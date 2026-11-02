@@ -78,6 +78,8 @@
             android:name=".rave.RaveActivity"
             android:exported="true"
             android:label="Rave"
+            android:icon="@mipmap/ic_rave"
+            android:roundIcon="@mipmap/ic_rave"
             android:taskAffinity="no.espen.bilnett.rave"
             android:launchMode="singleTask"
             android:resizeableActivity="true"

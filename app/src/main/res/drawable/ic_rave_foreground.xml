@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Rave-ikon: lydspekter-ringen fra Party-modus rundt en lysende plate med equalizer. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- Ekko-ring -->
+    <path android:pathData="M54.00,28.68 L55.55,30.37 L57.50,27.44 L58.67,30.52 L61.22,27.07 L61.84,30.91 L64.31,29.11 L64.26,33.19 L65.96,33.29 L66.51,35.28 L68.31,35.36 L68.62,37.33 L69.76,38.24 L70.40,39.61 L72.23,40.01 L72.62,41.56 L74.44,42.20 L74.06,44.11 L76.12,44.84 L75.81,46.60 L78.52,47.43 L76.76,49.47 L78.51,50.77 L76.94,52.50 L78.96,54.00 L76.86,55.50 L77.67,57.12 L75.69,58.31 L76.10,59.92 L74.98,61.12 L75.04,62.72 L73.60,63.67 L72.74,64.82 L72.10,66.09 L71.75,67.62 L70.45,68.42 L69.54,69.54 L68.19,70.18 L67.42,71.49 L66.14,72.18 L65.11,73.25 L63.58,73.43 L62.27,73.97 L60.99,74.59 L59.76,75.48 L58.25,75.37 L56.84,75.60 L55.41,75.53 L54.00,76.03 L52.59,75.53 L51.16,75.60 L49.75,75.37 L48.24,75.48 L47.01,74.59 L45.73,73.97 L44.42,73.43 L42.89,73.25 L41.86,72.18 L40.58,71.49 L39.81,70.18 L38.46,69.54 L37.55,68.42 L36.25,67.62 L35.90,66.09 L35.26,64.82 L34.40,63.67 L32.96,62.72 L33.02,61.12 L31.90,59.92 L32.31,58.31 L30.33,57.12 L31.14,55.50 L29.04,54.00 L31.06,52.50 L29.49,50.77 L31.24,49.47 L29.48,47.43 L32.19,46.60 L31.88,44.84 L33.94,44.11 L33.56,42.20 L35.38,41.56 L35.77,40.01 L37.60,39.61 L38.24,38.24 L39.38,37.33 L39.69,35.36 L41.49,35.28 L42.04,33.29 L43.74,33.19 L43.69,29.11 L46.16,30.91 L46.78,27.07 L49.33,30.52 L50.50,27.44 L52.45,30.37 Z"
+        android:fillColor="#00000000" android:strokeWidth="1.5" android:strokeLineJoin="round"
+        android:strokeColor="#99AA44FF" />
+    <!-- Hovedring med neon-gradient -->
+    <path android:pathData="M54.00,26.64 L55.74,27.50 L58.25,21.69 L59.47,26.49 L62.56,22.06 L62.72,28.30 L66.04,24.94 L65.77,30.13 L68.32,29.20 L67.79,33.36 L69.23,34.15 L70.11,35.63 L72.30,35.70 L72.40,37.86 L73.86,38.76 L74.19,40.51 L77.14,40.64 L76.78,42.77 L79.92,43.26 L78.09,45.82 L81.44,46.65 L79.70,48.89 L83.53,50.11 L79.98,52.30 L81.76,54.00 L79.23,55.65 L81.24,57.59 L78.57,58.89 L79.02,60.70 L76.71,61.71 L76.90,63.49 L75.74,64.72 L75.70,66.53 L73.90,67.30 L72.72,68.36 L71.94,69.73 L71.52,71.52 L69.86,72.09 L68.74,73.21 L67.07,73.57 L66.15,75.04 L64.63,75.56 L63.41,76.72 L61.64,76.49 L60.12,76.86 L58.65,77.40 L57.21,78.39 L55.56,77.87 L54.00,77.93 L52.44,77.87 L50.79,78.39 L49.35,77.40 L47.88,76.86 L46.36,76.49 L44.59,76.72 L43.37,75.56 L41.85,75.04 L40.93,73.57 L39.26,73.21 L38.14,72.09 L36.48,71.52 L36.06,69.73 L35.28,68.36 L34.10,67.30 L32.30,66.53 L32.26,64.72 L31.10,63.49 L31.29,61.71 L28.98,60.70 L29.43,58.89 L26.76,57.59 L28.77,55.65 L26.24,54.00 L28.02,52.30 L24.47,50.11 L28.30,48.89 L26.56,46.65 L29.91,45.82 L28.08,43.26 L31.22,42.77 L30.86,40.64 L33.81,40.51 L34.14,38.76 L35.60,37.86 L35.70,35.70 L37.89,35.63 L38.77,34.15 L40.21,33.36 L39.68,29.20 L42.23,30.13 L41.96,24.94 L45.28,28.30 L45.44,22.06 L48.53,26.49 L49.75,21.69 L52.26,27.50 Z"
+        android:fillColor="#1AAA44FF" android:strokeWidth="2.4" android:strokeLineJoin="round">
+        <aapt:attr name="android:strokeColor">
+            <gradient android:type="linear" android:startX="24" android:startY="24"
+                android:endX="84" android:endY="84"
+                android:startColor="#FF00F0FF" android:centerColor="#FFAA44FF" android:endColor="#FFFF44BB" />
+        </aapt:attr>
+    </path>
+    <!-- Plate -->
+    <path android:pathData="M54,40a14,14 0 1,1 0,28a14,14 0 1,1 0,-28z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="42" android:startY="42"
+                android:endX="66" android:endY="66"
+                android:startColor="#FF00D5FF" android:centerColor="#FF8A3CFF" android:endColor="#FFFF3FA8" />
+        </aapt:attr>
+    </path>
+    <!-- Equalizer-stolper -->
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M46.6,52.5h2.8v6h-2.8z M50.6,47.5h2.8v11h-2.8z M54.6,45h2.8v13.5h-2.8z M58.6,50h2.8v8.5h-2.8z" />
+</vector>
