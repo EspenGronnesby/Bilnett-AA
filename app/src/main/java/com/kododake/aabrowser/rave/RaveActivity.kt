@@ -29,13 +29,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -49,6 +49,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Pause
@@ -71,12 +72,15 @@ import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -113,6 +117,21 @@ class RaveActivity : ComponentActivity() {
     private var playing by mutableStateOf(false)
     private var level by mutableFloatStateOf(0f)
     private var beat by mutableFloatStateOf(0f)
+    private var hardstyleOn by mutableStateOf(false)
+    private var hardstyleFrame by mutableStateOf(HardstyleFrame())
+    private val hardstyleAudio = HardstyleAudio()
+    private var hardstyleAudioAt = 0L
+    private var trackIdentity = ""
+    private var controls by mutableStateOf(RaveControls())
+    private fun buttonInteraction() { controls = controls.button(SystemClock.elapsedRealtime()) }
+    private fun setHardstyle() {
+        hardstyleOn = !hardstyleOn
+        hardstyleAudio.reset()
+        hardstyleFrame = HardstyleFrame()
+        visualizer?.let { try { it.enabled = false; it.release() } catch (_: Exception) {} }
+        visualizer = null
+        startVisualizer()
+    }
     private var reactive by mutableStateOf(false)
     private var hasAccess by mutableStateOf(true)
     private var driving by mutableStateOf(false)
@@ -177,6 +196,8 @@ class RaveActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        hardstyleAudio.reset()
+        hardstyleFrame = HardstyleFrame()
         startSessions()
         startVisualizer()
         startSpeedGate()
@@ -234,6 +255,12 @@ class RaveActivity : ComponentActivity() {
     }
 
     private fun updateMeta(m: MediaMetadata?) {
+        val identity = "${m?.getString(MediaMetadata.METADATA_KEY_MEDIA_ID)}|${m?.getString(MediaMetadata.METADATA_KEY_TITLE)}|${m?.getString(MediaMetadata.METADATA_KEY_ARTIST)}"
+        if (identity != trackIdentity) {
+            trackIdentity = identity
+            hardstyleAudio.reset()
+            hardstyleFrame = HardstyleFrame()
+        }
         title = m?.getString(MediaMetadata.METADATA_KEY_TITLE).orEmpty()
         artist = m?.getString(MediaMetadata.METADATA_KEY_ARTIST)
             ?: m?.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST).orEmpty()
@@ -387,11 +414,16 @@ class RaveActivity : ComponentActivity() {
         try {
             val v = Visualizer(0)
             val range = Visualizer.getCaptureSizeRange()
-            v.captureSize = 512.coerceIn(range[0], range[1])
+            v.captureSize = (if (hardstyleOn) 2048 else 512).coerceIn(range[0], range[1])
             v.setDataCaptureListener(object : Visualizer.OnDataCaptureListener {
                 override fun onWaveFormDataCapture(vis: Visualizer?, waveform: ByteArray?, samplingRate: Int) {}
                 override fun onFftDataCapture(vis: Visualizer?, fft: ByteArray?, samplingRate: Int) {
-                    if (fft != null) onFft(fft)
+                    if (fft != null) {
+                        if (hardstyleOn) {
+                            hardstyleAudioAt = SystemClock.uptimeMillis()
+                            hardstyleFrame = hardstyleAudio.accept(fft, samplingRate / 1000, hardstyleAudioAt)
+                        } else onFft(fft)
+                    }
                 }
             }, Visualizer.getMaxCaptureRate(), false, true)
             v.enabled = true
@@ -414,7 +446,7 @@ class RaveActivity : ComponentActivity() {
         level = level * 0.55f + norm * 0.45f
         avgEnergy = avgEnergy * 0.94f + e * 0.06f
         val now = SystemClock.uptimeMillis()
-        if (e > avgEnergy * 1.35f && e > maxEnergy * 0.35f && now - lastBeatAt > 260) {
+        if (playing && e > 6f && e > avgEnergy * 1.35f && e > maxEnergy * 0.35f && now - lastBeatAt > 260) {
             lastBeatAt = now
             beat = 1f
         }
@@ -431,49 +463,71 @@ class RaveActivity : ComponentActivity() {
 
     @Composable
     private fun RaveScreen() {
-        var transportVisible by remember { mutableStateOf(true) }
-        var mediaTogglesVisible by remember { mutableStateOf(true) }
-        var lastTouchAt by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
-        var touchRevision by remember { mutableIntStateOf(0) }
-        var tapCount by remember { mutableIntStateOf(0) }
-        var firstTapAt by remember { mutableLongStateOf(0L) }
-        fun resetTapSequence() {
-            tapCount = 0
-            firstTapAt = 0L
-        }
-        fun registerScreenTap() {
-            val now = SystemClock.elapsedRealtime()
-            if (now - firstTapAt > 1_500L) {
-                firstTapAt = now
-                tapCount = 1
-            } else {
-                tapCount++
-            }
-            lastTouchAt = now
-            touchRevision++
-            transportVisible = true
-            if (tapCount >= 3) {
-                tapCount = 0
-                mediaTogglesVisible = true
-            }
-        }
-        LaunchedEffect(transportVisible, mediaTogglesVisible, touchRevision) {
-            if (!transportVisible && !mediaTogglesVisible) return@LaunchedEffect
-            val touchAt = lastTouchAt
+        val transportVisible = controls.transport
+        val mediaTogglesVisible = controls.media
+        LaunchedEffect(controls.touchedAt) {
             delay(10_000)
-            if (lastTouchAt == touchAt) {
-                transportVisible = false
-                mediaTogglesVisible = false
-                tapCount = 0
+            controls = controls.expire(SystemClock.elapsedRealtime())
+        }
+        LaunchedEffect(Unit) { controls = controls.touch(SystemClock.elapsedRealtime()) }
+        var announcement by remember { mutableStateOf(false) }
+        LaunchedEffect(hardstyleOn) {
+            announcement = hardstyleOn
+            if (hardstyleOn) { delay(1200); announcement = false }
+        }
+        var visualTime by remember { mutableFloatStateOf(0f) }
+        var audioIntensity by remember { mutableFloatStateOf(0f) }
+        var coverCenter by remember { mutableStateOf<Offset?>(null) }
+        var coverRadius by remember { mutableFloatStateOf(0f) }
+        var sceneOrigin by remember { mutableStateOf(Offset.Zero) }
+        var displayedFrame by remember { mutableStateOf(HardstyleFrame()) }
+        LaunchedEffect(hardstyleOn, foreground, driving, playing) {
+            if (!hardstyleOn || !foreground || driving) return@LaunchedEffect
+            var previous = 0L
+            while (true) {
+                withFrameNanos { now ->
+                    val dt = if (previous == 0L) 0f else ((now-previous)/1e9f).coerceAtMost(.05f)
+                    previous = now
+                    val fresh = reactive && SystemClock.uptimeMillis()-hardstyleAudioAt < 300
+                    val target = if (!playing || !fresh && reactive) HardstyleFrame() else if (fresh) hardstyleFrame
+                        else HardstyleFrame()
+                    // Advance the scene only while the live signal has energy. FFT noise
+                    // below the floor cannot keep the background drifting during silence.
+                    val activity = maxOf(target.bass, target.kick, target.highs, target.highMotion,
+                        target.spectrum.maxOrNull() ?: 0f)
+                    if (playing && ((!reactive && !fresh) || activity > .025f)) {
+                        visualTime += dt * if (!reactive && !fresh) .3f else (.35f + activity)
+                    }
+                    audioIntensity = if (playing && ((!reactive && !fresh) || activity > .025f)) activity.coerceIn(0f, 1f) else 0f
+                    val mix = 1f-kotlin.math.exp(-dt/(if (playing) .025f else .12f))
+                    fun blend(a: Float,b: Float) = a+(b-a)*mix
+                    displayedFrame = HardstyleFrame(blend(displayedFrame.bass,target.bass),
+                        blend(displayedFrame.kick,target.kick),blend(displayedFrame.highs,target.highs),
+                        blend(displayedFrame.energy,target.energy),blend(displayedFrame.burst,target.burst),blend(displayedFrame.build,target.build),
+                        spectrum = if (playing && fresh) target.spectrum else displayedFrame.spectrum.map {
+                            val value = it * kotlin.math.exp(-dt / .07f)
+                            if (value < .0001f) 0f else value
+                        },
+                        highMotion = blend(displayedFrame.highMotion, if (playing && fresh) target.highMotion else 0f))
+                }
             }
         }
 
         val palette = colors
+        val hardPalette = remember(colors) {
+            (if (colors == DEFAULT_COLORS) listOf(Color.Cyan, Color(0xFFAA44FF), Color(0xFFFF44BB)) else colors).map { color ->
+                val hsv = FloatArray(3)
+                android.graphics.Color.RGBToHSV((color.red*255).toInt(), (color.green*255).toInt(), (color.blue*255).toInt(), hsv)
+                hsv[1] = max(hsv[1], .7f); hsv[2] = max(hsv[2], .85f)
+                Color(android.graphics.Color.HSVToColor(hsv))
+            }.ifEmpty { listOf(Color.Cyan, Color(0xFFAA44FF)) }
+        }
         val transition = rememberInfiniteTransition(label = "drift")
+        val lightCycleMillis = if (hardstyleOn) 8_000 else 32_000
         val t by transition.animateFloat(
             initialValue = 0f,
             targetValue = (2 * PI).toFloat(),
-            animationSpec = infiniteRepeatable(tween(18000, easing = LinearEasing)),
+            animationSpec = infiniteRepeatable(tween(lightCycleMillis, easing = LinearEasing)),
             label = "t"
         )
 
@@ -497,28 +551,49 @@ class RaveActivity : ComponentActivity() {
         Box(
             Modifier.fillMaxSize().background(Color(0xFF050505)).pointerInput(Unit) {
                 awaitEachGesture {
-                    awaitFirstDown(requireUnconsumed = false)
-                    if (transportVisible || mediaTogglesVisible) {
-                        lastTouchAt = SystemClock.elapsedRealtime()
-                        touchRevision++
-                    }
-                    val up = waitForUpOrCancellation()
-                    if (up != null) registerScreenTap()
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    controls = controls.touch(SystemClock.elapsedRealtime())
+                    var validTap = !down.isConsumed
+                    do {
+                        val event = awaitPointerEvent()
+                        val pointer = event.changes.firstOrNull { it.id == down.id }
+                        validTap = validTap && event.changes.size == 1 && pointer != null &&
+                            !pointer.isConsumed && (pointer.position-down.position).getDistance() <= viewConfiguration.touchSlop
+                        awaitPointerEvent(PointerEventPass.Final)
+                        validTap = validTap && event.changes.none { it.isConsumed }
+                        controls = controls.touch(SystemClock.elapsedRealtime())
+                        if (event.changes.none { it.pressed }) {
+                            if (validTap) controls = controls.tap(SystemClock.elapsedRealtime())
+                            break
+                        }
+                    } while (true)
+
                 }
             }
         ) {
-            Canvas(Modifier.fillMaxSize()) {
+            Canvas(Modifier.fillMaxSize().onGloballyPositioned {
+                sceneOrigin = it.positionInRoot()
+            }) {
                 val w = size.width
                 val h = size.height
                 val base = min(w, h)
+                val lightTravel = if (hardstyleOn) .40f else .22f
+                // Party lighting should hit with the music instead of only drifting
+                // smoothly. Kick and bass pull each glow outward on every transient.
+                val partyHit = if (hardstyleOn)
+                    maxOf(displayedFrame.kick, displayedFrame.bass * .55f, displayedFrame.highMotion * .2f)
+                else 0f
                 palette.forEachIndexed { i, col ->
                     val a = t + i * 2.1f
-                    val c = Offset(w * (0.5f + 0.34f * cos(a)), h * (0.5f + 0.3f * sin(a * 1.3f)))
-                    val r = base * (0.6f + 0.35f * energy)
+                    val drift = Offset(w * (0.5f + lightTravel * cos(a)), h * (0.5f + lightTravel * .9f * sin(a * 1.3f)))
+                    val hitAngle = i * 2.399963f
+                    val hitOffset = Offset(cos(hitAngle), sin(hitAngle)) * (base * partyHit * .12f)
+                    val c = drift + hitOffset
+                    val r = base * (0.6f + 0.35f * energy) * (1f + partyHit * .1f)
                     drawCircle(
                         brush = Brush.radialGradient(
-                            listOf(col.copy(alpha = (0.45f + 0.35f * energy).coerceAtMost(0.9f)), Color.Transparent),
-                            center = c, radius = r
+                            listOf(col.copy(alpha = ((0.45f + 0.35f * energy + partyHit * .18f)).coerceIn(0f,.95f)), Color.Transparent),
+                        center = c, radius = r
                         ),
                         radius = r, center = c
                     )
@@ -553,7 +628,13 @@ class RaveActivity : ComponentActivity() {
                 }
             }
 
-            if (showVideo && !(showLyrics && maxOf(resources.displayMetrics.widthPixels, resources.displayMetrics.heightPixels) > minOf(resources.displayMetrics.widthPixels, resources.displayMetrics.heightPixels))) VideoOverlay(transportVisible, mediaTogglesVisible, ::resetTapSequence) else
+            if (hardstyleOn && foreground && !driving) {
+                coverCenter?.let { center ->
+                    HardstyleBackdrop(Modifier.fillMaxSize(), displayedFrame, visualTime, hardPalette, showVideo,
+                        center, coverRadius, audioIntensity)
+                }
+            }
+            if (showVideo && !(showLyrics && maxOf(resources.displayMetrics.widthPixels, resources.displayMetrics.heightPixels) > minOf(resources.displayMetrics.widthPixels, resources.displayMetrics.heightPixels))) VideoOverlay(transportVisible, mediaTogglesVisible, ::buttonInteraction) else
             BoxWithConstraints(
                 Modifier.fillMaxSize()
                     .background(if (showVideo && showLyrics) Color.Black.copy(alpha = 0.55f) else Color.Transparent)
@@ -575,9 +656,11 @@ class RaveActivity : ComponentActivity() {
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
-                            Cover(coverSize)
+                            ReactiveCover(coverSize, displayedFrame, hardPalette, sceneOrigin) { center, radius ->
+                                coverCenter = center; coverRadius = radius
+                            }
                             Spacer(Modifier.height(12.dp))
-                            Info(Modifier.fillMaxWidth(), Alignment.CenterHorizontally, includeLyrics = false, transportVisible = transportVisible, mediaTogglesVisible = false, onTransportInteraction = ::resetTapSequence)
+                            Info(Modifier.fillMaxWidth(), Alignment.CenterHorizontally, includeLyrics = false, transportVisible = transportVisible, mediaTogglesVisible = false, onTransportInteraction = ::buttonInteraction, modeButtonsAllowed = false)
                         }
                         Column(
                             Modifier.weight(0.56f).fillMaxHeight()
@@ -592,15 +675,9 @@ class RaveActivity : ComponentActivity() {
                             ) {
                                 LyricsView(Alignment.Start)
                             }
-                            if (mediaTogglesVisible) {
+                            if (mediaTogglesVisible || controls.hardstyle) {
                                 Spacer(Modifier.height(12.dp))
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    LyricsButton()
-                                    if (videoId != null) {
-                                        Spacer(Modifier.width(12.dp))
-                                        VideoButton()
-                                    }
-                                }
+                                ModeButtons(mediaTogglesVisible)
                             }
                         }
                     }
@@ -609,28 +686,62 @@ class RaveActivity : ComponentActivity() {
                     val artSize: Dp = if (wide) (min(maxHeight.value * 0.72f, 340f) * f).dp else (min(maxWidth.value * 0.75f, 340f) * f).dp
                     if (wide) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-                        Cover(artSize)
+                        ReactiveCover(artSize, displayedFrame, hardPalette, sceneOrigin) { center, radius ->
+                            coverCenter = center; coverRadius = radius
+                        }
                         Spacer(Modifier.width(40.dp))
-                        Info(Modifier.widthIn(max = if (showLyrics) 680.dp else 520.dp), Alignment.Start, transportVisible = transportVisible, mediaTogglesVisible = mediaTogglesVisible, onTransportInteraction = ::resetTapSequence)
+                        Info(Modifier.widthIn(max = if (showLyrics) 680.dp else 520.dp), Alignment.Start, transportVisible = transportVisible, mediaTogglesVisible = mediaTogglesVisible, onTransportInteraction = ::buttonInteraction)
                     }
                 } else {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                        Cover(artSize)
+                        ReactiveCover(artSize, displayedFrame, hardPalette, sceneOrigin) { center, radius ->
+                            coverCenter = center; coverRadius = radius
+                        }
                         Spacer(Modifier.height(32.dp))
-                        Info(Modifier, Alignment.CenterHorizontally, transportVisible = transportVisible, mediaTogglesVisible = mediaTogglesVisible, onTransportInteraction = ::resetTapSequence)
+                        Info(Modifier, Alignment.CenterHorizontally, transportVisible = transportVisible, mediaTogglesVisible = mediaTogglesVisible, onTransportInteraction = ::buttonInteraction)
                     }
                 }
                 }
             }
 
+            if (announcement && hardstyleOn && !driving) Text("PARTY ON", color=Color.White,
+                modifier=Modifier.align(Alignment.TopCenter).padding(16.dp).background(Color.Black.copy(alpha=.7f)).padding(12.dp))
             if (!hasAccess) Notice("Rave trenger tilgang til hva som spilles.\nInnstillinger → Varsler → Enhetstilgang til varsler → Bilnett Rave.")
             if (driving) Notice("Parker bilen for å bruke Rave.", solid = true)
         }
     }
 
+    /** Reserve exactly the normal cover slot so text and controls never move when toggling. */
     @Composable
-    private fun Cover(size: Dp) {
-        val mod = Modifier.size(size).clip(RoundedCornerShape(20.dp))
+    private fun ReactiveCover(
+        size: Dp,
+        frame: HardstyleFrame,
+        palette: List<Color>,
+        sceneOrigin: Offset,
+        onPosition: (Offset, Float) -> Unit
+    ) {
+        if (!hardstyleOn) {
+            Cover(size)
+            return
+        }
+        Box(Modifier.size(size).onGloballyPositioned { coordinates ->
+            val position = coordinates.positionInRoot() - sceneOrigin
+            onPosition(
+                Offset(position.x + coordinates.size.width/2f, position.y + coordinates.size.height/2f),
+                min(coordinates.size.width, coordinates.size.height) * .5f
+            )
+        }, contentAlignment = Alignment.Center) {
+            androidx.compose.runtime.key(trackIdentity, foreground, driving) {
+                HardstyleOrb(Modifier.fillMaxSize(), frame, palette, roundedSquare = true)
+            }
+            Cover(size * .86f, scale = 1f + frame.kick * .045f)
+        }
+    }
+
+    @Composable
+    private fun Cover(size: Dp, scale: Float = 1f) {
+        val mod = Modifier.size(size).graphicsLayer { scaleX=scale; scaleY=scale }
+            .clip(RoundedCornerShape(20.dp))
         val bmp = art
         if (bmp != null) {
             Image(bmp.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Crop, modifier = mod)
@@ -641,6 +752,7 @@ class RaveActivity : ComponentActivity() {
         }
     }
 
+    @OptIn(ExperimentalLayoutApi::class)
     @Composable
     private fun Info(
         modifier: Modifier,
@@ -648,7 +760,8 @@ class RaveActivity : ComponentActivity() {
         includeLyrics: Boolean = true,
         transportVisible: Boolean = true,
         mediaTogglesVisible: Boolean = true,
-        onTransportInteraction: () -> Unit = {}
+        onTransportInteraction: () -> Unit = {},
+        modeButtonsAllowed: Boolean = true
     ) {
         val ta = if (align == Alignment.CenterHorizontally) TextAlign.Center else TextAlign.Start
         val narrow = align == Alignment.CenterHorizontally
@@ -667,9 +780,10 @@ class RaveActivity : ComponentActivity() {
                 Spacer(Modifier.height(18.dp))
                 LyricsView(align)
             }
-            if (transportVisible || mediaTogglesVisible) {
+            if (transportVisible || mediaTogglesVisible || (modeButtonsAllowed && controls.hardstyle)) {
                 Spacer(Modifier.height(if (showLyrics) 18.dp else 28.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                FlowRow(verticalArrangement = Arrangement.spacedBy(12.dp), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                     if (transportVisible) {
                         Control(Icons.Rounded.SkipPrevious, 44.dp, onTransportInteraction) { controller?.transportControls?.skipToPrevious() }
                         Spacer(Modifier.width(28.dp))
@@ -680,18 +794,31 @@ class RaveActivity : ComponentActivity() {
                         Spacer(Modifier.width(28.dp))
                         Control(Icons.Rounded.SkipNext, 44.dp, onTransportInteraction) { controller?.transportControls?.skipToNext() }
                     }
-                    if (mediaTogglesVisible && !narrow) {
-                        Spacer(Modifier.width(28.dp))
-                        LyricsButton()
-                        if (videoId != null) { Spacer(Modifier.width(12.dp)); VideoButton() }
                     }
+                    if (modeButtonsAllowed && !narrow && (mediaTogglesVisible || (modeButtonsAllowed && controls.hardstyle))) ModeButtons(mediaTogglesVisible)
                 }
-                if (mediaTogglesVisible && narrow) {
-                    Spacer(Modifier.height(20.dp))
-                    Row {
-                        LyricsButton()
-                        if (videoId != null) { Spacer(Modifier.width(12.dp)); VideoButton() }
-                    }
+                if (modeButtonsAllowed && narrow && (mediaTogglesVisible || (modeButtonsAllowed && controls.hardstyle))) {
+                    Spacer(Modifier.height(12.dp))
+                    ModeButtons(mediaTogglesVisible)
+                }
+
+            }
+        }
+    }
+
+    @OptIn(ExperimentalLayoutApi::class)
+    @Composable
+    private fun ModeButtons(mediaVisible: Boolean) {
+        FlowRow(horizontalArrangement=Arrangement.spacedBy(10.dp), verticalArrangement=Arrangement.spacedBy(8.dp)) {
+            if (mediaVisible) {
+                LyricsButton()
+                if (videoId != null) VideoButton()
+            }
+            if (controls.hardstyle) {
+                Box(Modifier.height(64.dp).clip(RoundedCornerShape(50))
+                    .background(if(hardstyleOn) Color(0xFFF5F2EC) else Color(0x22FFFFFF))
+                    .clickable { buttonInteraction(); setHardstyle() }.padding(horizontal=24.dp), contentAlignment=Alignment.Center) {
+                    Text("Party", color=if(hardstyleOn) Color(0xFF0A0A0A) else Color(0xFFF5F2EC), fontSize=18.sp, fontWeight=FontWeight.SemiBold)
                 }
             }
         }
@@ -703,7 +830,7 @@ class RaveActivity : ComponentActivity() {
         Box(
             Modifier.height(64.dp).clip(RoundedCornerShape(50))
                 .background(if (on) Color(0xFFF5F2EC) else Color(0x22FFFFFF))
-                .clickable { showLyrics = !showLyrics; if (showLyrics) pos = positionMs() }
+                .clickable { buttonInteraction(); showLyrics = !showLyrics; if (showLyrics) pos = positionMs() }
                 .padding(horizontal = 24.dp),
             contentAlignment = Alignment.Center
         ) {
@@ -717,7 +844,7 @@ class RaveActivity : ComponentActivity() {
         Box(
             Modifier.height(64.dp).clip(RoundedCornerShape(50))
                 .background(if (on) Color(0xFFF5F2EC) else Color(0x22FFFFFF))
-                .clickable { videoOn = !videoOn; videoPlaying = false }
+                .clickable { buttonInteraction(); videoOn = !videoOn; videoPlaying = false }
                 .padding(horizontal = 24.dp),
             contentAlignment = Alignment.Center
         ) {
@@ -748,7 +875,7 @@ class RaveActivity : ComponentActivity() {
                     textAlign = TextAlign.Center, style = TextStyle(shadow = Shadow(Color.Black, Offset(0f, 2f), 10f)))
                 Text(artist, fontFamily = BodyFont, color = Color(0xCCF5F2EC), fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     textAlign = TextAlign.Center, style = TextStyle(shadow = Shadow(Color.Black, Offset(0f, 2f), 8f)))
-                if (transportVisible || mediaTogglesVisible) {
+                if (transportVisible || mediaTogglesVisible || controls.hardstyle) {
                     Spacer(Modifier.height(14.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (transportVisible) {
@@ -761,12 +888,8 @@ class RaveActivity : ComponentActivity() {
                             Spacer(Modifier.width(12.dp))
                             Control(Icons.Rounded.SkipNext, 30.dp, onTransportInteraction) { controller?.transportControls?.skipToNext() }
                         }
-                        if (mediaTogglesVisible) {
-                            Spacer(Modifier.width(16.dp))
-                            LyricsButton()
-                            if (videoId != null) { Spacer(Modifier.width(10.dp)); VideoButton() }
-                        }
                     }
+                    ModeButtons(mediaTogglesVisible)
                 }
             }
         }
