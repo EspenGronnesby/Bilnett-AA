@@ -124,6 +124,13 @@ object StartPagePreferences {
 
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val serialized = prefs.getString(KEY_START_PAGE_SLOTS, null)
+        // Bilnett: bytt ut gamle standard-snarveier
+        if (serialized != null && (serialized.contains("piped.video") || serialized.contains("kododake.com") || serialized.contains("keepandroidopen"))) {
+            val defaults = defaultSlots()
+            persistStartPageSlots(context, defaults)
+            cachedStartPageSlots = defaults.map { it.ifBlank { null } }
+            return defaults
+        }
         if (serialized.isNullOrBlank()) {
             val defaults = defaultSlots()
             persistStartPageSlots(context, defaults)

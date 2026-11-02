@@ -1,8 +1,8 @@
 <resources>
-    <string name="app_name">AABrowser</string>
+    <string name="app_name">Bilnett</string>
     <string name="app_credit">AABrowser — by Kododake</string>
     <string name="author_name">Kododake</string>
-    <string name="menu_title">AABrowser</string>
+    <string name="menu_title">Bilnett</string>
     <string name="menu_close">Close</string>
     <string name="menu_address_label">Address or search</string>
     
@@ -170,8 +170,8 @@
     <string name="menu_start_page_add_current">Add current page to start page</string>
     <string name="menu_home_page_set_current">Set current page as home page</string>
     <string name="start_page_title">Start Page</string>
-    <string name="start_page_headline">AABrowser</string>
-    <string name="start_page_subtitle">Quick access for the sites you use most.</string>
+    <string name="start_page_headline">Bilnett</string>
+    <string name="start_page_subtitle">Snarveier til det du bruker mest.</string>
     <string name="start_page_card_title">Quick Links</string>
     <string name="start_page_quick_links_hint">Press and hold a tile to drag and reorder. Tap to open or configure.</string>
     <string name="start_page_resume_last_page">Resume Last Page</string>
@@ -211,7 +211,7 @@
     <string name="location_upgrade_btn_precise">Upgrade to precise</string>
     <string name="location_upgrade_btn_approximate">Keep approximate</string>
     <string name="ssl_error_title">Security Warning</string>
-    <string name="ssl_error_message">AABrowser detected a problem with the security certificate of this website (%1$s).\n\nThis connection is not secure, and someone might be trying to intercept your data.</string>
+    <string name="ssl_error_message">Bilnett detected a problem with the security certificate of this website (%1$s).\n\nThis connection is not secure, and someone might be trying to intercept your data.</string>
     <string name="ssl_error_reason_prefix">Reason:</string>
     <string name="ssl_error_expired">The certificate has expired.</string>
     <string name="ssl_error_idmismatch">The certificate hostname does not match the website address.</string>

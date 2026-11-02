@@ -54,6 +54,8 @@ class UmamiTracker(context: Context) {
     }
 
     fun trackEvent(eventName: String, eventData: Map<String, String>? = null) {
+        if (true) return // Bilnett: analysesporing slått av
+
         val payload = buildJsonObject {
             put("type", "event")
             put("payload", buildJsonObject {

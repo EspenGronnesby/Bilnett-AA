@@ -81,7 +81,7 @@ object BrowserPreferences {
     fun setQuickActionButtonAlwaysVisible(context: Context, enabled: Boolean) = UIPreferences.setQuickActionButtonAlwaysVisible(context, enabled)
     fun getQuickActionButtonPosition(context: Context): QuickActionButtonPosition = UIPreferences.getQuickActionButtonPosition(context)
     fun setQuickActionButtonPosition(context: Context, position: QuickActionButtonPosition) = UIPreferences.setQuickActionButtonPosition(context, position)
-    fun shouldHideSponsors(context: Context): Boolean = UIPreferences.shouldHideSponsors(context)
+    fun shouldHideSponsors(context: Context): Boolean = true // Bilnett: ingen sponsor/kaffe
     fun setHideSponsors(context: Context, hide: Boolean) = UIPreferences.setHideSponsors(context, hide)
 
     // --- Tab Session ---
@@ -113,7 +113,7 @@ object BrowserPreferences {
     fun getStartPageBackgroundUri(context: Context): String? = BookmarkPreferences.getStartPageBackgroundUri(context)
     fun setStartPageBackgroundUri(context: Context, uri: String?) = BookmarkPreferences.setStartPageBackgroundUri(context, uri)
     fun clearStartPageBackgroundUri(context: Context) = BookmarkPreferences.clearStartPageBackgroundUri(context)
-    fun shouldShowAAAnythingPromotion(context: Context): Boolean = BookmarkPreferences.shouldShowAAAnythingPromotion(context)
+    fun shouldShowAAAnythingPromotion(context: Context): Boolean = false // Bilnett: ingen reklame
     fun setShowAAAnythingPromotion(context: Context, show: Boolean) = BookmarkPreferences.setShowAAAnythingPromotion(context, show)
     fun ensureGameBookmarkMigrated(context: Context) = BookmarkPreferences.ensureGameBookmarkMigrated(context)
 

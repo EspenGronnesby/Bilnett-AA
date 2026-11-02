@@ -62,7 +62,7 @@ object DisplayPreferences {
 
     fun getThemeMode(context: Context): AppThemeMode {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val raw = prefs.getString(KEY_THEME_MODE, AppThemeMode.AUTO.storageKey)
+        val raw = prefs.getString(KEY_THEME_MODE, AppThemeMode.DARK.storageKey)
         return AppThemeMode.fromKey(raw)
     }
 

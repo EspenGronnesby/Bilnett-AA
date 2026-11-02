@@ -128,7 +128,7 @@ object UIPreferences {
 
     fun shouldUseFullscreenMode(context: Context): Boolean {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getBoolean(KEY_FULLSCREEN_MODE, false)
+            .getBoolean(KEY_FULLSCREEN_MODE, true)
     }
 
     fun setFullscreenMode(context: Context, enabled: Boolean) {

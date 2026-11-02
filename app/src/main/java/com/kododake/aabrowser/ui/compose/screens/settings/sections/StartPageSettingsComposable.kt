@@ -98,6 +98,7 @@ fun StartPageSettingsComposable(
 
         Spacer(Modifier.height(3.dp))
 
+        if (false) { // Bilnett: AA Anything-reklame fjernet
         ExpressiveListItem(
             headline = stringResource(R.string.settings_start_page_show_aa_anything),
             supportingText = stringResource(R.string.settings_start_page_show_aa_anything_desc),
@@ -138,6 +139,7 @@ fun StartPageSettingsComposable(
             }
         )
 
+        }
         Spacer(Modifier.height(3.dp))
     }
 }

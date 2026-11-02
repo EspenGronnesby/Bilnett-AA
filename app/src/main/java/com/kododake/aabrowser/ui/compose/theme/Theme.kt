@@ -31,7 +31,7 @@ import androidx.compose.ui.platform.LocalContext
 @Composable
 fun AABrowserTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true,
+    dynamicColor: Boolean = false, // Bilnett: fast palett
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {

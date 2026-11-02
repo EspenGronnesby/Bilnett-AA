@@ -33,11 +33,12 @@ object BookmarkPreferences {
     const val GAME_BOOKMARK_URL = "https://kododake.com/game/"
 
     val DEFAULT_BOOKMARK_ENTRIES = listOf(
+        // Bilnett: egne snarveier
+        BookmarkEntry("https://m.youtube.com", "YouTube"),
         BookmarkEntry("https://www.google.com", "Google"),
-        BookmarkEntry("https://youtube.com", "YouTube"),
-        BookmarkEntry("https://duckduckgo.com", "DuckDuckGo"),
-        BookmarkEntry("https://keepandroidopen.org", "Keep Android Open"),
-        BookmarkEntry(GAME_BOOKMARK_URL, "Kododake Games")
+        BookmarkEntry("https://www.tiktok.com", "TikTok"),
+        BookmarkEntry("https://tv.nrk.no", "NRK TV"),
+        BookmarkEntry("https://www.vg.no", "VG")
     )
 
     val DEFAULT_BOOKMARKS: List<String> = DEFAULT_BOOKMARK_ENTRIES.map { it.url }
@@ -49,7 +50,12 @@ object BookmarkPreferences {
         val cached = cachedBookmarkEntries
         if (cached != null) return cached
 
-        val entries = loadBookmarkEntries(context)
+        var entries = loadBookmarkEntries(context)
+        // Bilnett: bytt ut originalens standard-snarveier (inkl. reklame) med våre
+        if (entries.any { it.url == GAME_BOOKMARK_URL || it.url.contains("keepandroidopen") || it.url.contains("piped.video") }) {
+            persistBookmarkEntries(context, DEFAULT_BOOKMARK_ENTRIES)
+            entries = DEFAULT_BOOKMARK_ENTRIES
+        }
         val result = if (entries.isEmpty()) {
             persistBookmarkEntries(context, DEFAULT_BOOKMARK_ENTRIES)
             DEFAULT_BOOKMARK_ENTRIES

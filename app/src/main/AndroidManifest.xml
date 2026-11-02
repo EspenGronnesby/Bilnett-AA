@@ -73,6 +73,36 @@
             <meta-data android:name="android.max_aspect" android:value="5.0" />
         </activity>
 
+        <!-- Bilnett: Rave-modus -->
+        <activity
+            android:name=".rave.RaveActivity"
+            android:exported="true"
+            android:label="Rave"
+            android:taskAffinity="no.espen.bilnett.rave"
+            android:launchMode="singleTask"
+            android:resizeableActivity="true"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|density|uiMode"
+            android:theme="@style/Theme.AABrowser">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.CAR_LAUNCHER" />
+                <category android:name="androidx.car.app.category.NAVIGATION" />
+                <category android:name="android.intent.category.APP_MAPS" />
+            </intent-filter>
+            <meta-data android:name="distractionOptimized" android:value="true" />
+        </activity>
+
+        <service
+            android:name=".rave.NowPlayingListener"
+            android:exported="true"
+            android:label="Bilnett Rave"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
         <activity
             android:name=".ShareBookmarkActivity"
             android:description="@string/share_bookmark_activity_description"

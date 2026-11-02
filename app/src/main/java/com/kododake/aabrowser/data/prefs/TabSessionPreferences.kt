@@ -41,7 +41,7 @@ object TabSessionPreferences {
         val raw = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .getString(KEY_LAST_URL, null)
             ?.trim()
-        return raw?.takeIf { UrlFormatter.isHttpOrHttps(it) }
+        return raw?.takeIf { UrlFormatter.isHttpOrHttps(it) && !it.contains("piped.video", ignoreCase = true) }
     }
 
     fun resolveInitialUrl(context: Context, fallback: String = UrlFormatter.DEFAULT_URL): String {
@@ -96,7 +96,8 @@ object TabSessionPreferences {
                         add(TabSessionEntry(url = normalizedUrl.ifEmpty { null }, title = title))
                     }
                 }
-            }.take(MAX_OPEN_TABS)
+            }.filterNot { it.url?.contains("piped.video", ignoreCase = true) == true }
+                .take(MAX_OPEN_TABS)
         }.getOrDefault(emptyList())
     }
 
@@ -163,7 +164,7 @@ object TabSessionPreferences {
             .getString(KEY_HOME_PAGE_URL, null)
             ?.trim()
         if (raw.isNullOrEmpty()) return null
-        return raw.takeIf { UrlFormatter.isHttpOrHttps(it) }
+        return raw.takeIf { UrlFormatter.isHttpOrHttps(it) && !it.contains("piped.video", ignoreCase = true) }
     }
 
     fun setHomePageUrl(context: Context, url: String?) {
