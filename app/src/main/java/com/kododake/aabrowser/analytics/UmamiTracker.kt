@@ -54,6 +54,8 @@ class UmamiTracker(context: Context) {
     }
 
     fun trackEvent(eventName: String, eventData: Map<String, String>? = null) {
+        // Bilnett: analytics disabled. Nothing is sent to the original author's server.
+        if (!ENABLED) return
         if (true) return // Bilnett: analysesporing slått av
 
         val payload = buildJsonObject {
@@ -96,6 +98,7 @@ class UmamiTracker(context: Context) {
 
     private companion object {
         private const val TAG = "UmamiTracker"
+        private const val ENABLED = false
         private const val PREFS_NAME = "umami_prefs"
         private const val KEY_USER_ID = "user_id"
         private const val WEBSITE_ID = "0429c890-e9a6-4370-8434-a05aaa54249d"

@@ -115,7 +115,6 @@ class MainActivity : AppCompatActivity(), MainActivityCallbackFactory.CallbackHo
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        managers.umamiTracker.trackEvent("app_open")
         setupUi()
         setupBackPressHandling()
 
