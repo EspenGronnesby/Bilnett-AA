@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.ComponentName
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.media.AudioManager
 import android.media.MediaMetadata
 import android.media.audiofx.Visualizer
 import android.media.session.MediaController
@@ -114,6 +115,8 @@ class RaveActivity : ComponentActivity() {
     private var level by mutableFloatStateOf(0f)
     private var beat by mutableFloatStateOf(0f)
     private var hardstyleOn by mutableStateOf(false)
+    private var volume by mutableFloatStateOf(1f)
+    private var volumeReadAt = 0L
     private var hardstyleFrame by mutableStateOf(HardstyleFrame())
     private val hardstyleAudio = HardstyleAudio()
     private var hardstyleAudioAt = 0L
@@ -392,6 +395,13 @@ class RaveActivity : ComponentActivity() {
         return out.sortedBy { it.first }
     }
 
+    private val audioManager by lazy { getSystemService(AudioManager::class.java) }
+    private fun readVolume(): Float = try {
+        val am = audioManager
+        val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        if (max > 0) am.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / max else 1f
+    } catch (_: Exception) { 1f }
+
     private fun startVisualizer() {
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             reactive = false
@@ -485,7 +495,9 @@ class RaveActivity : ComponentActivity() {
                             val value = it * kotlin.math.exp(-dt / .07f)
                             if (value < .0001f) 0f else value
                         },
-                        highMotion = blend(displayedFrame.highMotion, if (playing && fresh) target.highMotion else 0f))
+                        highMotion = blend(displayedFrame.highMotion, if (playing && fresh) target.highMotion else 0f),
+                        heavy = blend(displayedFrame.heavy, target.heavy),
+                        grit = blend(displayedFrame.grit, target.grit))
                 }
             }
         }
@@ -514,6 +526,11 @@ class RaveActivity : ComponentActivity() {
             while (true) {
                 withFrameNanos { }
                 beat *= 0.9f
+                val nowMs = SystemClock.uptimeMillis()
+                if (nowMs - volumeReadAt > 250) {
+                    volumeReadAt = nowMs
+                    volume = readVolume()
+                }
                 if (showLyrics) pos = positionMs()
                 if (!reactive) {
                     val phase = ((SystemClock.uptimeMillis() - start) % 500L) / 500f
@@ -546,6 +563,19 @@ class RaveActivity : ComponentActivity() {
                     } while (true)
 
                 }
+            }.graphicsLayer {
+                // Camera shake on heavy kicks (Trap Nation style). Shakes the whole scene incl.
+                // controls; the solid background drawn before this layer stays put.
+                // Heavy drops shake; from 70 % volume every kick shakes too, and drops harder.
+                val ramp = loudRamp(volume)
+                val shake = if (hardstyleOn) displayedFrame.kick * volumeGain(volume) *
+                    (displayedFrame.heavy * (10.dp.toPx() + loudness(volume) * 4.dp.toPx()) * (1f + ramp * .8f) +
+                        ramp * 5.dp.toPx()) else 0f
+                if (shake > .5f) {
+                    val s = SystemClock.uptimeMillis() / 1000f
+                    translationX = sin(s * 91f) * shake
+                    translationY = cos(s * 73f) * shake
+                } else { translationX = 0f; translationY = 0f }
             }
         ) {
             Canvas(Modifier.fillMaxSize().onGloballyPositioned {
@@ -558,8 +588,11 @@ class RaveActivity : ComponentActivity() {
                 // Party lighting should hit with the music instead of only drifting
                 // smoothly. Kick and bass pull each glow outward on every transient.
                 val partyHit = if (hardstyleOn)
-                    maxOf(displayedFrame.kick, displayedFrame.bass * .55f, displayedFrame.highMotion * .2f)
+                    (maxOf(displayedFrame.kick, displayedFrame.bass * .55f, displayedFrame.highMotion * .2f) +
+                        displayedFrame.heavy * displayedFrame.kick * .4f +
+                        (displayedFrame.spectrum.maxOrNull() ?: 0f) * .25f * volumeGain(volume)).coerceAtMost(1.6f)
                 else 0f
+                val heavyFlash = if (hardstyleOn) displayedFrame.heavy * displayedFrame.kick * (.6f + .4f * loudness(volume)) else 0f
                 palette.forEachIndexed { i, col ->
                     val a = t + i * 2.1f
                     val drift = Offset(w * (0.5f + lightTravel * cos(a)), h * (0.5f + lightTravel * .9f * sin(a * 1.3f)))
@@ -580,6 +613,28 @@ class RaveActivity : ComponentActivity() {
                         Brush.radialGradient(
                             listOf(palette.first().copy(alpha = 0.22f * beatNow), Color.Transparent),
                             center = center, radius = max(w, h) * 0.75f
+                        )
+                    )
+                }
+                // Strobe: max volume + heavy distorted kicks (zaag etc.) flash the whole scene,
+                // alternating cover colours. Kick decays in ~85 ms, so each flash is short.
+                val strobe = if (hardstyleOn) displayedFrame.kick * displayedFrame.heavy *
+                    ((volume - .85f) / .15f).coerceIn(0f, 1f) else 0f
+                if (strobe > 0.03f) {
+                    val strobeColor = palette[((SystemClock.uptimeMillis() / 110L) % palette.size).toInt()]
+                    drawRect(strobeColor.copy(alpha = (0.45f * strobe).coerceAtMost(.45f)))
+                    drawRect(
+                        Brush.radialGradient(
+                            listOf(Color.White.copy(alpha = 0.35f * strobe), Color.Transparent),
+                            center = center, radius = max(w, h) * 0.6f
+                        )
+                    )
+                }
+                if (heavyFlash > 0.02f) {
+                    drawRect(
+                        Brush.radialGradient(
+                            listOf(Color.White.copy(alpha = 0.25f * heavyFlash), Color.Transparent),
+                            center = center, radius = max(w, h) * 0.9f
                         )
                     )
                 }
@@ -608,7 +663,7 @@ class RaveActivity : ComponentActivity() {
             if (hardstyleOn && foreground) {
                 coverCenter?.let { center ->
                     HardstyleBackdrop(Modifier.fillMaxSize(), displayedFrame, visualTime, hardPalette, showVideo,
-                        center, coverRadius, audioIntensity)
+                        center, coverRadius, audioIntensity, volume)
                 }
             }
             if (showVideo && !(showLyrics && maxOf(resources.displayMetrics.widthPixels, resources.displayMetrics.heightPixels) > minOf(resources.displayMetrics.widthPixels, resources.displayMetrics.heightPixels))) VideoOverlay(transportVisible, mediaTogglesVisible, ::buttonInteraction) else
@@ -708,9 +763,9 @@ class RaveActivity : ComponentActivity() {
             )
         }, contentAlignment = Alignment.Center) {
             androidx.compose.runtime.key(trackIdentity, foreground) {
-                HardstyleOrb(Modifier.fillMaxSize(), frame, palette, roundedSquare = true)
+                HardstyleOrb(Modifier.fillMaxSize(), frame, palette, roundedSquare = true, volume = volume)
             }
-            Cover(size * .86f, scale = 1f + frame.kick * .045f)
+            Cover(size * .86f, scale = 1f + frame.kick * (.045f + frame.heavy * .09f) * volumeGain(volume))
         }
     }
 
