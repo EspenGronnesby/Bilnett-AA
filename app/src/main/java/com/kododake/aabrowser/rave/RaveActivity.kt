@@ -4,15 +4,12 @@ import android.Manifest
 import android.content.ComponentName
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
-import android.location.LocationListener
-import android.location.LocationManager
 import android.media.MediaMetadata
 import android.media.audiofx.Visualizer
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import android.os.Bundle
-import android.os.Looper
 import android.os.SystemClock
 import android.view.WindowInsets
 import androidx.activity.ComponentActivity
@@ -106,7 +103,6 @@ import kotlin.math.sin
 
 /**
  * Rave: viser sangen som spilles i fullskjerm, med farger fra coveret som pulserer i takt med musikken.
- * Svartner når bilen kjører.
  */
 class RaveActivity : ComponentActivity() {
 
@@ -134,7 +130,6 @@ class RaveActivity : ComponentActivity() {
     }
     private var reactive by mutableStateOf(false)
     private var hasAccess by mutableStateOf(true)
-    private var driving by mutableStateOf(false)
 
     // Sangtekst
     private var showLyrics by mutableStateOf(false)
@@ -155,7 +150,6 @@ class RaveActivity : ComponentActivity() {
     private var msm: MediaSessionManager? = null
     private var controller: MediaController? = null
     private var visualizer: Visualizer? = null
-    private var locationManager: LocationManager? = null
 
     private var maxEnergy = 1f
     private var avgEnergy = 0f
@@ -178,12 +172,6 @@ class RaveActivity : ComponentActivity() {
         }
     }
 
-    private val locationListener = LocationListener { loc ->
-        if (loc.hasSpeed()) {
-            driving = if (driving) loc.speed > 1.0f else loc.speed > 2.5f
-        }
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent { RaveScreen() }
@@ -200,7 +188,6 @@ class RaveActivity : ComponentActivity() {
         hardstyleFrame = HardstyleFrame()
         startSessions()
         startVisualizer()
-        startSpeedGate()
         foreground = true
     }
 
@@ -216,7 +203,6 @@ class RaveActivity : ComponentActivity() {
         visualizer?.let { try { it.enabled = false; it.release() } catch (_: Exception) { } }
         visualizer = null
         reactive = false
-        try { locationManager?.removeUpdates(locationListener) } catch (_: Exception) { }
     }
 
     private fun safeSessions(): List<MediaController> =
@@ -452,15 +438,6 @@ class RaveActivity : ComponentActivity() {
         }
     }
 
-    private fun startSpeedGate() {
-        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) return
-        try {
-            val lm = getSystemService(LocationManager::class.java)
-            locationManager = lm
-            lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000L, 0f, locationListener, Looper.getMainLooper())
-        } catch (_: Exception) { }
-    }
-
     @Composable
     private fun RaveScreen() {
         val transportVisible = controls.transport
@@ -481,8 +458,8 @@ class RaveActivity : ComponentActivity() {
         var coverRadius by remember { mutableFloatStateOf(0f) }
         var sceneOrigin by remember { mutableStateOf(Offset.Zero) }
         var displayedFrame by remember { mutableStateOf(HardstyleFrame()) }
-        LaunchedEffect(hardstyleOn, foreground, driving, playing) {
-            if (!hardstyleOn || !foreground || driving) return@LaunchedEffect
+        LaunchedEffect(hardstyleOn, foreground, playing) {
+            if (!hardstyleOn || !foreground) return@LaunchedEffect
             var previous = 0L
             while (true) {
                 withFrameNanos { now ->
@@ -614,21 +591,21 @@ class RaveActivity : ComponentActivity() {
                 )
             }
 
-            val showVideo = foreground && videoOn && videoPlaying && videoId != null && !driving
+            val showVideo = foreground && videoOn && videoPlaying && videoId != null
             if (foreground && videoOn && videoId != null) {
                 androidx.compose.runtime.key(videoId) {
                     AndroidView(
                         factory = { ctx -> SilentClipView(ctx, videoId!!,
                             onFrame = { videoPlaying = true },
                             onFailure = { videoPlaying = false; videoId = null }) },
-                        update = { it.setPlaying(playing && !driving) },
+                        update = { it.setPlaying(playing) },
                         onRelease = { it.release() },
                         modifier = Modifier.fillMaxSize()
                     )
                 }
             }
 
-            if (hardstyleOn && foreground && !driving) {
+            if (hardstyleOn && foreground) {
                 coverCenter?.let { center ->
                     HardstyleBackdrop(Modifier.fillMaxSize(), displayedFrame, visualTime, hardPalette, showVideo,
                         center, coverRadius, audioIntensity)
@@ -704,10 +681,9 @@ class RaveActivity : ComponentActivity() {
                 }
             }
 
-            if (announcement && hardstyleOn && !driving) Text("PARTY ON", color=Color.White,
+            if (announcement && hardstyleOn) Text("PARTY ON", color=Color.White,
                 modifier=Modifier.align(Alignment.TopCenter).padding(16.dp).background(Color.Black.copy(alpha=.7f)).padding(12.dp))
             if (!hasAccess) Notice("Rave trenger tilgang til hva som spilles.\nInnstillinger → Varsler → Enhetstilgang til varsler → Bilnett Rave.")
-            if (driving) Notice("Parker bilen for å bruke Rave.", solid = true)
         }
     }
 
@@ -731,7 +707,7 @@ class RaveActivity : ComponentActivity() {
                 min(coordinates.size.width, coordinates.size.height) * .5f
             )
         }, contentAlignment = Alignment.Center) {
-            androidx.compose.runtime.key(trackIdentity, foreground, driving) {
+            androidx.compose.runtime.key(trackIdentity, foreground) {
                 HardstyleOrb(Modifier.fillMaxSize(), frame, palette, roundedSquare = true)
             }
             Cover(size * .86f, scale = 1f + frame.kick * .045f)
