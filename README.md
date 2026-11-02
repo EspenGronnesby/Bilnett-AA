@@ -1,191 +1,148 @@
-# <img src="https://github.com/user-attachments/assets/fa4252fa-b71e-4c87-9b93-d8ad832434cc" width="48" height="48" valign="bottom" /> AA Browser
+# Bilnett
 
-<a href="https://trendshift.io/repositories/45344" target="_blank"><img src="https://trendshift.io/api/badge/repositories/45344" alt="kododake%2FAABrowser | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
+Android Auto-nettleser med Rave: musikkvisualisering i bilen.
+
+> **Dette er en modifisert versjon av [AABrowser](https://github.com/kododake/AABrowser) av kododake, lisensiert under GPL-3.0. Endret av Espen Grønnesby fra november 2026.**
 
 [![Android](https://img.shields.io/badge/Android-15%2B-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://www.android.com/)
-[![License](https://img.shields.io/badge/License-GPLv3-blue.svg?style=for-the-badge)](https://www.gnu.org/licenses/gpl-3.0)
-[![Sponsor](https://img.shields.io/badge/Sponsor-Buy_Me_a_Coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/kododake)
-[![GitHub Sponsors](https://img.shields.io/badge/Sponsor-GitHub_Sponsors-EA4AAA?style=for-the-badge&logo=githubsponsors&logoColor=white)](https://github.com/sponsors/kododake)
-[<img src="https://img.shields.io/badge/Download_APK-GitHub_Releases-181717?style=for-the-badge&logo=github&logoColor=white" height="40" alt="Download APK on GitHub Releases">](https://github.com/kododake/AABrowser/releases/latest)
-[<img src="https://github.com/user-attachments/assets/1551eaef-432d-4634-875c-f085870d00a1" alt="Get it on Obtainium" height="40">](https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22com.kododake.aabrowser%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2Fkododake%2FAABrowser%22%2C%22author%22%3A%22kododake%22%2C%22name%22%3A%22AABrowser%22%2C%22preferredApkIndex%22%3A0%2C%22additionalSettings%22%3A%22%7B%5C%22includePrereleases%5C%22%3Afalse%2C%5C%22fallbackToOlderReleases%5C%22%3Atrue%2C%5C%22filterReleaseTitlesByRegEx%5C%22%3A%5C%22%5C%22%2C%5C%22filterReleaseNotesByRegEx%5C%22%3A%5C%22%5C%22%2C%5C%22verifyLatestTag%5C%22%3Afalse%2C%5C%22sortMethodChoice%5C%22%3A%5C%22date%5C%22%2C%5C%22useLatestAssetDateAsReleaseDate%5C%22%3Afalse%2C%5C%22releaseTitleAsVersion%5C%22%3Afalse%2C%5C%22trackOnly%5C%22%3Afalse%2C%5C%22versionExtractionRegEx%5C%22%3A%5C%22%5C%22%2C%5C%22matchGroupToUse%5C%22%3A%5C%22%5C%22%2C%5C%22versionDetection%5C%22%3Atrue%2C%5C%22releaseDateAsVersion%5C%22%3Afalse%2C%5C%22useVersionCodeAsOSVersion%5C%22%3Afalse%2C%5C%22apkFilterRegEx%5C%22%3A%5C%22%5C%22%2C%5C%22invertAPKFilter%5C%22%3Afalse%2C%5C%22autoApkFilterByArch%5C%22%3Atrue%2C%5C%22appName%5C%22%3A%5C%22%5C%22%2C%5C%22appAuthor%5C%22%3A%5C%22%5C%22%2C%5C%22shizukuPretendToBeGooglePlay%5C%22%3Afalse%2C%5C%22allowInsecure%5C%22%3Afalse%2C%5C%22exemptFromBackgroundUpdates%5C%22%3Afalse%2C%5C%22skipUpdateNotifications%5C%22%3Afalse%2C%5C%22about%5C%22%3A%5C%22%5C%22%2C%5C%22refreshBeforeDownload%5C%22%3Afalse%2C%5C%22includeZips%5C%22%3Afalse%2C%5C%22zippedApkFilterRegEx%5C%22%3A%5C%22%5C%22%7D%22%2C%22overrideSource%22%3Anull%7D)
+[![Lisens](https://img.shields.io/badge/Lisens-GPLv3-blue.svg?style=for-the-badge)](https://www.gnu.org/licenses/gpl-3.0)
 
-**The ultimate WebView browser experience for Android Auto head units.**
-Transform your "parked time" with a sleek, modern browser designed specifically for the road.
-
-> [!CAUTION]
-> **Beware of Fake Websites**
-> Fake websites impersonating AA Browser have appeared. **This GitHub repository (https://github.com/kododake/AABrowser) is the ONLY official source.** To prevent malware infections and financial damage, absolutely do not trust or download from any other websites.
-
-> [!NOTE]
-> **Requires Android 15 or later**
->
-> 📲 **Easy Install:** No need for a special installer. Just download and install.
->
-> 🚀 **Updates:** Using **[Obtainium](https://github.com/ImranR98/Obtainium)** (linked above) is recommended to keep the app automatically up to date without limitations. Alternatively, you can download the APK from [GitHub Releases](https://github.com/kododake/AABrowser/releases).
+Bilnett krever Android 15 eller nyere.
 
 ---
 
+## Rave og Party-modus
+
+Rave er hovedfunksjonen i Bilnett. Det er en fullskjerm «nå spilles»-visning som følger musikken på telefonen.
+
+Rave viser:
+
+- cover og tittel på sangen som spilles
+- sangtekst
+- musikkvideo
+
+**Party-modus** gjør Rave om til en lydvisualisering i Trap Nation- og Bass Boosted-stil:
+
+- En lydspekter-ring rundt coveret som beveger seg med musikken.
+- Overdrevne spikes og lys på tunge zaag- og rawstyle-drops.
+- Den følger telefonens volum. Fra 70 % kommer det ekstra streker, flere partikler og risting. Ved 90-100 % tar ringen helt av.
+- Strobe ved maks volum og tunge kick.
+- Ripple-bølger kun på sterk og forvrengt bass.
+
+Rave har eget ikon, slik at du finner den raskt.
+
+Rave trenger to tilganger:
+
+- **Mikrofon:** brukes til lydanalysen (Android Visualizer).
+- **Varsler:** gir tilgang til å lese hva som spilles. Slå på «Bilnett Rave».
+
+---
+
+## Nettleseren
+
+Nettleseren kommer fra AABrowser og er laget for bilskjermer.
+
 <div align="center">
-  <img width="80%" src="docs/img/aabrowser3.gif" alt="AA Browser showcase screenshot" />
+  <img width="80%" src="docs/img/aabrowser3.gif" alt="Nettleseren i Bilnett" />
 </div>
 
-## ✨ Key Features
-
-- 🎨 **Material 3 Expressive UI:** Built specifically for car screens with fluid expressive animations, modern bottom sheets, and true-black AMOLED theme.
-- 🎬 **Immersive Video & Fullscreen:** Stream DRM-protected video (Widevine L3) and toggle instant fullscreen with a single tap for parked entertainment.
-- 🚀 **Dynamic Start Page:** Up to 6 quick-link tiles with smooth drag-and-drop reordering, cached site icons, and custom background image support.
-- 🗂️ **Desktop-Class Tab Management:** Easily open, switch, close, and restore multiple browser tabs directly from your dashboard.
-- 🚗 **Car-First Controls:** One-touch mobile/desktop mode switching, global UI scaling, and intuitive bookmark management designed for head units.
-
-### 📸 Screenshots
+- **Material 3-utseende:** tilpasset bilskjermer, med myke animasjoner og ekte svart AMOLED-tema.
+- **Video i fullskjerm:** støtter DRM-beskyttet video (Widevine L3). Ett trykk for fullskjerm.
+- **Startside:** opptil 6 snarveier du kan sortere ved å dra, med lagrede ikoner og eget bakgrunnsbilde.
+- **Faner:** åpne, bytt, lukk og gjenopprett flere faner.
+- **Bilvennlig:** bytt mellom mobil- og skrivebordsvisning, skaler hele grensesnittet og administrer bokmerker.
 
 <div align="center">
-  <img width="44%" src="docs/screenshots/litemode-v3_0.png" alt="AA Browser light mode live screenshot" />
-  <img width="44%" src="docs/screenshots/darkmode-v3_0.png" alt="AA Browser dark mode live screenshot" />
-</div>
-
----
-
-## 📱 Quick Start & Safety 🚦
-
-#### 🛑 Developer's Safety Request
-
-- **Driver's Duty:** If you're the one steering, **DO NOT LOOK AT THIS APP.** If you think your eyes might wander while driving, **uninstall it right now!** Seriously, your safety is my top priority.
-- **Passenger's Joy:** This app is for your passengers or for when you are safely parked.
-- **Legal Note:** I built the code, but the **GPLv3 license** means I am **NOT RESPONSIBLE** for your actions. Drive smart!
-
----
-
-#### 🛠️ How to Enable Unknown Sources on Android Auto
-
-To use this app, you must unlock the hidden Developer Settings.
-
-1. **Open Android Auto Settings:** Search for "Android Auto" in your phone's settings.
-2. **Unlock Developer Mode:** Scroll to the bottom and **tap the "Version" section 10 times**. Tap **OK** on the pop-up.
-3. **Open Developer Settings:** Tap the **three-dot menu (⋮)** in the top-right corner -> **Developer settings**.
-4. **Enable Unknown Sources:** Find the **Unknown sources** checkbox and turn it on.
-
----
-
-## ❓ Troubleshooting
-
-**App not starting?**
-If the app fails to launch, try opening a non-Google Maps navigation app (such as **Waze**) first, then open AA Browser.
-
----
-
-## ⚠️ Current Issues
-
-- 🚫 **No Ad Blocking:** Ad filtering is not currently implemented. *(💡 **Tip:** If you want to use your own favorite browser with built-in ad-blocking or other apps like VLC on Android Auto, check out **[AA Anything](https://github.com/kododake/AAAnything)**, another app I built!)*
-- 🚗 **Stationary Use Only**
-
----
-
-## 🤝 Contributors
-
-Every contribution makes AA Browser better!
-
-- 🐛 **Found a bug?** Check for existing issues and open a new one with reproduction steps if none are found.
-- 💡 **Got an idea?** Start a discussion.
-- 🔧 **Wanna code?** Fork the repo and submit a PR!
-- 📸 **Show it off:** Share a photo of AA Browser on your dashboard in the Discussions tab!
-
-<table width="100%">
-  <tr>
-    <td align="center" valign="top" width="20%">
-      <a href="https://github.com/kododake">
-        <img src="https://github.com/kododake.png?s=100" width="60" alt="kododake"/><br />
-        <sub><b>kododake</b></sub>
-      </a><br />
-      <sub>Project Lead & Maintainer</sub>
-    </td>
-    <td align="center" valign="top" width="20%">
-      <a href="https://github.com/cmacrowther">
-        <img src="https://github.com/cmacrowther.png?s=100" width="60" alt="Colin Crowther"/><br />
-        <sub><b>Colin Crowther</b></sub>
-      </a><br />
-      <sub>Original Design</sub>
-    </td>
-    <td align="center" valign="top" width="20%">
-      <a href="https://github.com/jigneshbhavani">
-        <img src="https://github.com/jigneshbhavani.png?s=100" width="60" alt="jigneshbhavani"/><br />
-        <sub><b>jigneshbhavani</b></sub>
-      </a><br />
-      <sub>Microphone Support</sub>
-    </td>
-    <td align="center" valign="top" width="20%">
-      <a href="https://github.com/SaveEditors">
-        <img src="https://github.com/SaveEditors.png?s=100" width="60" alt="SaveEditors"/><br />
-        <sub><b>SaveEditors</b></sub>
-      </a><br />
-      <sub>Multi-tab support, Original Home screen</sub>
-    </td>
-    <td align="center" valign="top" width="20%">
-      <a href="https://github.com/gregorixG">
-        <img src="https://github.com/gregorixG.png?s=100" width="60" alt="gregorixG"/><br />
-        <sub><b>gregorixG</b></sub>
-      </a><br />
-      <sub>Desktop site UA handling</sub>
-    </td>
-    <td align="center" valign="top" width="20%">
-      <a href="https://github.com/breakzplatform">
-        <img src="https://github.com/breakzplatform.png?s=100" width="60" alt="breakzplatform"/><br />
-        <sub><b>breakzplatform</b></sub>
-      </a><br />
-      <sub>Custom UA handling</sub>
-    </td>
-  </tr>
-</table>
-
----
-
-## 🛡️ Privacy, Reimagined
-I care about the app's growth, but I care about your privacy even more. This app is designed with a **Transparency-First** policy:
-
-> [!IMPORTANT]
-> **I have ZERO interest in your browsing habits.**
-> - 🚫 **No URL Tracking:** I don't (and physically can't) see which websites you visit, what you search, or what you type.
-> - 🕵️ **Self-Hosted Analytics:** I use a private **Umami** instance. No IP track, No Google, No Meta, no Big Tech trackers.
-> - 🆔 **Anonymous Data:** I only see **"The app was opened"** and **This App Versions**. I use a random, anonymous UUID that isn't tied to your device ID or personal info.
-
----
-
-## <img src="https://github.com/kododake/AAAnything/blob/main/assets/icon.png?raw=true" width="32" height="32" valign="middle" alt="AA Anything Logo" /> Want More Than a Browser? Try **AA Anything**!
-
-Love **AA Browser**, but wish you could also run your other favorite apps on your car's screen? Check out **[AA Anything](https://github.com/kododake/AAAnything)** — a brand-new tool I built to unlock your dashboard for everyday Android apps!
-
-- 🎬 **Bring Your Apps to the Dash:** Project media players (like **VLC** — completely free to use!), plus unlock third-party web browsers, finance trackers, and handy utilities directly on Android Auto *(excluding apps with strict DRM or Play Integrity restrictions)*.
-- 📱 **No Root, No PC Required:** Forget complicated ADB commands. Everything happens right on your phone in just a few taps—pick an app, tap **Patch & Install**, and plug in!
-- 🔄 **Effortless In-Place Updates:** Keep all your app data and login sessions intact when updating apps or after Android system updates.
-- 🛡️ **100% Safe for Your Vehicle:** Operates purely over standard Android Auto projection on **Android 15+** with zero modifications to your car's head unit.
-
-<div align="center">
-  <a href="https://github.com/kododake/AAAnything">
-    <img src="https://img.shields.io/badge/Explore-AA_Anything-blue?style=for-the-badge&logo=github&logoColor=white" height="40" alt="Explore AA Anything">
-  </a>
-  &nbsp;
-  <a href="https://github.com/kododake/AAAnything/releases/latest">
-    <img src="https://img.shields.io/badge/Get_It_On-GitHub_Releases-181717?style=for-the-badge&logo=github&logoColor=white" height="40" alt="Get AA Anything on GitHub Releases">
-  </a>
+  <img width="44%" src="docs/screenshots/litemode-v3_0.png" alt="Nettleseren i lyst tema" />
+  <img width="44%" src="docs/screenshots/darkmode-v3_0.png" alt="Nettleseren i mørkt tema" />
 </div>
 
 ---
 
-## ☕ Support the Project
+## Endringer fra AABrowser
 
-I'm a solo student developer building and maintaining **AA Browser** in my spare time (mostly while fighting `./gradlew` crashes on my machine 😅). If this app makes your parked breaks or road trips a little more enjoyable, please consider buying me a coffee! Your support helps keep me caffeinated, upgrade my dev environment, and keep this project alive.
+Endringer i Bilnett:
 
-<div align="center">
-  <a href="https://buymeacoffee.com/kododake">
-    <img src="docs/img/bmc-white-button.png" alt="Buy Me A Coffee" height="48">
-  </a>
-  &nbsp;
-  <a href="https://github.com/sponsors/kododake">
-    <img src="https://img.shields.io/badge/Sponsor_on-GitHub-EA4AAA?style=for-the-badge&logo=githubsponsors&logoColor=white" height="48" alt="Sponsor on GitHub">
-  </a>
-</div>
+- Fartssperren i Rave er fjernet.
+- Analytics til opprinnelig forfatters server er slått av. Bilnett sporer ingenting.
+- Party-modus er ny.
+- Rave har eget ikon.
 
-*If you sponsor the project, please let me know in the Discussions! I'd love to add you to our sponsors list as a token of my gratitude.*
+Alt annet, som nettleseren, startsiden, fanene og Material 3-designet, kommer fra AABrowser og dets bidragsytere. Se [Takk til](#takk-til).
 
 ---
-**Stay safe, keep your eyes on the road, and happy browsing! 🚗💨**
+
+## Installer
+
+Det finnes ingen ferdige utgivelser (releases) ennå. Du må bygge appen selv.
+
+Du trenger JDK 21 og en telefon koblet til med `adb`.
+
+```bash
+./gradlew assembleDebug
+adb install -r app/build/renamedApks/debug/AABrowser-3.3_debug.apk
+```
+
+### Slik slår du på Ukjente kilder i Android Auto
+
+Appen er ikke installert fra Play Store, så du må låse opp utviklerinnstillingene i Android Auto.
+
+1. **Åpne Android Auto-innstillinger:** Søk etter «Android Auto» i telefonens innstillinger.
+2. **Lås opp utviklermodus:** Bla til bunnen og **trykk 10 ganger på «Versjon»**. Trykk **OK** i dialogen.
+3. **Åpne utviklerinnstillinger:** Trykk på **trepunktsmenyen (⋮)** øverst til høyre, og velg **Utviklerinnstillinger**.
+4. **Slå på Ukjente kilder:** Finn **Ukjente kilder** og slå den på.
+
+---
+
+## Sikkerhet i bilen
+
+Føreren har ansvaret. Video, strobe og risting kan ta blikket fra veien. Bruk Bilnett med vett.
+
+Bilnett leveres uten garanti, slik GPL-3.0 sier.
+
+---
+
+## Personvern
+
+Bilnett sender ingen analytics.
+
+Internett brukes bare til:
+
+- nettsidene du selv åpner
+- søk etter musikkvideo (iTunes Search)
+- sangtekster
+
+---
+
+## Feilsøking
+
+**Appen starter ikke?**
+Prøv å åpne en annen navigasjonsapp enn Google Maps først, for eksempel **Waze**. Åpne deretter Bilnett.
+
+**Bilnett vises ikke i bilen?**
+Sjekk at **Ukjente kilder** fortsatt er slått på. Den kan bli slått av etter en oppdatering av Android Auto.
+
+---
+
+## Takk til
+
+Bilnett bygger på [AABrowser](https://github.com/kododake/AABrowser) av [kododake](https://github.com/kododake). Uten det arbeidet fantes ikke Bilnett.
+
+Takk også til bidragsytere i AABrowser:
+
+- [Colin Crowther](https://github.com/cmacrowther): opprinnelig design
+- [jigneshbhavani](https://github.com/jigneshbhavani): mikrofonstøtte
+- [SaveEditors](https://github.com/SaveEditors): flere faner og opprinnelig startskjerm
+- [gregorixG](https://github.com/gregorixG): håndtering av skrivebordsvisning (UA)
+- [breakzplatform](https://github.com/breakzplatform): egendefinert UA
+
+**Støtt originalutvikleren:**
+
+- [Buy Me a Coffee](https://buymeacoffee.com/kododake)
+- [GitHub Sponsors](https://github.com/sponsors/kododake)
+
+---
+
+## Lisens
+
+GPL-3.0. Se [LICENSE](LICENSE).
