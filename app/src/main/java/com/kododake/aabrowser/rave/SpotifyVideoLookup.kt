@@ -26,6 +26,21 @@ internal object SpotifyVideoLookup {
             ?.optString("previewUrl")?.takeIf(::valid)
     }
 
+    /** Apple Music's genre for the song (e.g. "Hip-Hop/Rap", "Rock", "Dance"), or null. */
+    fun genreFor(title: String, artist: String): String? {
+        // Spotify titles often carry extras ("- Remastered 2011", "(feat. X)") that Apple lacks.
+        val clean = title.replace(Regex("\\s*[-–(\\[].*$"), "").trim().ifBlank { title }
+        val mainArtist = artist.split(Regex("\\s*(?:,|&| feat\\.? | featuring )\\s*", RegexOption.IGNORE_CASE)).first()
+        val hits = search("$mainArtist $clean", "no", "song") + search("$mainArtist $clean", "us", "song")
+        val exact = hits.firstOrNull { norm(it.optString("trackName")).startsWith(norm(clean)) && sameArtist(it.optString("artistName"), artist) }
+        val byArtist = hits.firstOrNull { sameArtist(it.optString("artistName"), artist) }
+        (exact ?: byArtist)?.optString("primaryGenreName")?.takeIf { it.isNotBlank() }?.let { return it }
+        // Last resort: the artist's own main genre.
+        val artistHits = search(mainArtist, "no", "musicArtist") + search(mainArtist, "us", "musicArtist")
+        return artistHits.firstOrNull { sameArtist(it.optString("artistName"), artist) }
+            ?.optString("primaryGenreName")?.takeIf { it.isNotBlank() }
+    }
+
     private fun sameArtist(candidate: String, artist: String): Boolean {
         val candidates = candidate.split(Regex("\\s*(?:,|&| feat\\.? | featuring )\\s*", RegexOption.IGNORE_CASE)).map(::norm)
         val wanted = artist.split(Regex("\\s*(?:,|&| feat\\.? | featuring )\\s*", RegexOption.IGNORE_CASE)).map(::norm)
@@ -33,9 +48,9 @@ internal object SpotifyVideoLookup {
     }
     private fun valid(url: String) = url.startsWith("https://")
 
-    private fun search(term: String, country: String): List<JSONObject> {
+    private fun search(term: String, country: String, entity: String = "musicVideo"): List<JSONObject> {
         val encoded = URLEncoder.encode(term, "UTF-8")
-        val req = Request.Builder().url("https://itunes.apple.com/search?term=$encoded&entity=musicVideo&limit=25&country=$country").build()
+        val req = Request.Builder().url("https://itunes.apple.com/search?term=$encoded&entity=$entity&limit=25&country=$country").build()
         return try {
             client.newCall(req).execute().use { response ->
                 if (!response.isSuccessful) return emptyList()

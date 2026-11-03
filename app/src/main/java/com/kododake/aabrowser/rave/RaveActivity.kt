@@ -115,6 +115,34 @@ class RaveActivity : ComponentActivity() {
     private var level by mutableFloatStateOf(0f)
     private var beat by mutableFloatStateOf(0f)
     private var hardstyleOn by mutableStateOf(false)
+    // Party profile per genre (hardstyle, rap, rock, EDM, standard), detected automatically.
+    private val genreDetector = GenreDetector()
+    private val songPhase = HardstyleStructure()
+    private val hardSubDetector = HardSubDetector()
+    private var hardSub by mutableStateOf(HardSub.RAW)
+    private var partLabelAt by mutableLongStateOf(0L)
+    private var subChangedAt by mutableLongStateOf(0L)
+    private var lastStrobeAt = 0L
+    /** Live analysis panel (HUD): what the structure engine sees right now. */
+    private var hudData by mutableStateOf(StructureHud())
+    private var showAnalysis by mutableStateOf(true)
+    private var lastHudAt = 0L
+    private var lastHeavyFlashAt = 0L
+    private var songDurationMs = 0L
+    private var screechShake by mutableFloatStateOf(0f)
+    /** How lively the current song part is (hardstyle/EDM): low in intro/breakdown/outro. */
+    private var phaseLevel by mutableFloatStateOf(1f)
+    private var genre by mutableStateOf(Genre.HARDSTYLE)
+    private var partyProfile by mutableStateOf(Genre.HARDSTYLE.profile())
+    private var genreAnnouncedAt by mutableLongStateOf(0L)
+    /** Genre picked with the buttons (null = automatic); remembered between sessions. */
+    private var chosenGenre by mutableStateOf<Genre?>(null)
+    private fun chooseGenre(g: Genre?) {
+        chosenGenre = g
+        genreDetector.setManual(g, SystemClock.uptimeMillis())
+        genre = genreDetector.genre
+        try { getSharedPreferences("rave", MODE_PRIVATE).edit().putString("genre", g?.name ?: "AUTO").apply() } catch (_: Exception) { }
+    }
     private var volume by mutableFloatStateOf(1f)
     private var volumeReadAt = 0L
     private var hardstyleFrame by mutableStateOf(HardstyleFrame())
@@ -129,10 +157,38 @@ class RaveActivity : ComponentActivity() {
         hardstyleFrame = HardstyleFrame()
         visualizer?.let { try { it.enabled = false; it.release() } catch (_: Exception) {} }
         visualizer = null
+        val wasMic = micMode
+        stopMic()
         startVisualizer()
+        if (wasMic) startMic()
     }
     private var reactive by mutableStateOf(false)
     private var hasAccess by mutableStateOf(true)
+
+    // Backup sound source: with Android Auto over USB the Visualizer only hears silence, so Party
+    // falls back to the phone's microphone (the music is loud in the car).
+    private var micSource: MicFftSource? = null
+    private var micMode by mutableStateOf(false)
+    @Volatile private var lastVisualizerSoundAt = 0L
+    private var visualizerStartedAt = 0L
+
+    /** Same handling for sound from the Visualizer and from the microphone. */
+    private fun handleFft(fft: ByteArray, sampleRateHz: Int) {
+        if (hardstyleOn) {
+            hardstyleAudioAt = SystemClock.uptimeMillis()
+            hardstyleFrame = hardstyleAudio.accept(fft, sampleRateHz, hardstyleAudioAt)
+        } else onFft(fft)
+    }
+
+    private fun startMic() {
+        if (micSource?.isRunning == true) return
+        val src = MicFftSource(this, if (hardstyleOn) 2048 else 512) { fft, rate -> if (micMode) handleFft(fft, rate) }
+        if (src.start()) { micSource = src; micMode = true; reactive = true; hardstyleAudio.reset() }
+    }
+
+    private fun stopMic() {
+        micSource?.stop(); micSource = null; micMode = false
+    }
 
     // Sangtekst
     private var showLyrics by mutableStateOf(false)
@@ -177,6 +233,9 @@ class RaveActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        showAnalysis = try { getSharedPreferences("rave", MODE_PRIVATE).getBoolean("analysis", true) } catch (_: Exception) { true }
+        val saved = try { getSharedPreferences("rave", MODE_PRIVATE).getString("genre", "AUTO") } catch (_: Exception) { "AUTO" }
+        Genre.entries.firstOrNull { it.name == saved }?.let { chosenGenre = it; genreDetector.setManual(it, 0L); genre = it }
         setContent {
             val cfg = androidx.compose.ui.platform.LocalConfiguration.current
             androidx.compose.runtime.CompositionLocalProvider(
@@ -210,6 +269,7 @@ class RaveActivity : ComponentActivity() {
         controller = null
         visualizer?.let { try { it.enabled = false; it.release() } catch (_: Exception) { } }
         visualizer = null
+        stopMic()
         reactive = false
     }
 
@@ -254,8 +314,23 @@ class RaveActivity : ComponentActivity() {
             trackIdentity = identity
             hardstyleAudio.reset()
             hardstyleFrame = HardstyleFrame()
+            genreDetector.newTrack(SystemClock.uptimeMillis())
+            songPhase.newTrack(SystemClock.uptimeMillis())
+            hardSubDetector.newTrack()
+            val t = m?.getString(MediaMetadata.METADATA_KEY_TITLE).orEmpty()
+            val a = m?.getString(MediaMetadata.METADATA_KEY_ARTIST).orEmpty()
+            if (t.isNotBlank() && a.isNotBlank()) Thread {
+                val appleGenre = SpotifyVideoLookup.genreFor(t, a)
+                runOnUiThread {
+                    if (trackIdentity == identity) {
+                        genreDetector.setAppleGenre(appleGenre, SystemClock.uptimeMillis())
+                        genre = genreDetector.genre
+                    }
+                }
+            }.start()
         }
         title = m?.getString(MediaMetadata.METADATA_KEY_TITLE).orEmpty()
+        songDurationMs = m?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L
         artist = m?.getString(MediaMetadata.METADATA_KEY_ARTIST)
             ?: m?.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST).orEmpty()
         val bmp = m?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
@@ -420,15 +495,17 @@ class RaveActivity : ComponentActivity() {
                 override fun onWaveFormDataCapture(vis: Visualizer?, waveform: ByteArray?, samplingRate: Int) {}
                 override fun onFftDataCapture(vis: Visualizer?, fft: ByteArray?, samplingRate: Int) {
                     if (fft != null) {
-                        if (hardstyleOn) {
-                            hardstyleAudioAt = SystemClock.uptimeMillis()
-                            hardstyleFrame = hardstyleAudio.accept(fft, samplingRate / 1000, hardstyleAudioAt)
-                        } else onFft(fft)
+                        // Is the Visualizer actually hearing anything? (Silent under Android Auto/USB.)
+                        var loud = 0
+                        for (i in 2 until minOf(fft.size, 130)) loud = maxOf(loud, kotlin.math.abs(fft[i].toInt()))
+                        if (loud > 2) lastVisualizerSoundAt = SystemClock.uptimeMillis()
+                        if (!micMode) handleFft(fft, samplingRate / 1000)
                     }
                 }
             }, Visualizer.getMaxCaptureRate(), false, true)
             v.enabled = true
             visualizer = v
+            visualizerStartedAt = SystemClock.uptimeMillis()
             reactive = true
         } catch (_: Exception) {
             reactive = false
@@ -463,6 +540,37 @@ class RaveActivity : ComponentActivity() {
         }
         LaunchedEffect(Unit) { controls = controls.touch(SystemClock.elapsedRealtime()) }
         var announcement by remember { mutableStateOf(false) }
+        // Short label when the Party profile changes, e.g. "ROCK", "RAP", "HARDSTYLE".
+        var genreBanner by remember { mutableStateOf<String?>(null) }
+        // Shown once per song (what the app thinks it is) and whenever the profile changes.
+        var bannerShownFor by remember { mutableLongStateOf(genreAnnouncedAt) }
+        fun genreName() = if (genre == Genre.HARDSTYLE) hardSub.label else genre.label
+        // One banner at a time: a newer text is never cleared early by an older one's timer.
+        var bannerToken by remember { mutableIntStateOf(0) }
+        suspend fun banner(text: String, ms: Long) {
+            val token = ++bannerToken
+            genreBanner = text; delay(ms)
+            if (bannerToken == token) genreBanner = null
+        }
+        LaunchedEffect(genreAnnouncedAt) {
+            if (genreAnnouncedAt > 0L && genreAnnouncedAt != bannerShownFor) {
+                bannerShownFor = genreAnnouncedAt
+                banner(genreName(), 1600)
+            }
+        }
+        // Hardstyle sub-genre found (e.g. "RAW", "UPTEMPO") and song parts ("BUILD-UP",
+        // "FAKE DROP", "FØRSTE DROP", "SISTE DROP", "SYNGING").
+        var subShownFor by remember { mutableLongStateOf(subChangedAt) }
+        LaunchedEffect(subChangedAt) {
+            if (subChangedAt > 0L && subChangedAt != subShownFor && genre == Genre.HARDSTYLE) { subShownFor = subChangedAt; banner(genreName(), 1600) }
+        }
+        var partShownFor by remember { mutableLongStateOf(partLabelAt) }
+        LaunchedEffect(partLabelAt) {
+            if (partLabelAt > 0L && partLabelAt != partShownFor && (genre == Genre.HARDSTYLE || genre == Genre.EDM) && songPhase.label.isNotBlank()) {
+                partShownFor = partLabelAt
+                banner(songPhase.label, 1300)
+            }
+        }
         LaunchedEffect(hardstyleOn) {
             announcement = hardstyleOn
             if (hardstyleOn) { delay(1200); announcement = false }
@@ -481,18 +589,69 @@ class RaveActivity : ComponentActivity() {
                     val dt = if (previous == 0L) 0f else ((now-previous)/1e9f).coerceAtMost(.05f)
                     previous = now
                     val fresh = reactive && SystemClock.uptimeMillis()-hardstyleAudioAt < 300
-                    val target = if (!playing || !fresh && reactive) HardstyleFrame() else if (fresh) hardstyleFrame
+                    val rawTarget = if (!playing || !fresh && reactive) HardstyleFrame() else if (fresh) hardstyleFrame
                         else HardstyleFrame()
                     // Advance the scene only while the live signal has energy. FFT noise
                     // below the floor cannot keep the background drifting during silence.
-                    val activity = maxOf(target.bass, target.kick, target.highs, target.highMotion,
-                        target.spectrum.maxOrNull() ?: 0f)
+                    val activity = maxOf(rawTarget.bass, rawTarget.kick, rawTarget.highs, rawTarget.highMotion,
+                        rawTarget.spectrum.maxOrNull() ?: 0f)
                     if (playing && ((!reactive && !fresh) || activity > .025f)) {
                         visualTime += dt * if (!reactive && !fresh) .3f else (.35f + activity)
                     }
                     audioIntensity = if (playing && ((!reactive && !fresh) || activity > .025f)) activity.coerceIn(0f, 1f) else 0f
                     val mix = 1f-kotlin.math.exp(-dt/(if (playing) .025f else .12f))
                     fun blend(a: Float,b: Float) = a+(b-a)*mix
+                    // Genre profile: reshape what the visuals react to, softly over ~1 s.
+                    val nowMs = SystemClock.uptimeMillis()
+                    if (playing && fresh) genre = genreDetector.update(rawTarget, nowMs)
+                    genreAnnouncedAt = genreDetector.announcedAt
+                    val change = genreDetector.transition(nowMs)
+                    val shapedFull = if (change >= 1f) genre.shape(rawTarget)
+                        else blendFrames(genreDetector.previous.shape(rawTarget), genre.shape(rawTarget), change)
+                    // Song structure (hardstyle/EDM): calm intro, rising build-up, max chaos on the drop.
+                    val phaseIntensity = if (playing && fresh)
+                        songPhase.update(rawTarget, nowMs, positionMs(), if (songDurationMs > 0L) songDurationMs else -1L) else 1f
+                    partLabelAt = songPhase.labelAt
+                    // HUD: only while shown, at most ~7 times a second (no needless recomposition).
+                    if (showAnalysis && hardstyleOn && nowMs - lastHudAt >= 150L) { hudData = songPhase.hud; lastHudAt = nowMs }
+                    if (playing && fresh && genre == Genre.HARDSTYLE) { hardSub = hardSubDetector.update(rawTarget, nowMs); subChangedAt = hardSubDetector.changedAt }
+                    val structured = genre == Genre.HARDSTYLE || genre == Genre.EDM
+                    val pi = if (structured) phaseIntensity else 1f
+                    val inDrop = structured && songPhase.part == SongPart.DROP
+                    // Strobe and ripples wait until a drop has proven real (2 s) — no chaos on fake drops.
+                    val effectsOn = !structured || songPhase.effectsAllowed
+                    val sub = if (genre == Genre.HARDSTYLE) hardSub else null
+                    phaseLevel = pi.coerceAtMost(1f)
+                    screechShake = when {
+                        genre != Genre.HARDSTYLE -> 0f
+                        songPhase.part == SongPart.DROP && effectsOn -> (sub?.screech ?: 1f) * (if (songPhase.dropKind == DropKind.LAST) 1.3f else 1f)
+                        songPhase.part == SongPart.DROP -> .5f * (sub?.screech ?: 1f)
+                        else -> 0f
+                    }
+                    val shaped = when {
+                        !structured -> shapedFull
+                        // In the drop the effects follow the music's own heaviness (no forced full
+                        // input — Espen prefers a bit too little over too much chaos).
+                        inDrop -> shapedFull.copy(heavy = (shapedFull.heavy * pi).coerceAtMost(1f),
+                            grit = if (effectsOn) shapedFull.grit else 0f)
+                        // Outside the drop: keep pumping to every beat; only the chaos is held back.
+                        else -> shapedFull.copy(
+                            heavy = (shapedFull.heavy * pi).coerceAtMost(1f),
+                            kick = shapedFull.kick * (.6f + .4f * pi.coerceAtMost(1f)),
+                            grit = 0f
+                        )
+                    }
+                    val pa = genreDetector.previous.profile(); val pb = genre.profile()
+                    fun lp(x: Float, y: Float) = x + (y - x) * change
+                    // Strobe only in the drop; shake/particles/spikes follow the song part.
+                    // Hardstyle sub-genres (euphoric/raw/hardcore/uptempo) each get their own feel.
+                    partyProfile = PartyProfile(
+                        lp(pa.spike, pb.spike) * (.75f + .25f * pi) * (sub?.spike ?: 1f),
+                        lp(pa.particles, pb.particles) * (.6f + .4f * pi) * (sub?.particles ?: 1f),
+                        lp(pa.shake, pb.shake) * pi * (sub?.shake ?: 1f),
+                        lp(pa.strobe, pb.strobe) * (if (effectsOn && pi >= .9f) 1f else 0f) * (sub?.strobe ?: 1f),
+                        lp(pa.density, pb.density), lp(pa.softness, pb.softness))
+                    val target = shaped
                     displayedFrame = HardstyleFrame(blend(displayedFrame.bass,target.bass),
                         blend(displayedFrame.kick,target.kick),blend(displayedFrame.highs,target.highs),
                         blend(displayedFrame.energy,target.energy),blend(displayedFrame.burst,target.burst),blend(displayedFrame.build,target.build),
@@ -502,7 +661,10 @@ class RaveActivity : ComponentActivity() {
                         },
                         highMotion = blend(displayedFrame.highMotion, if (playing && fresh) target.highMotion else 0f),
                         heavy = blend(displayedFrame.heavy, target.heavy),
-                        grit = blend(displayedFrame.grit, target.grit))
+                        grit = blend(displayedFrame.grit, target.grit),
+                        bpm = target.bpm, snare = target.snare, crash = target.crash, sub = target.sub, level = target.level, screech = blend(displayedFrame.screech, target.screech),
+                        bassLevel = target.bassLevel, air = target.air, subLevel = target.subLevel,
+                        presence = target.presence, beat = target.beat)
                 }
             }
         }
@@ -535,6 +697,12 @@ class RaveActivity : ComponentActivity() {
                 if (nowMs - volumeReadAt > 250) {
                     volumeReadAt = nowMs
                     volume = readVolume()
+                    // Visualizer silent for 2.5 s while music plays → listen through the microphone;
+                    // switch back when the Visualizer hears sound again.
+                    if (playing && visualizer != null && !micMode && nowMs - visualizerStartedAt > 2_500L &&
+                        nowMs - lastVisualizerSoundAt > 2_500L &&
+                        checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) startMic()
+                    if (micMode && nowMs - lastVisualizerSoundAt < 500L) { stopMic(); hardstyleAudio.reset() }
                 }
                 if (showLyrics) pos = positionMs()
                 if (!reactive) {
@@ -573,9 +741,12 @@ class RaveActivity : ComponentActivity() {
                 // controls; the solid background drawn before this layer stays put.
                 // Heavy drops shake; from 70 % volume every kick shakes too, and drops harder.
                 val ramp = loudRamp(volume)
-                val shake = if (hardstyleOn) displayedFrame.kick * volumeGain(volume) *
+                val shake = if (hardstyleOn) partyProfile.shake * displayedFrame.kick * volumeGain(volume) *
                     (displayedFrame.heavy * (10.dp.toPx() + loudness(volume) * 4.dp.toPx()) * (1f + ramp * .8f) +
-                        ramp * 5.dp.toPx()) else 0f
+                        ramp * 5.dp.toPx()) +
+                    // Screeches (raw hardstyle): the screen trembles while they sound — strongest in
+                    // the drop, weaker between drops, off in intro/build-up/ending.
+                    screechShake * displayedFrame.screech * 7.dp.toPx() * volumeGain(volume) else 0f
                 if (shake > .5f) {
                     val s = SystemClock.uptimeMillis() / 1000f
                     translationX = sin(s * 91f) * shake
@@ -592,7 +763,8 @@ class RaveActivity : ComponentActivity() {
                 val lightTravel = if (hardstyleOn) .40f else .22f
                 // Party lighting should hit with the music instead of only drifting
                 // smoothly. Kick and bass pull each glow outward on every transient.
-                val partyHit = if (hardstyleOn)
+                // Background lights follow the song part too: calm parts flash much less.
+                val partyHit = if (hardstyleOn) (.3f + .7f * phaseLevel) *
                     (maxOf(displayedFrame.kick, displayedFrame.bass * .55f, displayedFrame.highMotion * .2f) +
                         displayedFrame.heavy * displayedFrame.kick * .4f +
                         (displayedFrame.spectrum.maxOrNull() ?: 0f) * .25f * volumeGain(volume)).coerceAtMost(1.6f)
@@ -623,8 +795,17 @@ class RaveActivity : ComponentActivity() {
                 }
                 // Strobe: max volume + heavy distorted kicks (zaag etc.) flash the whole scene,
                 // alternating cover colours. Kick decays in ~85 ms, so each flash is short.
-                val strobe = if (hardstyleOn) displayedFrame.kick * displayedFrame.heavy *
-                    ((volume - .85f) / .15f).coerceIn(0f, 1f) else 0f
+                // Rock flashes on cymbal crashes instead; rap and standard have no strobe.
+                val strobeSource = if (genre == Genre.ROCK) displayedFrame.crash else displayedFrame.kick * displayedFrame.heavy
+                // Hardstyle strobes from 70 % volume (max chaos on the drop); others from 85 %.
+                val strobeFrom = if (genre == Genre.HARDSTYLE) .7f else .85f
+                val strobeRaw = if (hardstyleOn) partyProfile.strobe * strobeSource *
+                    ((volume - strobeFrom) / .15f).coerceIn(0f, 1f) else 0f
+                // Safety: never more than 2.5 flashes per second (under the 3 Hz limit for people
+                // sensitive to flashing light) — matters at uptempo, where kicks come 3+ times/s.
+                val strobeNow = SystemClock.uptimeMillis()
+                if (strobeRaw > .3f && strobeNow - lastStrobeAt >= 400L) lastStrobeAt = strobeNow
+                val strobe = if (strobeNow - lastStrobeAt < 120L) strobeRaw else 0f
                 if (strobe > 0.03f) {
                     val strobeColor = palette[((SystemClock.uptimeMillis() / 110L) % palette.size).toInt()]
                     drawRect(strobeColor.copy(alpha = (0.45f * strobe).coerceAtMost(.45f)))
@@ -635,7 +816,10 @@ class RaveActivity : ComponentActivity() {
                         )
                     )
                 }
-                if (heavyFlash > 0.02f) {
+                // The white heavy-flash obeys the same 2.5-flashes-per-second cap as the strobe.
+                val flashNow = SystemClock.uptimeMillis()
+                if (heavyFlash > .3f && flashNow - lastHeavyFlashAt >= 400L) lastHeavyFlashAt = flashNow
+                if (heavyFlash > 0.02f && flashNow - lastHeavyFlashAt < 120L) {
                     drawRect(
                         Brush.radialGradient(
                             listOf(Color.White.copy(alpha = 0.25f * heavyFlash), Color.Transparent),
@@ -668,7 +852,8 @@ class RaveActivity : ComponentActivity() {
             if (hardstyleOn && foreground) {
                 coverCenter?.let { center ->
                     HardstyleBackdrop(Modifier.fillMaxSize(), displayedFrame, visualTime, hardPalette, showVideo,
-                        center, coverRadius, audioIntensity, volume)
+                        center, coverRadius, audioIntensity, volume, particles = partyProfile.particles,
+                        density = partyProfile.density, softness = partyProfile.softness)
                 }
             }
             // Same layout with or without video: cover, title and controls stay in place,
@@ -738,7 +923,7 @@ class RaveActivity : ComponentActivity() {
                     // Without lyrics the mode buttons sit in the top-right corner: always free,
                     // so they never cover the play buttons, even on the small Kenwood screen.
                     if (!showLyrics && (mediaTogglesVisible || controls.hardstyle)) {
-                        Box(Modifier.align(Alignment.TopEnd)) { ModeButtons(mediaTogglesVisible) }
+                        Box(Modifier.align(Alignment.TopEnd)) { ModeButtons(mediaTogglesVisible, stackGenres = true) }
                     }
                 } else {
                     val f = if (showLyrics) 0.62f else 1f
@@ -763,6 +948,10 @@ class RaveActivity : ComponentActivity() {
                 }
             }
 
+            if (hardstyleOn && showAnalysis && (genre == Genre.HARDSTYLE || genre == Genre.EDM))
+                AnalysisHud(Modifier.align(Alignment.TopStart).padding(12.u))
+            if (genreBanner != null && hardstyleOn && !announcement) Text(genreBanner!!, color=Color.White,
+                modifier=Modifier.align(Alignment.TopCenter).padding(16.u).background(Color.Black.copy(alpha=.7f)).padding(12.u))
             if (announcement && hardstyleOn) Text("PARTY ON", color=Color.White,
                 modifier=Modifier.align(Alignment.TopCenter).padding(16.u).background(Color.Black.copy(alpha=.7f)).padding(12.u))
             if (!hasAccess) Notice("Rave trenger tilgang til hva som spilles.\nInnstillinger → Varsler → Enhetstilgang til varsler → Bilnett Rave.")
@@ -790,9 +979,9 @@ class RaveActivity : ComponentActivity() {
             )
         }, contentAlignment = Alignment.Center) {
             androidx.compose.runtime.key(trackIdentity, foreground) {
-                HardstyleOrb(Modifier.fillMaxSize(), frame, palette, roundedSquare = true, volume = volume)
+                HardstyleOrb(Modifier.fillMaxSize(), frame, palette, roundedSquare = true, volume = volume, spikeGain = partyProfile.spike)
             }
-            Cover(size * .86f, scale = 1f + frame.kick * (.045f + frame.heavy * .09f) * volumeGain(volume))
+            Cover(size * .86f, scale = 1f + frame.kick * (.045f + frame.heavy * .09f) * volumeGain(volume) * (.4f + .6f * phaseLevel))
         }
     }
 
@@ -868,7 +1057,8 @@ class RaveActivity : ComponentActivity() {
 
     @OptIn(ExperimentalLayoutApi::class)
     @Composable
-    private fun ModeButtons(mediaVisible: Boolean) {
+    private fun ModeButtons(mediaVisible: Boolean, stackGenres: Boolean = false) {
+        Column(horizontalAlignment = if (stackGenres) Alignment.End else Alignment.Start) {
         FlowRow(horizontalArrangement=Arrangement.spacedBy(10.u), verticalArrangement=Arrangement.spacedBy(8.u)) {
             if (mediaVisible) {
                 LyricsButton()
@@ -880,6 +1070,48 @@ class RaveActivity : ComponentActivity() {
                     .clickable { buttonInteraction(); setHardstyle() }.padding(horizontal=24.u), contentAlignment=Alignment.Center) {
                     Text("Party", color=if(hardstyleOn) Color(0xFF0A0A0A) else Color(0xFFF5F2EC), fontSize=18.us, fontWeight=FontWeight.SemiBold)
                 }
+            }
+        }
+        // With Party on: pick which style the dancing/effects should follow.
+        if (hardstyleOn && controls.hardstyle) {
+            Spacer(Modifier.height(10.u))
+            if (stackGenres) Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.u)) { GenreChips() }
+            else FlowRow(horizontalArrangement = Arrangement.spacedBy(8.u), verticalArrangement = Arrangement.spacedBy(6.u)) { GenreChips() }
+        }
+        }
+    }
+
+    @Composable
+    private fun GenreChips() {
+        // Toggle for the live analysis panel (so Espen can give feedback on what is detected).
+        Box(
+            Modifier.height(42.u).clip(RoundedCornerShape(50))
+                .background(if (showAnalysis) Color(0xFFF5F2EC) else Color(0x22FFFFFF))
+                .clickable {
+                    buttonInteraction(); showAnalysis = !showAnalysis
+                    try { getSharedPreferences("rave", MODE_PRIVATE).edit().putBoolean("analysis", showAnalysis).apply() } catch (_: Exception) { }
+                }
+                .padding(horizontal = 18.u),
+            contentAlignment = Alignment.Center
+        ) {
+            Text("Analyse", maxLines = 1, softWrap = false, fontSize = 15.us, fontWeight = FontWeight.SemiBold,
+                color = if (showAnalysis) Color(0xFF0A0A0A) else Color(0xFFF5F2EC))
+        }
+        val options = listOf<Pair<String, Genre?>>(
+            "Automatisk" to null, "Hardstyle" to Genre.HARDSTYLE, "Rap / hip-hop" to Genre.RAP,
+            "Rock / metal" to Genre.ROCK, "EDM / house" to Genre.EDM, "Rolig" to Genre.STANDARD
+        )
+        for ((name, g) in options) {
+            val on = chosenGenre == g
+            Box(
+                Modifier.height(42.u).clip(RoundedCornerShape(50))
+                    .background(if (on) Color(0xFFF5F2EC) else Color(0x22FFFFFF))
+                    .clickable { buttonInteraction(); chooseGenre(g) }
+                    .padding(horizontal = 18.u),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(name, maxLines = 1, softWrap = false, fontSize = 15.us, fontWeight = FontWeight.SemiBold,
+                    color = if (on) Color(0xFF0A0A0A) else Color(0xFFF5F2EC))
             }
         }
     }
@@ -910,6 +1142,43 @@ class RaveActivity : ComponentActivity() {
         ) {
             Text("Video", fontFamily = FontFamily.Default, maxLines = 1, softWrap = false,
                 color = if (on) Color(0xFF0A0A0A) else Color(0xFFF5F2EC), fontSize = 18.us, fontWeight = FontWeight.SemiBold)
+        }
+    }
+
+    /** Live analysis panel: section, phrase position and the meters behind the decisions. */
+    @Composable
+    private fun AnalysisHud(modifier: Modifier) {
+        val h = hudData
+        val dim = Color(0xB3F5F2EC)
+        Column(
+            modifier.widthIn(max = 260.u).clip(RoundedCornerShape(14.u))
+                .background(Color.Black.copy(alpha = .55f)).padding(horizontal = 12.u, vertical = 10.u)
+        ) {
+            Text(h.part, color = Color(0xFFF5F2EC), fontSize = 18.us, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            Text("${if (genre == Genre.HARDSTYLE) hardSub.label else genre.label} · %.0f BPM".format(h.bpm),
+                color = dim, fontSize = 12.us, maxLines = 1)
+            Text("Lyd: ${if (micMode) (micSource?.deviceName ?: "mikrofon") else "telefonens lyd"}", color = dim, fontSize = 12.us, maxLines = 1)
+            Text("takt ${h.barInPhrase}/8 · frase ${h.phrase} · ${if (h.ready) "klar for drop" else "ikke klar"}",
+                color = dim, fontSize = 12.us, maxLines = 1)
+            Spacer(Modifier.height(6.u))
+            @Composable
+            fun meter(name: String, value: Float, text: String) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(name, color = dim, fontSize = 11.us, modifier = Modifier.width(62.u), maxLines = 1)
+                    Box(Modifier.width(110.u).height(6.u).clip(RoundedCornerShape(3.u)).background(Color(0x22FFFFFF))) {
+                        Box(Modifier.fillMaxHeight().fillMaxWidth(value.coerceIn(0f, 1f)).clip(RoundedCornerShape(3.u))
+                            .background(Color(0xFFF5F2EC)))
+                    }
+                    Spacer(Modifier.width(6.u))
+                    Text(text, color = dim, fontSize = 11.us, maxLines = 1)
+                }
+                Spacer(Modifier.height(3.u))
+            }
+            meter("Sub-bass", (h.subRelDb + 12f) / 24f, "%+.0f dB".format(h.subRelDb))
+            meter("Diskant", (h.airTrendDb + 6f) / 12f, "%+.0f dB".format(h.airTrendDb))
+            meter("Build-up", h.build, "%.0f %%".format(h.build * 100f))
+            meter("Zaag/grit", h.grit / .6f, "%.2f".format(h.grit))
+            meter("Screech", h.screech, "%.2f".format(h.screech))
         }
     }
 

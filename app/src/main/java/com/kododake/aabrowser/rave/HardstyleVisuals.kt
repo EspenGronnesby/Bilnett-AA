@@ -14,7 +14,8 @@ import kotlin.math.*
  * supplies the same background lighting as normal mode. */
 @Composable
 internal fun HardstyleBackdrop(modifier: Modifier, frame: HardstyleFrame, time: Float, colors: List<Color>, video: Boolean,
-    coverCenter: Offset, coverRadius: Float, intensity: Float, volume: Float = 1f) {
+    coverCenter: Offset, coverRadius: Float, intensity: Float, volume: Float = 1f, particles: Float = 1f,
+    density: Float = 1f, softness: Float = 1f) {
     val ripples = remember { RippleBank() }
     Canvas(modifier) {
         val gain = volumeGain(volume)
@@ -27,7 +28,7 @@ internal fun HardstyleBackdrop(modifier: Modifier, frame: HardstyleFrame, time: 
         val shimmer = max(frame.highMotion, highActivity * .35f)
         val beatKick = max(frame.kick, frame.bass * .35f)
         val heavyHit = frame.heavy * beatKick
-        val speed = (.10f + intensity * .20f + frame.energy * .08f + frame.heavy * .35f) * (.6f + .4f * gain) * (1f + ramp * .4f)
+        val speed = (.10f + intensity * .20f + frame.energy * .08f + frame.heavy * .35f) * (.6f + .4f * gain) * (1f + ramp * .4f) * particles
         // Ripples only on lots of bass AND distortion together (zaag etc.). Clean bass,
         // kicks, highs and quiet drops do not trigger them.
         val now = SystemClock.uptimeMillis()
@@ -51,21 +52,25 @@ internal fun HardstyleBackdrop(modifier: Modifier, frame: HardstyleFrame, time: 
                 style = Stroke(1.5.dp.toPx() + 2.5.dp.toPx() * strength))
         }
         // From 70 % volume up to 100 %, up to twice as many particles join in.
-        val count = 112 + (112 * ramp).toInt()
+        val count = ((112 + 112 * ramp) * density).toInt().coerceAtLeast(12)
         // Each particle has a deterministic direction and phase. It is born just
         // beyond the cover, travels outward, fades at the edge, then is emitted again.
         for (i in 0 until count) {
             val band = frame.spectrum[32 + i % 16]
             val phase = (i * .618034f + time * speed * (1f + band * 1.8f)) % 1f
             val angle = i * 2.399963f + sin(time * .35f + i) * shimmer * .08f
-            val distance = coverRadius + span * phase * phase * (.78f + frame.burst * .35f + beatKick * .18f + heavyHit * .4f)
+            val distance = coverRadius + span * phase * phase * (.78f + frame.burst * .35f + beatKick * .18f + heavyHit * .4f / softness)
             val direction = Offset(cos(angle), sin(angle))
             val position = c + direction * distance
             val musicalGlow = (frame.energy * .28f + frame.bass * .25f + frame.highs * .18f + shimmer * .45f + band * .25f).coerceIn(0f, 1f)
             val edgeFade = (1f - phase).coerceIn(0f, 1f)
-            val alpha = edgeFade * (.18f + musicalGlow * .72f) * (if (video) .72f else 1f) * (if (i >= 112) ramp else 1f)
-            val radius = (1.3f + musicalGlow * 3.2f + beatKick * 1.8f + heavyHit * 2.5f) * (.6f + .4f * gain) * (1f + ramp * .5f)
-            drawCircle(colors[i % colors.size].copy(alpha = alpha), radius, position)
+            val alpha = edgeFade * (.18f + musicalGlow * .72f) * (if (video) .72f else 1f) * (if (i >= (112 * density).toInt()) ramp else 1f) / softness
+            val radius = (1.3f + musicalGlow * 3.2f + beatKick * 1.8f + heavyHit * 2.5f) * (.6f + .4f * gain) * (1f + ramp * .5f) * softness
+            val c = colors[i % colors.size]
+            // Soft profiles (rap) draw glowing bokeh instead of sharp sparks.
+            if (softness > 1.2f) drawCircle(Brush.radialGradient(listOf(c.copy(alpha = alpha), Color.Transparent),
+                center = position, radius = radius * 2.2f), radius * 2.2f, position)
+            else drawCircle(c.copy(alpha = alpha), radius, position)
         }
     }
 }
@@ -74,7 +79,7 @@ internal fun HardstyleBackdrop(modifier: Modifier, frame: HardstyleFrame, time: 
 @Composable
 internal fun HardstyleOrb(
     modifier: Modifier, frame: HardstyleFrame, colors: List<Color>,
-    roundedSquare: Boolean = false, volume: Float = 1f
+    roundedSquare: Boolean = false, volume: Float = 1f, spikeGain: Float = 1f
 ) {
     val path = remember { Path() }
     val history = remember { SpectrumHistory() }
@@ -94,7 +99,7 @@ internal fun HardstyleOrb(
         // At (near) 100 % volume the ring takes off: today's max becomes 70 % of the new max.
         val boost = maxVolumeBoost(volume)
         val kickExpansion = boost * (if (roundedSquare) frame.kick*(.035f + drive*.16f) else frame.kick*(.11f + drive*.14f)) * gain
-        val maximumDisplacement = min(36.dp.toPx() + drive*70.dp.toPx(), side * (.12f + drive*.22f)) * gain * boost
+        val maximumDisplacement = min(36.dp.toPx() + drive*70.dp.toPx(), side * (.12f + drive*.22f)) * gain * boost * spikeGain
         // Big, but never so big that spikes cover the text or leave the screen.
         val displacementCap = side * .38f * boost
         val spikeCurve = 1f - drive*.5f
