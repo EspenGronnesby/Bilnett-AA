@@ -129,6 +129,24 @@ class RaveActivity : ComponentActivity() {
     private var showAnalysis by mutableStateOf(true)
     private var lastHudAt = 0L
     private var lastHeavyFlashAt = 0L
+    private var strobeColorIndex = 0
+    // Party camera shake, computed once per frame; only the scene (background, particles, cover)
+    // moves — buttons and text stay still so they can be tapped.
+    private var shakeX by mutableFloatStateOf(0f)
+    private var shakeY by mutableFloatStateOf(0f)
+    private var shakeRotation by mutableFloatStateOf(0f)
+
+    private fun Modifier.sceneShake(overscan: Boolean = false): Modifier = graphicsLayer {
+        if (!hardstyleOn) return@graphicsLayer
+        translationX = shakeX
+        translationY = shakeY
+        rotationZ = shakeRotation
+        if (overscan && (shakeX != 0f || shakeY != 0f)) {
+            val minSide = min(size.width, size.height).coerceAtLeast(1f)
+            val zoom = 1f + 2f * hypot(shakeX, shakeY) / minSide + .02f * abs(shakeRotation)
+            scaleX = zoom; scaleY = zoom
+        }
+    }
     private var songDurationMs = 0L
     private var screechShake by mutableFloatStateOf(0f)
     /** How lively the current song part is (hardstyle/EDM): low in intro/breakdown/outro. */
@@ -234,6 +252,8 @@ class RaveActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Skjermen skal aldri slukke mens Rave vises (gjelder bare mens vinduet er synlig).
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         showAnalysis = try { getSharedPreferences("rave", MODE_PRIVATE).getBoolean("analysis", true) } catch (_: Exception) { true }
         val saved = try { getSharedPreferences("rave", MODE_PRIVATE).getString("genre", "AUTO") } catch (_: Exception) { "AUTO" }
         Genre.entries.firstOrNull { it.name == saved }?.let { chosenGenre = it; genreDetector.setManual(it, 0L); genre = it }
@@ -588,8 +608,12 @@ class RaveActivity : ComponentActivity() {
         var coverRadius by remember { mutableFloatStateOf(0f) }
         var sceneOrigin by remember { mutableStateOf(Offset.Zero) }
         var displayedFrame by remember { mutableStateOf(HardstyleFrame()) }
+        // Spectrum eased every display frame (FFT only arrives ~20x/s): quick rise, slower fall.
+        val smoothSpectrum = remember { FloatArray(SPECTRUM_BANDS) }
+        val shakeDirection = remember { FloatArray(2) } // [angle, armed]
+        val density = androidx.compose.ui.platform.LocalDensity.current
         LaunchedEffect(hardstyleOn, foreground, playing) {
-            if (!hardstyleOn || !foreground) return@LaunchedEffect
+            if (!hardstyleOn || !foreground) { shakeX = 0f; shakeY = 0f; shakeRotation = 0f; return@LaunchedEffect }
             var previous = 0L
             while (true) {
                 withFrameNanos { now ->
@@ -659,19 +683,48 @@ class RaveActivity : ComponentActivity() {
                         lp(pa.strobe, pb.strobe) * (if (effectsOn && pi >= .9f) 1f else 0f) * (sub?.strobe ?: 1f),
                         lp(pa.density, pb.density), lp(pa.softness, pb.softness))
                     val target = shaped
+                    val liveSpectrum = playing && fresh
+                    for (i in 0 until SPECTRUM_BANDS) {
+                        val goal = if (liveSpectrum) target.spectrum[i] else 0f
+                        val current = smoothSpectrum[i]
+                        val tau = if (goal > current) .022f else .13f
+                        var value = current + (goal - current) * (1f - kotlin.math.exp(-dt / tau))
+                        if (value < .0001f) value = 0f
+                        smoothSpectrum[i] = value
+                    }
                     displayedFrame = HardstyleFrame(blend(displayedFrame.bass,target.bass),
                         blend(displayedFrame.kick,target.kick),blend(displayedFrame.highs,target.highs),
                         blend(displayedFrame.energy,target.energy),blend(displayedFrame.burst,target.burst),blend(displayedFrame.build,target.build),
-                        spectrum = if (playing && fresh) target.spectrum else displayedFrame.spectrum.map {
-                            val value = it * kotlin.math.exp(-dt / .07f)
-                            if (value < .0001f) 0f else value
-                        },
+                        spectrum = smoothSpectrum.toList(),
                         highMotion = blend(displayedFrame.highMotion, if (playing && fresh) target.highMotion else 0f),
                         heavy = blend(displayedFrame.heavy, target.heavy),
                         grit = blend(displayedFrame.grit, target.grit),
                         bpm = target.bpm, snare = target.snare, crash = target.crash, sub = target.sub, level = target.level, screech = blend(displayedFrame.screech, target.screech),
                         bassLevel = target.bassLevel, air = target.air, subLevel = target.subLevel,
                         presence = target.presence, beat = target.beat)
+                    // Camera shake (Trap Nation style): each kick punches the scene in a new random
+                    // direction and settles with the kick's decay; screeches add a light tremble.
+                    with(density) {
+                        val f = displayedFrame
+                        val ramp = loudRamp(volume)
+                        val punch = partyProfile.shake * f.kick * volumeGain(volume) *
+                            (f.heavy * (10.dp.toPx() + loudness(volume) * 4.dp.toPx()) * (1f + ramp * .8f) + ramp * 5.dp.toPx())
+                        val tremble = screechShake * f.screech * 7.dp.toPx() * volumeGain(volume)
+                        if (f.kick < .3f) shakeDirection[1] = 1f
+                        if (f.kick > .55f && shakeDirection[1] == 1f) {
+                            shakeDirection[1] = 0f
+                            shakeDirection[0] = (Math.random() * 2 * PI).toFloat()
+                        }
+                        val s = (SystemClock.uptimeMillis() % 1_000_000L) / 1000f
+                        val wobble = punch * .35f + tremble
+                        val x = cos(shakeDirection[0]) * punch + sin(s * 61f) * wobble
+                        val y = sin(shakeDirection[0]) * punch + cos(s * 47f) * wobble
+                        val big = punch + tremble > .5f
+                        shakeX = if (big) x else 0f
+                        shakeY = if (big) y else 0f
+                        // A hint of rotation only on heavy hits (max ~0.8°).
+                        shakeRotation = if (big) (f.heavy * f.kick * .8f * if (shakeDirection[0] > PI) -1f else 1f) else 0f
+                    }
                 }
             }
         }
@@ -743,27 +796,12 @@ class RaveActivity : ComponentActivity() {
                     } while (true)
 
                 }
-            }.graphicsLayer {
-                // Camera shake on heavy kicks (Trap Nation style). Shakes the whole scene incl.
-                // controls; the solid background drawn before this layer stays put.
-                // Heavy drops shake; from 70 % volume every kick shakes too, and drops harder.
-                val ramp = loudRamp(volume)
-                val shake = if (hardstyleOn) partyProfile.shake * displayedFrame.kick * volumeGain(volume) *
-                    (displayedFrame.heavy * (10.dp.toPx() + loudness(volume) * 4.dp.toPx()) * (1f + ramp * .8f) +
-                        ramp * 5.dp.toPx()) +
-                    // Screeches (raw hardstyle): the screen trembles while they sound — strongest in
-                    // the drop, weaker between drops, off in intro/build-up/ending.
-                    screechShake * displayedFrame.screech * 7.dp.toPx() * volumeGain(volume) else 0f
-                if (shake > .5f) {
-                    val s = SystemClock.uptimeMillis() / 1000f
-                    translationX = sin(s * 91f) * shake
-                    translationY = cos(s * 73f) * shake
-                } else { translationX = 0f; translationY = 0f }
             }
         ) {
+            // Background shakes with the scene, slightly zoomed in so its edges never show.
             Canvas(Modifier.fillMaxSize().onGloballyPositioned {
                 sceneOrigin = it.positionInRoot()
-            }) {
+            }.sceneShake(overscan = true)) {
                 val w = size.width
                 val h = size.height
                 val base = min(w, h)
@@ -811,10 +849,11 @@ class RaveActivity : ComponentActivity() {
                 // Safety: never more than 2.5 flashes per second (under the 3 Hz limit for people
                 // sensitive to flashing light) — matters at uptempo, where kicks come 3+ times/s.
                 val strobeNow = SystemClock.uptimeMillis()
-                if (strobeRaw > .3f && strobeNow - lastStrobeAt >= 400L) lastStrobeAt = strobeNow
+                if (strobeRaw > .3f && strobeNow - lastStrobeAt >= 400L) { lastStrobeAt = strobeNow; strobeColorIndex++ }
                 val strobe = if (strobeNow - lastStrobeAt < 120L) strobeRaw else 0f
                 if (strobe > 0.03f) {
-                    val strobeColor = palette[((SystemClock.uptimeMillis() / 110L) % palette.size).toInt()]
+                    // Each flash takes the next cover colour.
+                    val strobeColor = hardPalette[strobeColorIndex % hardPalette.size]
                     drawRect(strobeColor.copy(alpha = (0.45f * strobe).coerceAtMost(.45f)))
                     drawRect(
                         Brush.radialGradient(
@@ -851,14 +890,15 @@ class RaveActivity : ComponentActivity() {
                             onFailure = { videoPlaying = false; videoId = null }) },
                         update = { it.setPlaying(playing) },
                         onRelease = { it.release() },
-                        modifier = Modifier.fillMaxSize()
+                        // The music video shakes with the scene too (zoomed slightly so edges never show).
+                        modifier = Modifier.fillMaxSize().sceneShake(overscan = true)
                     )
                 }
             }
 
             if (hardstyleOn && foreground) {
                 coverCenter?.let { center ->
-                    HardstyleBackdrop(Modifier.fillMaxSize(), displayedFrame, visualTime, hardPalette, showVideo,
+                    HardstyleBackdrop(Modifier.fillMaxSize().sceneShake(), displayedFrame, visualTime, hardPalette, showVideo,
                         center, coverRadius, audioIntensity, volume, particles = partyProfile.particles,
                         density = partyProfile.density, softness = partyProfile.softness)
                 }
@@ -990,7 +1030,7 @@ class RaveActivity : ComponentActivity() {
                 Offset(position.x + coordinates.size.width/2f, position.y + coordinates.size.height/2f),
                 min(coordinates.size.width, coordinates.size.height) * .5f
             )
-        }, contentAlignment = Alignment.Center) {
+        }.sceneShake(), contentAlignment = Alignment.Center) {
             androidx.compose.runtime.key(trackIdentity, foreground) {
                 HardstyleOrb(Modifier.fillMaxSize(), frame, palette, roundedSquare = true, volume = volume, spikeGain = partyProfile.spike)
             }
