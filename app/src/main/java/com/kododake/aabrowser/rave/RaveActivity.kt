@@ -49,6 +49,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Apps
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -242,6 +243,12 @@ class RaveActivity : ComponentActivity() {
                 LocalRaveScale provides raveScaleFor(cfg.screenWidthDp.toFloat(), cfg.screenHeightDp.toFloat())
             ) { RaveScreen() }
         }
+    }
+
+    /** Viser systemlinjene igjen og lukker Rave, så bilen går tilbake til app-oversikten. Musikken spiller videre. */
+    private fun exitToApps() {
+        try { window.insetsController?.show(WindowInsets.Type.systemBars()) } catch (_: Exception) { }
+        finish()
     }
 
     override fun onResume() {
@@ -949,12 +956,18 @@ class RaveActivity : ComponentActivity() {
             }
 
             if (hardstyleOn && showAnalysis && (genre == Genre.HARDSTYLE || genre == Genre.EDM))
-                AnalysisHud(Modifier.align(Alignment.TopStart).padding(12.u))
+                AnalysisHud(Modifier.align(Alignment.TopStart).padding(start = 12.u, end = 12.u, bottom = 12.u,
+                    top = if (transportVisible) 96.u else 12.u))
             if (genreBanner != null && hardstyleOn && !announcement) Text(genreBanner!!, color=Color.White,
                 modifier=Modifier.align(Alignment.TopCenter).padding(16.u).background(Color.Black.copy(alpha=.7f)).padding(12.u))
             if (announcement && hardstyleOn) Text("PARTY ON", color=Color.White,
                 modifier=Modifier.align(Alignment.TopCenter).padding(16.u).background(Color.Black.copy(alpha=.7f)).padding(12.u))
             if (!hasAccess) Notice("Rave trenger tilgang til hva som spilles.\nInnstillinger → Varsler → Enhetstilgang til varsler → Bilnett Rave.")
+            // Tilbake til app-oversikten i bilen (Rave skjuler ellers systemlinjene).
+            // Vises sammen med pause/skip etter ett trykk, øverst i venstre hjørne.
+            if (transportVisible) Box(Modifier.align(Alignment.TopStart).padding(16.u)) {
+                Control(Icons.Rounded.Apps, 44.u, ::buttonInteraction) { exitToApps() }
+            }
         }
     }
 
