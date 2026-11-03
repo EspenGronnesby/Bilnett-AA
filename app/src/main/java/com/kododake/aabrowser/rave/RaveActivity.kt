@@ -177,7 +177,12 @@ class RaveActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { RaveScreen() }
+        setContent {
+            val cfg = androidx.compose.ui.platform.LocalConfiguration.current
+            androidx.compose.runtime.CompositionLocalProvider(
+                LocalRaveScale provides raveScaleFor(cfg.screenWidthDp.toFloat(), cfg.screenHeightDp.toFloat())
+            ) { RaveScreen() }
+        }
     }
 
     override fun onResume() {
@@ -666,70 +671,92 @@ class RaveActivity : ComponentActivity() {
                         center, coverRadius, audioIntensity, volume)
                 }
             }
-            if (showVideo && !(showLyrics && maxOf(resources.displayMetrics.widthPixels, resources.displayMetrics.heightPixels) > minOf(resources.displayMetrics.widthPixels, resources.displayMetrics.heightPixels))) VideoOverlay(transportVisible, mediaTogglesVisible, ::buttonInteraction) else
+            // Same layout with or without video: cover, title and controls stay in place,
+            // the music video just plays behind them with a dark veil for readability.
             BoxWithConstraints(
                 Modifier.fillMaxSize()
-                    .background(if (showVideo && showLyrics) Color.Black.copy(alpha = 0.55f) else Color.Transparent)
-                    .padding(24.dp),
+                    .background(when {
+                        showVideo -> Color.Black.copy(alpha = 0.55f)
+                        else -> Color.Transparent
+                    })
+                    .padding(24.u),
                 contentAlignment = Alignment.Center
             ) {
                 val wide = maxWidth > maxHeight
-                if (wide && showLyrics) {
+                // On wide screens (the car): cover with title and buttons underneath. Centered
+                // without lyrics; slides smoothly to the left when lyrics come in on the right.
+                if (wide) {
                     val layoutHeight = maxHeight.value
                     val layoutWidth = maxWidth.value
+                    val lyricsShift by animateFloatAsState(
+                        if (showLyrics) 1f else 0f,
+                        tween(350, easing = androidx.compose.animation.core.CubicBezierEasing(.77f, 0f, .175f, 1f)),
+                        label = "lyricsShift"
+                    )
                     Row(
                         Modifier.fillMaxSize(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(24.dp)
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        val coverSize = min(min(layoutHeight * 0.66f, layoutWidth * 0.4f), 300f).dp
+                        // Cover gets what is left after title, artist and buttons (~150 dp scaled),
+                        // so everything always fits vertically — tuned for the Kenwood 800x480 screen.
+                        val scale = LocalRaveScale.current
+                        val coverSize = minOf(layoutHeight - 150f * scale, layoutWidth * 0.4f, 300f * scale).coerceAtLeast(120f).dp
                         Column(
-                            Modifier.weight(0.44f),
+                            Modifier.weight(0.44f + 0.56f * (1f - lyricsShift)),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
                             ReactiveCover(coverSize, displayedFrame, hardPalette, sceneOrigin) { center, radius ->
                                 coverCenter = center; coverRadius = radius
                             }
-                            Spacer(Modifier.height(12.dp))
-                            Info(Modifier.fillMaxWidth(), Alignment.CenterHorizontally, includeLyrics = false, transportVisible = transportVisible, mediaTogglesVisible = false, onTransportInteraction = ::buttonInteraction, modeButtonsAllowed = false)
+                            Spacer(Modifier.height(12.u))
+                            Info(Modifier.fillMaxWidth(), Alignment.CenterHorizontally, includeLyrics = false, transportVisible = transportVisible, mediaTogglesVisible = false, onTransportInteraction = ::buttonInteraction, modeButtonsAllowed = false, compact = true)
                         }
-                        Column(
-                            Modifier.weight(0.56f).fillMaxHeight()
-                                .clip(RoundedCornerShape(20.dp))
-                                .background(Color.Black.copy(alpha = 0.24f))
-                                .padding(horizontal = 18.dp, vertical = 12.dp),
-                            horizontalAlignment = Alignment.Start
-                        ) {
-                            Box(
-                                Modifier.weight(1f).fillMaxWidth(),
-                                contentAlignment = Alignment.CenterStart
+                        if (lyricsShift > 0.001f) {
+                            Spacer(Modifier.width((24f * lyricsShift).u))
+                            Column(
+                                Modifier.weight(0.56f * lyricsShift).fillMaxHeight()
+                                    .graphicsLayer { alpha = lyricsShift }
+                                    .clip(RoundedCornerShape(20.u))
+                                    .background(Color.Black.copy(alpha = 0.24f))
+                                    .padding(horizontal = 18.u, vertical = 12.u),
+                                horizontalAlignment = Alignment.Start
                             ) {
-                                LyricsView(Alignment.Start)
-                            }
-                            if (mediaTogglesVisible || controls.hardstyle) {
-                                Spacer(Modifier.height(12.dp))
-                                ModeButtons(mediaTogglesVisible)
+                                Box(
+                                    Modifier.weight(1f).fillMaxWidth(),
+                                    contentAlignment = Alignment.CenterStart
+                                ) {
+                                    LyricsView(Alignment.Start)
+                                }
+                                if (showLyrics && (mediaTogglesVisible || controls.hardstyle)) {
+                                    Spacer(Modifier.height(12.u))
+                                    ModeButtons(mediaTogglesVisible)
+                                }
                             }
                         }
                     }
+                    // Without lyrics the mode buttons sit in the top-right corner: always free,
+                    // so they never cover the play buttons, even on the small Kenwood screen.
+                    if (!showLyrics && (mediaTogglesVisible || controls.hardstyle)) {
+                        Box(Modifier.align(Alignment.TopEnd)) { ModeButtons(mediaTogglesVisible) }
+                    }
                 } else {
                     val f = if (showLyrics) 0.62f else 1f
-                    val artSize: Dp = if (wide) (min(maxHeight.value * 0.72f, 340f) * f).dp else (min(maxWidth.value * 0.75f, 340f) * f).dp
+                    val artSize: Dp = if (wide) (min(maxHeight.value * 0.72f, 340f * LocalRaveScale.current) * f).dp else (min(maxWidth.value * 0.75f, 340f * LocalRaveScale.current) * f).dp
                     if (wide) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
                         ReactiveCover(artSize, displayedFrame, hardPalette, sceneOrigin) { center, radius ->
                             coverCenter = center; coverRadius = radius
                         }
-                        Spacer(Modifier.width(40.dp))
-                        Info(Modifier.widthIn(max = if (showLyrics) 680.dp else 520.dp), Alignment.Start, transportVisible = transportVisible, mediaTogglesVisible = mediaTogglesVisible, onTransportInteraction = ::buttonInteraction)
+                        Spacer(Modifier.width(40.u))
+                        Info(Modifier.widthIn(max = if (showLyrics) 680.u else 520.u), Alignment.Start, transportVisible = transportVisible, mediaTogglesVisible = mediaTogglesVisible, onTransportInteraction = ::buttonInteraction)
                     }
                 } else {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                         ReactiveCover(artSize, displayedFrame, hardPalette, sceneOrigin) { center, radius ->
                             coverCenter = center; coverRadius = radius
                         }
-                        Spacer(Modifier.height(32.dp))
+                        Spacer(Modifier.height(32.u))
                         Info(Modifier, Alignment.CenterHorizontally, transportVisible = transportVisible, mediaTogglesVisible = mediaTogglesVisible, onTransportInteraction = ::buttonInteraction)
                     }
                 }
@@ -737,7 +764,7 @@ class RaveActivity : ComponentActivity() {
             }
 
             if (announcement && hardstyleOn) Text("PARTY ON", color=Color.White,
-                modifier=Modifier.align(Alignment.TopCenter).padding(16.dp).background(Color.Black.copy(alpha=.7f)).padding(12.dp))
+                modifier=Modifier.align(Alignment.TopCenter).padding(16.u).background(Color.Black.copy(alpha=.7f)).padding(12.u))
             if (!hasAccess) Notice("Rave trenger tilgang til hva som spilles.\nInnstillinger → Varsler → Enhetstilgang til varsler → Bilnett Rave.")
         }
     }
@@ -772,7 +799,7 @@ class RaveActivity : ComponentActivity() {
     @Composable
     private fun Cover(size: Dp, scale: Float = 1f) {
         val mod = Modifier.size(size).graphicsLayer { scaleX=scale; scaleY=scale }
-            .clip(RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(20.u))
         val bmp = art
         if (bmp != null) {
             Image(bmp.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Crop, modifier = mod)
@@ -792,44 +819,46 @@ class RaveActivity : ComponentActivity() {
         transportVisible: Boolean = true,
         mediaTogglesVisible: Boolean = true,
         onTransportInteraction: () -> Unit = {},
-        modeButtonsAllowed: Boolean = true
+        modeButtonsAllowed: Boolean = true,
+        /** Smaller title/artist, as in the lyrics layout. The car layout always uses this. */
+        compact: Boolean = showLyrics
     ) {
         val ta = if (align == Alignment.CenterHorizontally) TextAlign.Center else TextAlign.Start
         val narrow = align == Alignment.CenterHorizontally
         Column(modifier, horizontalAlignment = align) {
             Text(
                 title.ifBlank { "Start Spotify" }, textAlign = ta, fontFamily = FontFamily.Default,
-                color = Color(0xFFF5F2EC), fontSize = if (showLyrics) 20.sp else 36.sp, fontWeight = FontWeight.SemiBold,
-                maxLines = if (showLyrics) 1 else 2, overflow = TextOverflow.Ellipsis, lineHeight = if (showLyrics) 24.sp else 40.sp
+                color = Color(0xFFF5F2EC), fontSize = if (compact) 20.us else 36.us, fontWeight = FontWeight.SemiBold,
+                maxLines = if (compact) 1 else 2, overflow = TextOverflow.Ellipsis, lineHeight = if (compact) 24.us else 40.us
             )
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(8.u))
             Text(
                 artist.ifBlank { "Spill av noe, så starter Rave" }, textAlign = ta, fontFamily = BodyFont,
-                color = Color(0xB3F5F2EC), fontSize = if (showLyrics) 15.sp else 20.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
+                color = Color(0xB3F5F2EC), fontSize = if (compact) 15.us else 20.us, maxLines = 1, overflow = TextOverflow.Ellipsis
             )
             if (showLyrics && includeLyrics) {
-                Spacer(Modifier.height(18.dp))
+                Spacer(Modifier.height(18.u))
                 LyricsView(align)
             }
             if (transportVisible || mediaTogglesVisible || (modeButtonsAllowed && controls.hardstyle)) {
-                Spacer(Modifier.height(if (showLyrics) 18.dp else 28.dp))
-                FlowRow(verticalArrangement = Arrangement.spacedBy(12.dp), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+                Spacer(Modifier.height(if (compact) 18.u else 28.u))
+                FlowRow(verticalArrangement = Arrangement.spacedBy(12.u), horizontalArrangement = Arrangement.spacedBy(28.u)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                     if (transportVisible) {
-                        Control(Icons.Rounded.SkipPrevious, 44.dp, onTransportInteraction) { controller?.transportControls?.skipToPrevious() }
-                        Spacer(Modifier.width(28.dp))
-                        Control(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, 60.dp, onTransportInteraction) {
+                        Control(Icons.Rounded.SkipPrevious, 44.u, onTransportInteraction) { controller?.transportControls?.skipToPrevious() }
+                        Spacer(Modifier.width(28.u))
+                        Control(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, 60.u, onTransportInteraction) {
                             val tc = controller?.transportControls
                             if (playing) tc?.pause() else tc?.play()
                         }
-                        Spacer(Modifier.width(28.dp))
-                        Control(Icons.Rounded.SkipNext, 44.dp, onTransportInteraction) { controller?.transportControls?.skipToNext() }
+                        Spacer(Modifier.width(28.u))
+                        Control(Icons.Rounded.SkipNext, 44.u, onTransportInteraction) { controller?.transportControls?.skipToNext() }
                     }
                     }
                     if (modeButtonsAllowed && !narrow && (mediaTogglesVisible || (modeButtonsAllowed && controls.hardstyle))) ModeButtons(mediaTogglesVisible)
                 }
                 if (modeButtonsAllowed && narrow && (mediaTogglesVisible || (modeButtonsAllowed && controls.hardstyle))) {
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(12.u))
                     ModeButtons(mediaTogglesVisible)
                 }
 
@@ -840,16 +869,16 @@ class RaveActivity : ComponentActivity() {
     @OptIn(ExperimentalLayoutApi::class)
     @Composable
     private fun ModeButtons(mediaVisible: Boolean) {
-        FlowRow(horizontalArrangement=Arrangement.spacedBy(10.dp), verticalArrangement=Arrangement.spacedBy(8.dp)) {
+        FlowRow(horizontalArrangement=Arrangement.spacedBy(10.u), verticalArrangement=Arrangement.spacedBy(8.u)) {
             if (mediaVisible) {
                 LyricsButton()
                 if (videoId != null) VideoButton()
             }
             if (controls.hardstyle) {
-                Box(Modifier.height(64.dp).clip(RoundedCornerShape(50))
+                Box(Modifier.height(64.u).clip(RoundedCornerShape(50))
                     .background(if(hardstyleOn) Color(0xFFF5F2EC) else Color(0x22FFFFFF))
-                    .clickable { buttonInteraction(); setHardstyle() }.padding(horizontal=24.dp), contentAlignment=Alignment.Center) {
-                    Text("Party", color=if(hardstyleOn) Color(0xFF0A0A0A) else Color(0xFFF5F2EC), fontSize=18.sp, fontWeight=FontWeight.SemiBold)
+                    .clickable { buttonInteraction(); setHardstyle() }.padding(horizontal=24.u), contentAlignment=Alignment.Center) {
+                    Text("Party", color=if(hardstyleOn) Color(0xFF0A0A0A) else Color(0xFFF5F2EC), fontSize=18.us, fontWeight=FontWeight.SemiBold)
                 }
             }
         }
@@ -859,13 +888,13 @@ class RaveActivity : ComponentActivity() {
     private fun LyricsButton() {
         val on = showLyrics
         Box(
-            Modifier.height(64.dp).clip(RoundedCornerShape(50))
+            Modifier.height(64.u).clip(RoundedCornerShape(50))
                 .background(if (on) Color(0xFFF5F2EC) else Color(0x22FFFFFF))
                 .clickable { buttonInteraction(); showLyrics = !showLyrics; if (showLyrics) pos = positionMs() }
-                .padding(horizontal = 24.dp),
+                .padding(horizontal = 24.u),
             contentAlignment = Alignment.Center
         ) {
-            Text("Tekst", fontFamily = FontFamily.Default, maxLines = 1, softWrap = false, color = if (on) Color(0xFF0A0A0A) else Color(0xFFF5F2EC), fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            Text("Tekst", fontFamily = FontFamily.Default, maxLines = 1, softWrap = false, color = if (on) Color(0xFF0A0A0A) else Color(0xFFF5F2EC), fontSize = 18.us, fontWeight = FontWeight.SemiBold)
         }
     }
 
@@ -873,56 +902,14 @@ class RaveActivity : ComponentActivity() {
     private fun VideoButton() {
         val on = videoOn
         Box(
-            Modifier.height(64.dp).clip(RoundedCornerShape(50))
+            Modifier.height(64.u).clip(RoundedCornerShape(50))
                 .background(if (on) Color(0xFFF5F2EC) else Color(0x22FFFFFF))
                 .clickable { buttonInteraction(); videoOn = !videoOn; videoPlaying = false }
-                .padding(horizontal = 24.dp),
+                .padding(horizontal = 24.u),
             contentAlignment = Alignment.Center
         ) {
             Text("Video", fontFamily = FontFamily.Default, maxLines = 1, softWrap = false,
-                color = if (on) Color(0xFF0A0A0A) else Color(0xFFF5F2EC), fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-        }
-    }
-
-    @Composable
-    private fun VideoOverlay(transportVisible: Boolean, mediaTogglesVisible: Boolean, onTransportInteraction: () -> Unit) {
-        Box(
-            Modifier.fillMaxSize().background(
-                Brush.verticalGradient(0f to Color(0x66000000), 0.25f to Color.Transparent, 0.5f to Color.Transparent, 1f to Color(0xE6000000))
-            )
-        )
-        Box(Modifier.fillMaxSize()) {
-            if (showLyrics) {
-                Box(Modifier.fillMaxSize().padding(horizontal = 24.dp), contentAlignment = Alignment.Center) {
-                    LyricsView(Alignment.CenterHorizontally)
-                }
-            }
-            Column(
-                Modifier.fillMaxSize().padding(horizontal = 32.dp, vertical = 24.dp),
-                verticalArrangement = Arrangement.Bottom,
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(title, fontFamily = FontFamily.Default, color = Color(0xFFF5F2EC), fontSize = 30.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center, style = TextStyle(shadow = Shadow(Color.Black, Offset(0f, 2f), 10f)))
-                Text(artist, fontFamily = BodyFont, color = Color(0xCCF5F2EC), fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center, style = TextStyle(shadow = Shadow(Color.Black, Offset(0f, 2f), 8f)))
-                if (transportVisible || mediaTogglesVisible || controls.hardstyle) {
-                    Spacer(Modifier.height(14.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (transportVisible) {
-                            Control(Icons.Rounded.SkipPrevious, 30.dp, onTransportInteraction) { controller?.transportControls?.skipToPrevious() }
-                            Spacer(Modifier.width(12.dp))
-                            Control(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, 38.dp, onTransportInteraction) {
-                                val tc = controller?.transportControls
-                                if (playing) tc?.pause() else tc?.play()
-                            }
-                            Spacer(Modifier.width(12.dp))
-                            Control(Icons.Rounded.SkipNext, 30.dp, onTransportInteraction) { controller?.transportControls?.skipToNext() }
-                        }
-                    }
-                    ModeButtons(mediaTogglesVisible)
-                }
-            }
+                color = if (on) Color(0xFF0A0A0A) else Color(0xFFF5F2EC), fontSize = 18.us, fontWeight = FontWeight.SemiBold)
         }
     }
 
@@ -932,7 +919,7 @@ class RaveActivity : ComponentActivity() {
         val dim = Color(0x66F5F2EC)
         Column(horizontalAlignment = align) {
             when {
-                lyricsState == "loading" -> Text("Henter tekst …", color = dim, fontSize = 22.sp, textAlign = ta, fontFamily = BodyFont)
+                lyricsState == "loading" -> Text("Henter tekst …", color = dim, fontSize = 22.us, textAlign = ta, fontFamily = BodyFont)
                 lyrics.isNotEmpty() -> {
                     val idx = lyrics.indexOfLast { it.first <= pos + 250 }.coerceAtLeast(0)
                     for (i in (idx - 2)..(idx + 2)) {
@@ -945,23 +932,23 @@ class RaveActivity : ComponentActivity() {
                                 else -> line
                             },
                             color = if (current) Color(0xFFF5F2EC) else dim,
-                            fontSize = if (current) 34.sp else 22.sp,
+                            fontSize = if (current) 34.us else 22.us,
                             fontFamily = FontFamily.Default,
                             style = TextStyle(shadow = Shadow(Color.Black, Offset(0f, 2f), 10f)),
                             fontWeight = if (current) FontWeight.SemiBold else FontWeight.Normal,
-                            lineHeight = if (current) 38.sp else 27.sp,
+                            lineHeight = if (current) 38.us else 27.us,
                             textAlign = ta,
                             maxLines = 2, overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(vertical = 3.dp)
+                            modifier = Modifier.padding(vertical = 3.u)
                         )
                     }
                 }
                 plainLyrics != null -> Text(
-                    plainLyrics.orEmpty(), color = Color(0xCCF5F2EC), fontSize = 20.sp, fontFamily = FontFamily.Default, lineHeight = 28.sp, textAlign = ta,
-                    modifier = Modifier.heightIn(max = 220.dp).verticalScroll(rememberScrollState())
+                    plainLyrics.orEmpty(), color = Color(0xCCF5F2EC), fontSize = 20.us, fontFamily = FontFamily.Default, lineHeight = 28.us, textAlign = ta,
+                    modifier = Modifier.heightIn(max = 220.u).verticalScroll(rememberScrollState())
                 )
-                lyricsState == "none" -> Text("Fant ingen tekst til denne sangen", color = dim, fontSize = 22.sp, textAlign = ta, fontFamily = BodyFont)
-                else -> Text("Spill av en sang for å se teksten", color = dim, fontSize = 22.sp, textAlign = ta, fontFamily = BodyFont)
+                lyricsState == "none" -> Text("Fant ingen tekst til denne sangen", color = dim, fontSize = 22.us, textAlign = ta, fontFamily = BodyFont)
+                else -> Text("Spill av en sang for å se teksten", color = dim, fontSize = 22.us, textAlign = ta, fontFamily = BodyFont)
             }
         }
     }
@@ -969,7 +956,7 @@ class RaveActivity : ComponentActivity() {
     @Composable
     private fun Control(icon: ImageVector, size: Dp, onInteraction: () -> Unit = {}, onClick: () -> Unit) {
         Box(
-            Modifier.size(size + 20.dp).clip(RoundedCornerShape(50)).background(Color(0x22FFFFFF)).clickable {
+            Modifier.size(size + 20.u).clip(RoundedCornerShape(50)).background(Color(0x22FFFFFF)).clickable {
                 onInteraction()
                 onClick()
             },
@@ -985,7 +972,7 @@ class RaveActivity : ComponentActivity() {
             Modifier.fillMaxSize().background(if (solid) Color(0xFF050505) else Color(0xCC050505)),
             contentAlignment = Alignment.Center
         ) {
-            Text(text, color = Color(0xFFF5F2EC), fontSize = 24.sp, fontFamily = BodyFont, lineHeight = 32.sp, modifier = Modifier.padding(40.dp))
+            Text(text, color = Color(0xFFF5F2EC), fontSize = 24.us, fontFamily = BodyFont, lineHeight = 32.us, modifier = Modifier.padding(40.u))
         }
     }
 
@@ -1027,3 +1014,20 @@ class RaveActivity : ComponentActivity() {
         }
     }
 }
+
+/** One scale factor for the whole Rave screen: 1.0 on a phone in landscape, larger on big
+ * car screens, smaller on small ones, so proportions and positions stay the same everywhere. */
+private val LocalRaveScale = androidx.compose.runtime.staticCompositionLocalOf { 1f }
+
+private fun raveScaleFor(widthDp: Float, heightDp: Float): Float {
+    val wide = widthDp > heightDp
+    // Reference = Android Auto on a 6.8" Kenwood (800x480): the app gets about 720x480 dp
+    // → scale 1.0. Phone landscape lands at ~1.0 too; big car screens scale up.
+    val scale = if (wide) min(heightDp / 400f, widthDp / 720f) else min(widthDp / 400f, heightDp / 720f)
+    return scale.coerceIn(.7f, 2.2f)
+}
+
+private val Int.u: Dp @Composable get() = (this * LocalRaveScale.current).dp
+private val Float.u: Dp @Composable get() = (this * LocalRaveScale.current).dp
+private val Double.u: Dp @Composable get() = (this.toFloat() * LocalRaveScale.current).dp
+private val Int.us: androidx.compose.ui.unit.TextUnit @Composable get() = (this * LocalRaveScale.current).sp
