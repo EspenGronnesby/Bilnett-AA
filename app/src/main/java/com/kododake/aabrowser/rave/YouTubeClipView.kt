@@ -35,7 +35,7 @@ internal class YouTubeClipView(
     private val timeout = Runnable { fail() }
 
     init {
-        setBackgroundColor(Color.BLACK)
+        setBackgroundColor(Color.TRANSPARENT)
         isClickable = false
         isFocusable = false
         isVerticalScrollBarEnabled = false
@@ -68,7 +68,7 @@ internal class YouTubeClipView(
         @JavascriptInterface fun playing() = post {
             if (released || failed) return@post
             removeCallbacks(timeout)
-            if (!started) { started = true; onFrame() }
+            if (!started) { started = true; Log.d("RaveVideo", "YouTube playing -> show"); onFrame() }
         }
         @JavascriptInterface fun error(code: Int) = post { Log.w("RaveVideo", "YouTube player error $code"); fail() }
         @JavascriptInterface fun wanted() = wanted
@@ -76,7 +76,7 @@ internal class YouTubeClipView(
 
     override fun setPlaying(value: Boolean) {
         wanted = value
-        if (!released && !failed) evaluateJavascript("setWant($value)", null)
+        if (!released && !failed) evaluateJavascript("window.setWant && setWant($value)", null) // page may still be loading; onReady reads wanted()
     }
 
     // Purely visual: never take taps or drags from Rave.
@@ -103,18 +103,30 @@ internal class YouTubeClipView(
 
     private fun html(id: String, origin: String) = """
 <!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
-<style>html,body{margin:0;height:100%;background:#000;overflow:hidden}
-#p{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}</style></head>
+<style>html,body{margin:0;background:transparent;overflow:hidden}
+#p{position:absolute;top:0;left:0;border:0;pointer-events:none}</style></head>
 <body><div id="p"></div>
 <script>
 var player, want = false, ready = false, jumped = false;
-function setWant(v){ want = v; if(!ready) return; if(v) player.playVideo(); else player.pauseVideo(); }
+window.setWant = function(v){ want = v; if(!ready) return; if(v) player.playVideo(); else player.pauseVideo(); }
+// The WebView is created before it has its final size, so CSS 100%/100vh resolve to 0 height.
+// Size the player in pixels from the real window instead, and again whenever it changes.
+// Fill the screen like «cover» (no black bars), zoomed a bit more so YouTube's title, logo and
+// «More videos» bar fall outside the edges.
+function fit(){
+  var f = document.getElementById('p'); if (!f) return;
+  var W = innerWidth, H = innerHeight, zoom = 1.3;
+  var w = Math.max(W, H * 16 / 9) * zoom, h = w * 9 / 16;
+  f.style.width = w + 'px'; f.style.height = h + 'px';
+  f.style.left = (W - w) / 2 + 'px'; f.style.top = (H - h) / 2 + 'px';
+}
+addEventListener('resize', fit); setInterval(fit, 1000);
 function onYouTubeIframeAPIReady(){
-  player = new YT.Player('p', { videoId: '$id', host: 'https://www.youtube-nocookie.com',
+  player = new YT.Player('p', { videoId: '$id', width: innerWidth, height: innerHeight, host: 'https://www.youtube-nocookie.com',
     playerVars: { autoplay: 1, mute: 1, controls: 0, disablekb: 1, fs: 0, rel: 0, playsinline: 1,
       iv_load_policy: 3, modestbranding: 1, origin: '$origin' },
     events: {
-      onReady: function(e){ ready = true; want = Rave.wanted(); e.target.mute(); if(want) e.target.playVideo(); },
+      onReady: function(e){ fit(); ready = true; want = Rave.wanted(); e.target.mute(); if(want) e.target.playVideo(); },
       onStateChange: function(e){
         if (e.data === YT.PlayerState.PLAYING) {
           // Autoplay ignores a paused song; hold it until the music plays.

@@ -51,8 +51,9 @@ internal object YouTubeLookup {
     private val JUNK_WORDS = listOf("lyrics", "lyric", "reaction", "reacts", "slowed", "reverb", "sped up", "nightcore",
         "type beat", "cover", "karaoke", "full album", "album", "interview", "1 hour", "tutorial", "bass boosted",
         "8d", "visualizer", "visualiser", "audio", "legendado", "tradução", "traducida", "letra", "mix", "playlist")
+    // «Artist - Topic» channels are YouTube's auto-uploads: just the album cover, no video.
     private fun junk(h: Hit, except: List<String> = emptyList()) =
-        JUNK_WORDS.any { w -> w !in except && hasWord(h.title, w) }
+        norm(h.channel).endsWith(" topic") || JUNK_WORDS.any { w -> w !in except && hasWord(h.title, w) }
     private fun byArtist(h: Hit, name: String) = hasWord(h.title, name) || norm(h.channel).startsWith(norm(name))
     private val HARDSTYLE_NAMES = listOf("Brennan Heart", "Wildstylez", "Sub Zero Project", "Headhunterz", "Da Tweekaz",
         "D-Block & S-te-Fan", "Coone", "Ran-D", "Frontliner", "Zatox", "D-Sturb", "Rebelion", "Phuture Noize", "Sefa",
