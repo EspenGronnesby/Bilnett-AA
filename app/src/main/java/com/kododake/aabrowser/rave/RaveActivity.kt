@@ -24,6 +24,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -217,6 +218,8 @@ class RaveActivity : ComponentActivity() {
     private var hardstyleAudioAt = 0L
     private var trackIdentity = ""
     private var controls by mutableStateOf(RaveControls())
+    /** Party extras (vibe slider, synk, analyse) show with the other buttons while Party is on. */
+    private val partyControls: Boolean get() = hardstyleOn && controls.transport
     private fun buttonInteraction() { controls = controls.button(SystemClock.elapsedRealtime()) }
     private fun setHardstyle() {
         hardstyleOn = !hardstyleOn
@@ -259,13 +262,43 @@ class RaveActivity : ComponentActivity() {
     }
 
     // Sangtekst
-    private var showLyrics by mutableStateOf(false)
+    private var showLyrics by mutableStateOf(true)  // Tekst er på som standard
     private var lyrics by mutableStateOf<List<Pair<Long, String>>>(emptyList())
     private var plainLyrics by mutableStateOf<String?>(null)
     private var lyricsState by mutableStateOf("")
     private var pos by mutableLongStateOf(0L)
     private var lastState: PlaybackState? = null
     private var lyricsKey = ""
+    /** Chosen lyrics style (swipe the lyrics to change) and glass box vs. open text (double-tap). */
+    private var lyricsStyle by mutableStateOf(LyricsStyle.SCROLL)
+    private var lyricsGlass by mutableStateOf(true)
+    private var lyricsToast by mutableStateOf<String?>(null)
+    private var lyricsToastAt by mutableLongStateOf(0L)
+    /** Bass/kick level for the «Bass-puls» style; set from the screen, which knows the Party frame. */
+    private var lyricsPulse: () -> Float = { beat }
+
+    private fun showLyricsToast(text: String) { lyricsToast = text; lyricsToastAt = SystemClock.uptimeMillis() }
+
+    private fun stepLyricsStyle(dir: Int) {
+        val all = LyricsStyle.entries
+        lyricsStyle = all[(lyricsStyle.ordinal + dir + all.size) % all.size]
+        showLyricsToast(lyricsStyle.label)
+        saveLyricsPrefs()
+    }
+
+    /** Song whose «no lyrics found» message has been hidden (after 3 s or by a double-tap). */
+    private var noLyricsHiddenFor by mutableStateOf("")
+
+    private fun toggleLyricsGlass() {
+        if (lyricsState == "none") noLyricsHiddenFor = lyricsKey
+        lyricsGlass = !lyricsGlass
+        showLyricsToast(if (lyricsGlass) "Frostet glass" else "Åpen, uten boks")
+        saveLyricsPrefs()
+    }
+
+    private fun saveLyricsPrefs() {
+        try { getSharedPreferences("rave", MODE_PRIVATE).edit().putString("lyricsStyle", lyricsStyle.name).putBoolean("lyricsGlass", lyricsGlass).apply() } catch (_: Exception) { }
+    }
 
     // Musikkvideo
     private var videoClips by mutableStateOf<List<SpotifyVideoLookup.VideoClip>>(emptyList())
@@ -313,6 +346,11 @@ class RaveActivity : ComponentActivity() {
         showAnalysis = try { getSharedPreferences("rave", MODE_PRIVATE).getBoolean("analysis", true) } catch (_: Exception) { true }
         syncMs = try { getSharedPreferences("rave", MODE_PRIVATE).getInt("syncMs", 0) } catch (_: Exception) { 0 }
             .coerceIn(-SYNC_LIMIT_MS, SYNC_LIMIT_MS)
+        try {
+            val prefs = getSharedPreferences("rave", MODE_PRIVATE)
+            lyricsStyle = LyricsStyle.entries.firstOrNull { it.name == prefs.getString("lyricsStyle", null) } ?: LyricsStyle.SCROLL
+            lyricsGlass = prefs.getBoolean("lyricsGlass", true)
+        } catch (_: Exception) { }
         try {
             val prefs = getSharedPreferences("rave", MODE_PRIVATE)
             if (prefs.contains("vibeAuto")) {
@@ -658,11 +696,11 @@ class RaveActivity : ComponentActivity() {
         val transportVisible = controls.transport
         val mediaTogglesVisible = controls.media
         LaunchedEffect(controls.touchedAt) {
-            delay(10_000)
+            delay(3_000)
             controls = controls.expire(SystemClock.elapsedRealtime())
         }
         LaunchedEffect(Unit) { controls = controls.touch(SystemClock.elapsedRealtime()) }
-        var announcement by remember { mutableStateOf(false) }
+        var announcement by remember { mutableStateOf<String?>(null) }
         // Short label when the Party profile changes, e.g. "ROCK", "RAP", "HARDSTYLE".
         var genreBanner by remember { mutableStateOf<String?>(null) }
         // Shown once per song (what the app thinks it is) and whenever the profile changes.
@@ -695,9 +733,12 @@ class RaveActivity : ComponentActivity() {
                 banner(songPhase.label, 1300)
             }
         }
+        var partyAnnounceReady by remember { mutableStateOf(false) }
         LaunchedEffect(hardstyleOn) {
-            announcement = hardstyleOn
-            if (hardstyleOn) { delay(1200); announcement = false }
+            // Not on first start, only when Party is switched.
+            if (!partyAnnounceReady) { partyAnnounceReady = true; return@LaunchedEffect }
+            announcement = if (hardstyleOn) "PARTY ON" else "PARTY OFF"
+            delay(1200); announcement = null
         }
         var visualTime by remember { mutableFloatStateOf(0f) }
         var audioIntensity by remember { mutableFloatStateOf(0f) }
@@ -944,6 +985,7 @@ class RaveActivity : ComponentActivity() {
         val raw = if (reactive) max(level, beat) else synthetic
         val energy by animateFloatAsState(raw, tween(80), label = "energy")
         val beatNow = beat
+        lyricsPulse = { if (hardstyleOn) max(displayedFrame.kick, displayedFrame.bass * .6f) else beat }
 
         Box(
             Modifier.fillMaxSize().background(Color(0xFF050505)).pointerInput(Unit) {
@@ -960,7 +1002,13 @@ class RaveActivity : ComponentActivity() {
                         validTap = validTap && event.changes.none { it.isConsumed }
                         controls = controls.touch(SystemClock.elapsedRealtime())
                         if (event.changes.none { it.pressed }) {
-                            if (validTap) controls = controls.tap(SystemClock.elapsedRealtime())
+                            if (validTap) {
+                                val now = SystemClock.elapsedRealtime()
+                                // 5 quick taps toggle Party on/off; a short «PARTY ON/OFF» label shows it.
+                                val fifth = controls.isFifthTap(now)
+                                controls = controls.tap(now)
+                                if (fifth) setHardstyle()
+                            }
                             break
                         }
                     } while (true)
@@ -1140,17 +1188,20 @@ class RaveActivity : ComponentActivity() {
                                 Modifier.weight(0.56f * lyricsShift).fillMaxHeight()
                                     .graphicsLayer { alpha = lyricsShift }
                                     .clip(RoundedCornerShape(20.u))
-                                    .background(Color.Black.copy(alpha = 0.24f))
+                                    .then(
+                                        if (lyricsGlass) Modifier
+                                            .background(Brush.verticalGradient(listOf(Color(0x33141018), Color(0x4D0A080C))))
+                                            .background(Brush.verticalGradient(listOf(Color(0x24FFFFFF), Color(0x0DFFFFFF))))
+                                            .border(1.dp, Color(0x29FFFFFF), RoundedCornerShape(20.u))
+                                        else Modifier
+                                    )
                                     .padding(horizontal = 18.u, vertical = 12.u),
                                 horizontalAlignment = Alignment.Start
                             ) {
-                                Box(
-                                    Modifier.weight(1f).fillMaxWidth(),
-                                    contentAlignment = Alignment.CenterStart
-                                ) {
-                                    LyricsView(Alignment.Start)
+                                LyricsSwipeArea(Modifier.weight(1f).fillMaxWidth()) {
+                                    LyricsView(Alignment.Start, fill = true)
                                 }
-                                if (showLyrics && (mediaTogglesVisible || controls.hardstyle)) {
+                                if (showLyrics && (mediaTogglesVisible || partyControls)) {
                                     Spacer(Modifier.height(12.u))
                                     ModeButtons(mediaTogglesVisible)
                                 }
@@ -1159,7 +1210,7 @@ class RaveActivity : ComponentActivity() {
                     }
                     // Without lyrics the mode buttons sit in the top-right corner: always free,
                     // so they never cover the play buttons, even on the small Kenwood screen.
-                    if (!showLyrics && (mediaTogglesVisible || controls.hardstyle)) {
+                    if (!showLyrics && (mediaTogglesVisible || partyControls)) {
                         Box(Modifier.align(Alignment.TopEnd)) { ModeButtons(mediaTogglesVisible, stackGenres = true) }
                     }
                 } else {
@@ -1186,18 +1237,19 @@ class RaveActivity : ComponentActivity() {
             }
 
             if (hardstyleOn && showAnalysis && vibe >= .5f)
-                AnalysisHud(Modifier.align(Alignment.TopStart).padding(start = if (controls.hardstyle) 100.u else 12.u, end = 12.u, bottom = 12.u,
+                AnalysisHud(Modifier.align(Alignment.TopStart).padding(start = if (partyControls) 100.u else 12.u, end = 12.u, bottom = 12.u,
                     top = if (transportVisible) 96.u else 12.u))
-            if (hardstyleOn && controls.hardstyle) BoxWithConstraints(
+            // Vibe slider: shown with the other buttons (one tap) while Party is on.
+            if (partyControls) BoxWithConstraints(
                 Modifier.align(Alignment.CenterStart).fillMaxHeight()
                     .padding(start = 16.u, top = 76.u, bottom = 16.u),
                 contentAlignment = Alignment.CenterStart
             ) {
                 VibeSlider(minOf(maxHeight - 62.u, 300.u).coerceAtLeast(120.u))
             }
-            if (genreBanner != null && hardstyleOn && !announcement) Text(genreBanner!!, color=Color.White,
+            if (genreBanner != null && hardstyleOn && announcement == null) Text(genreBanner!!, color=Color.White,
                 modifier=Modifier.align(Alignment.TopCenter).padding(16.u).background(Color.Black.copy(alpha=.7f)).padding(12.u))
-            if (announcement && hardstyleOn) Text("PARTY ON", color=Color.White,
+            if (announcement != null) Text(announcement!!, color=Color.White,
                 modifier=Modifier.align(Alignment.TopCenter).padding(16.u).background(Color.Black.copy(alpha=.7f)).padding(12.u))
             if (!hasAccess) Notice("Rave trenger tilgang til hva som spilles.\nInnstillinger → Varsler → Enhetstilgang til varsler → Bilnett Rave.")
             // Tilbake til app-oversikten i bilen (Rave skjuler ellers systemlinjene).
@@ -1286,7 +1338,7 @@ class RaveActivity : ComponentActivity() {
                 Spacer(Modifier.height(18.u))
                 LyricsView(align)
             }
-            if (transportVisible || mediaTogglesVisible || (modeButtonsAllowed && controls.hardstyle)) {
+            if (transportVisible || mediaTogglesVisible || (modeButtonsAllowed && partyControls)) {
                 Spacer(Modifier.height(if (compact) 18.u else 28.u))
                 FlowRow(verticalArrangement = Arrangement.spacedBy(12.u), horizontalArrangement = Arrangement.spacedBy(28.u)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1301,9 +1353,9 @@ class RaveActivity : ComponentActivity() {
                         Control(Icons.Rounded.SkipNext, 44.u, onTransportInteraction) { controller?.transportControls?.skipToNext() }
                     }
                     }
-                    if (modeButtonsAllowed && !narrow && (mediaTogglesVisible || (modeButtonsAllowed && controls.hardstyle))) ModeButtons(mediaTogglesVisible)
+                    if (modeButtonsAllowed && !narrow && (mediaTogglesVisible || (modeButtonsAllowed && partyControls))) ModeButtons(mediaTogglesVisible)
                 }
-                if (modeButtonsAllowed && narrow && (mediaTogglesVisible || (modeButtonsAllowed && controls.hardstyle))) {
+                if (modeButtonsAllowed && narrow && (mediaTogglesVisible || (modeButtonsAllowed && partyControls))) {
                     Spacer(Modifier.height(12.u))
                     ModeButtons(mediaTogglesVisible)
                 }
@@ -1322,16 +1374,10 @@ class RaveActivity : ComponentActivity() {
                 if (videoId != null) VideoButton()
                 if (videoOn && videoClips.size > 1) NextVideoButton()
             }
-            if (controls.hardstyle) {
-                Box(Modifier.height(64.u).clip(RoundedCornerShape(50))
-                    .background(if(hardstyleOn) Color(0xFFF5F2EC) else Color(0x22FFFFFF))
-                    .clickable { buttonInteraction(); setHardstyle() }.padding(horizontal=24.u), contentAlignment=Alignment.Center) {
-                    Text("Party", color=if(hardstyleOn) Color(0xFF0A0A0A) else Color(0xFFF5F2EC), fontSize=18.us, fontWeight=FontWeight.SemiBold)
-                }
-            }
+            // No Party button: 5 quick taps switch Party on/off.
         }
         // With Party on: the analysis toggle (the vibe slider itself sits on the left edge).
-        if (hardstyleOn && controls.hardstyle) {
+        if (partyControls) {
             Spacer(Modifier.height(10.u))
             if (stackGenres) Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.u)) { GenreChips() }
             else FlowRow(horizontalArrangement = Arrangement.spacedBy(8.u), verticalArrangement = Arrangement.spacedBy(6.u)) { GenreChips() }
@@ -1566,41 +1612,108 @@ class RaveActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Drag the lyrics sideways to change style (left = next, right = previous, like flipping pages); double-tap to switch
+     * between the glass box and open text. Taps are not consumed, so the screen's own tap handling
+     * (showing the controls) still works.
+     */
     @Composable
-    private fun LyricsView(align: Alignment.Horizontal) {
+    private fun LyricsSwipeArea(modifier: Modifier, content: @Composable () -> Unit) {
+        var dragX by remember { mutableFloatStateOf(0f) }
+        var dragging by remember { mutableStateOf(false) }
+        val shownX by animateFloatAsState(dragX, if (dragging) androidx.compose.animation.core.snap() else androidx.compose.animation.core.spring(dampingRatio = .75f), label = "swipe")
+        var lastTapAt by remember { mutableLongStateOf(0L) }
+        val threshold = with(androidx.compose.ui.platform.LocalDensity.current) { 64.u.toPx() }
+        Box(
+            modifier.pointerInput(Unit) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    var dx = 0f
+                    var moved = false      // finger left the tap area: not a tap any more
+                    var swiping = false    // a sideways drag that moves the lyrics
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val c = event.changes.firstOrNull { it.id == down.id } ?: break
+                        dx = c.position.x - down.position.x
+                        val dy = c.position.y - down.position.y
+                        if (!moved && kotlin.math.hypot(dx, dy) > viewConfiguration.touchSlop) {
+                            moved = true
+                            swiping = abs(dx) > abs(dy)
+                        }
+                        if (swiping) { dragging = true; dragX = dx; c.consume() }
+                        if (!c.pressed) {
+                            // Short tap: second one within 320 ms toggles glass/open. Consumed, so the
+                            // double-tap does not also count towards unlocking the hidden buttons.
+                            val short = c.uptimeMillis - down.uptimeMillis < 300L
+                            if (!moved && short) {
+                                if (c.uptimeMillis - lastTapAt < 320L) { c.consume(); toggleLyricsGlass(); lastTapAt = 0L }
+                                else lastTapAt = c.uptimeMillis
+                            }
+                            break
+                        }
+                    }
+                    dragging = false
+                    dragX = 0f
+                    if (swiping) {
+                        if (dx < -threshold) stepLyricsStyle(1) else if (dx > threshold) stepLyricsStyle(-1)
+                    }
+                }
+            }
+        ) {
+            Box(
+                Modifier.fillMaxSize().graphicsLayer {
+                    translationX = shownX * .6f
+                    alpha = 1f - (abs(shownX) / 500f).coerceAtMost(.6f)
+                },
+                contentAlignment = Alignment.CenterStart
+            ) {
+                content()
+            }
+            // Style name + dots for a moment after a change.
+            val toast = lyricsToast
+            LaunchedEffect(lyricsToastAt) { if (toast != null) { delay(1400); lyricsToast = null } }
+            if (toast != null) {
+                Column(Modifier.align(Alignment.TopCenter), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(toast, color = Color(0xFFF5F2EC), fontSize = 15.us, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Default,
+                        modifier = Modifier.clip(RoundedCornerShape(50)).background(Color(0x99000000)).padding(horizontal = 14.u, vertical = 6.u))
+                    Spacer(Modifier.height(8.u))
+                    StyleDots(lyricsStyle)
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun LyricsView(align: Alignment.Horizontal, fill: Boolean = false) {
         val ta = if (align == Alignment.CenterHorizontally) TextAlign.Center else TextAlign.Start
         val dim = Color(0x66F5F2EC)
         Column(horizontalAlignment = align) {
             when {
                 lyricsState == "loading" -> Text("Henter tekst …", color = dim, fontSize = 22.us, textAlign = ta, fontFamily = BodyFont)
                 lyrics.isNotEmpty() -> {
-                    val idx = lyrics.indexOfLast { it.first <= pos + 250 }.coerceAtLeast(0)
-                    for (i in (idx - 2)..(idx + 2)) {
-                        val line = lyrics.getOrNull(i)?.second
-                        val current = i == idx
-                        Text(
-                            when {
-                                line == null -> " "
-                                line.isBlank() -> "♪"
-                                else -> line
-                            },
-                            color = if (current) Color(0xFFF5F2EC) else dim,
-                            fontSize = if (current) 34.us else 22.us,
-                            fontFamily = FontFamily.Default,
-                            style = TextStyle(shadow = Shadow(Color.Black, Offset(0f, 2f), 10f)),
-                            fontWeight = if (current) FontWeight.SemiBold else FontWeight.Normal,
-                            lineHeight = if (current) 38.us else 27.us,
-                            textAlign = ta,
-                            maxLines = 2, overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(vertical = 3.u)
-                        )
-                    }
+                    val now = pos + 250
+                    val idx = lyrics.indexOfLast { it.first <= now }.coerceAtLeast(0)
+                    val start = lyrics[idx].first
+                    val end = lyrics.getOrNull(idx + 1)?.first ?: (start + 5_000L)
+                    // A long instrumental after a line must not slow the word timing down to a crawl.
+                    val dur = minOf(end - start, maxOf(1_500L, lyrics[idx].second.length * 90L)).coerceAtLeast(1L)
+                    val progress = ((now - start).toFloat() / dur).coerceIn(0f, 1f)
+                    // Text colour from the cover, lifted so it reads on a dark background.
+                    val accent = remember(colors) { colors.maxByOrNull { maxOf(it.red, it.green, it.blue) - minOf(it.red, it.green, it.blue) }?.let { brighten(it) } ?: Color(0xFFFF7A3D) }
+                    StyledLyrics(lyricsStyle, lyrics, idx, progress, align, accent, lyricsPulse, if (fill) Modifier.fillMaxSize() else Modifier.fillMaxWidth().height(260.u))
                 }
                 plainLyrics != null -> Text(
                     plainLyrics.orEmpty(), color = Color(0xCCF5F2EC), fontSize = 20.us, fontFamily = FontFamily.Default, lineHeight = 28.us, textAlign = ta,
                     modifier = Modifier.heightIn(max = 220.u).verticalScroll(rememberScrollState())
                 )
-                lyricsState == "none" -> Text("Fant ingen tekst til denne sangen", color = dim, fontSize = 22.us, textAlign = ta, fontFamily = BodyFont)
+                lyricsState == "none" -> {
+                    // Shown briefly, then fades away so it does not hang on screen for the whole song.
+                    val key = lyricsKey
+                    LaunchedEffect(key) { delay(3_000); noLyricsHiddenFor = key }
+                    val a by animateFloatAsState(if (noLyricsHiddenFor == key) 0f else 1f, tween(600), label = "noLyrics")
+                    Text("Fant ingen tekst til denne sangen", color = dim, fontSize = 22.us, textAlign = ta, fontFamily = BodyFont,
+                        modifier = Modifier.graphicsLayer { alpha = a })
+                }
                 else -> Text("Spill av en sang for å se teksten", color = dim, fontSize = 22.us, textAlign = ta, fontFamily = BodyFont)
             }
         }
@@ -1670,7 +1783,7 @@ class RaveActivity : ComponentActivity() {
 
 /** One scale factor for the whole Rave screen: 1.0 on a phone in landscape, larger on big
  * car screens, smaller on small ones, so proportions and positions stay the same everywhere. */
-private val LocalRaveScale = androidx.compose.runtime.staticCompositionLocalOf { 1f }
+internal val LocalRaveScale = androidx.compose.runtime.staticCompositionLocalOf { 1f }
 
 private fun raveScaleFor(widthDp: Float, heightDp: Float): Float {
     val wide = widthDp > heightDp
@@ -1680,7 +1793,7 @@ private fun raveScaleFor(widthDp: Float, heightDp: Float): Float {
     return scale.coerceIn(.7f, 2.2f)
 }
 
-private val Int.u: Dp @Composable get() = (this * LocalRaveScale.current).dp
-private val Float.u: Dp @Composable get() = (this * LocalRaveScale.current).dp
+internal val Int.u: Dp @Composable get() = (this * LocalRaveScale.current).dp
+internal val Float.u: Dp @Composable get() = (this * LocalRaveScale.current).dp
 private val Double.u: Dp @Composable get() = (this.toFloat() * LocalRaveScale.current).dp
-private val Int.us: androidx.compose.ui.unit.TextUnit @Composable get() = (this * LocalRaveScale.current).sp
+internal val Int.us: androidx.compose.ui.unit.TextUnit @Composable get() = (this * LocalRaveScale.current).sp
