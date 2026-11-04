@@ -42,20 +42,11 @@ Rave trenger to tilganger:
 
 Nettleseren kommer fra AABrowser og er laget for bilskjermer.
 
-<div align="center">
-  <img width="80%" src="docs/img/aabrowser3.gif" alt="Nettleseren i Bilnett" />
-</div>
-
 - **Material 3-utseende:** tilpasset bilskjermer, med myke animasjoner og ekte svart AMOLED-tema.
 - **Video i fullskjerm:** støtter DRM-beskyttet video (Widevine L3). Ett trykk for fullskjerm.
 - **Startside:** opptil 6 snarveier du kan sortere ved å dra, med lagrede ikoner og eget bakgrunnsbilde.
 - **Faner:** åpne, bytt, lukk og gjenopprett flere faner.
 - **Bilvennlig:** bytt mellom mobil- og skrivebordsvisning, skaler hele grensesnittet og administrer bokmerker.
-
-<div align="center">
-  <img width="44%" src="docs/screenshots/litemode-v3_0.png" alt="Nettleseren i lyst tema" />
-  <img width="44%" src="docs/screenshots/darkmode-v3_0.png" alt="Nettleseren i mørkt tema" />
-</div>
 
 ---
 
