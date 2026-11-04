@@ -170,6 +170,13 @@ class RaveActivity : ComponentActivity() {
     /** Look inside a drop (changes every 8 bars and per drop): 0 shake, 1 spikes/ripples, 2 colours. */
     private var dropLook by mutableIntStateOf(0)
     private var flashesNow by mutableIntStateOf(0)
+    /** Car sync: + fires the visuals earlier, − later (ms). Saved between sessions. */
+    private var syncMs by mutableIntStateOf(0)
+    private val syncTapper = SyncTapper()
+    private var tapMode by mutableStateOf(false)
+    private var tapCount by mutableIntStateOf(0)
+    private fun stopTapTest() { tapMode = false; syncTapper.reset(); tapCount = 0 }
+    private fun saveSync() { try { getSharedPreferences("rave", MODE_PRIVATE).edit().putInt("syncMs", syncMs).apply() } catch (_: Exception) { } }
     private var genreAnnouncedAt by mutableLongStateOf(0L)
     // Vibe meter (vertical slider): 0 = calm … 1 = full hardstyle/rock. In auto mode the app moves
     // it to fit the music; dragging it takes over until "Auto" is tapped. Remembered between sessions.
@@ -213,6 +220,7 @@ class RaveActivity : ComponentActivity() {
     private fun buttonInteraction() { controls = controls.button(SystemClock.elapsedRealtime()) }
     private fun setHardstyle() {
         hardstyleOn = !hardstyleOn
+        stopTapTest()
         hardstyleAudio.reset()
         hardstyleFrame = HardstyleFrame()
         visualizer?.let { try { it.enabled = false; it.release() } catch (_: Exception) {} }
@@ -303,6 +311,8 @@ class RaveActivity : ComponentActivity() {
         // Skjermen skal aldri slukke mens Rave vises (gjelder bare mens vinduet er synlig).
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         showAnalysis = try { getSharedPreferences("rave", MODE_PRIVATE).getBoolean("analysis", true) } catch (_: Exception) { true }
+        syncMs = try { getSharedPreferences("rave", MODE_PRIVATE).getInt("syncMs", 0) } catch (_: Exception) { 0 }
+            .coerceIn(-SYNC_LIMIT_MS, SYNC_LIMIT_MS)
         try {
             val prefs = getSharedPreferences("rave", MODE_PRIVATE)
             if (prefs.contains("vibeAuto")) {
@@ -406,6 +416,7 @@ class RaveActivity : ComponentActivity() {
             loudNoDropS = 0f
             beatClock.reset(); dip = 0f; dropHit = 0f; lastPart = SongPart.INTRO; dropLook = 0
             dipStartedAt = 0L; dipSpent = false
+            stopTapTest()   // a new song has a new beat grid
             hardSubDetector.newTrack()
             val t = m?.getString(MediaMetadata.METADATA_KEY_TITLE).orEmpty()
             val a = m?.getString(MediaMetadata.METADATA_KEY_ARTIST).orEmpty()
@@ -735,7 +746,7 @@ class RaveActivity : ComponentActivity() {
                     // is heard. The analysis (genre, song parts) still uses the detected kick.
                     if (!playing || !fresh) beatClock.reset()
                     val clockOn = v >= BEAT_CLOCK_FROM_VIBE
-                    val clockKick = if (playing && fresh && clockOn) beatClock.pulse(rawTarget, nowMs) else null
+                    val clockKick = if (playing && fresh && clockOn) beatClock.pulse(rawTarget, nowMs, BEAT_LEAD_MS + syncMs) else null
                     val visualInput = if (clockKick != null) rawTarget.copy(kick = clockKick) else rawTarget
                     val shapedFull = vibeShape(visualInput, v, r)
                     // Song structure (hardstyle/EDM): calm intro, rising build-up, max chaos on the drop.
@@ -1335,7 +1346,7 @@ class RaveActivity : ComponentActivity() {
             Modifier.height(42.u).clip(RoundedCornerShape(50))
                 .background(if (showAnalysis) Color(0xFFF5F2EC) else Color(0x22FFFFFF))
                 .clickable {
-                    buttonInteraction(); showAnalysis = !showAnalysis
+                    buttonInteraction(); showAnalysis = !showAnalysis; if (!showAnalysis) stopTapTest()
                     try { getSharedPreferences("rave", MODE_PRIVATE).edit().putBoolean("analysis", showAnalysis).apply() } catch (_: Exception) { }
                 }
                 .padding(horizontal = 18.u),
@@ -1343,6 +1354,59 @@ class RaveActivity : ComponentActivity() {
         ) {
             Text("Analyse", maxLines = 1, softWrap = false, fontSize = 15.us, fontWeight = FontWeight.SemiBold,
                 color = if (showAnalysis) Color(0xFF0A0A0A) else Color(0xFFF5F2EC))
+        }
+        // Car sync (shown with the analysis): nudge the visuals earlier/later, or tap along to measure.
+        if (showAnalysis) {
+            @Composable
+            fun pill(text: String, on: Boolean = false, onClick: () -> Unit) = Box(
+                Modifier.height(42.u).clip(RoundedCornerShape(50))
+                    .background(if (on) Color(0xFFF5F2EC) else Color(0x22FFFFFF))
+                    .clickable { buttonInteraction(); onClick() }
+                    .padding(horizontal = 16.u),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(text, maxLines = 1, softWrap = false, fontSize = 15.us, fontWeight = FontWeight.SemiBold,
+                    color = if (on) Color(0xFF0A0A0A) else Color(0xFFF5F2EC))
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.u), verticalAlignment = Alignment.CenterVertically) {
+                pill("−") { syncMs = (syncMs - SYNC_STEP_MS).coerceAtLeast(-SYNC_LIMIT_MS); saveSync() }
+                Text("Synk ${if (syncMs > 0) "+" else ""}$syncMs ms", maxLines = 1, softWrap = false,
+                    fontSize = 15.us, color = Color(0xFFF5F2EC))
+                pill("+") { syncMs = (syncMs + SYNC_STEP_MS).coerceAtMost(SYNC_LIMIT_MS); saveSync() }
+            }
+            // Measured on finger DOWN (a normal click fires on release, ~100 ms late).
+            Box(
+                Modifier.height(42.u).clip(RoundedCornerShape(50))
+                    .background(if (tapMode) Color(0xFFF5F2EC) else Color(0x22FFFFFF))
+                    .pointerInput(Unit) {
+                        awaitEachGesture {
+                            val down = awaitFirstDown()
+                            down.consume()
+                            buttonInteraction()
+                            when {
+                                // The calibration only matters where the beat clock is used.
+                                vibe < BEAT_CLOCK_FROM_VIBE -> stopTapTest()
+                                !tapMode -> { tapMode = true; syncTapper.reset(); tapCount = 0 }
+                                // No beat found yet: a tap cancels instead of hanging forever.
+                                !beatClock.active -> stopTapTest()
+                                else -> {
+                                syncTapper.tap(down.uptimeMillis, hardstyleFrame)?.let { syncMs = it; saveSync(); tapMode = false }
+                                tapCount = syncTapper.taps
+                                }
+                            }
+                        }
+                    }
+                    .padding(horizontal = 16.u),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(when {
+                    vibe < BEAT_CLOCK_FROM_VIBE -> "Synk: skru opp vibe"
+                    !tapMode -> "Trykk i takt"
+                    !beatClock.active -> "Venter på takt (trykk = avbryt)"
+                    else -> "Trykk på slaget $tapCount/$SYNC_TAPS"
+                }, maxLines = 1, softWrap = false, fontSize = 15.us, fontWeight = FontWeight.SemiBold,
+                    color = if (tapMode) Color(0xFF0A0A0A) else Color(0xFFF5F2EC))
+            }
         }
     }
 

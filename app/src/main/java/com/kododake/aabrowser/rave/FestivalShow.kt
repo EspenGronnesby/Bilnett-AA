@@ -26,6 +26,38 @@ internal const val DROP_HIT_UNSURE = .5f
 /** The beat clock and unsmoothed hits only from about here on the vibe slider (calm modes stay soft). */
 internal const val BEAT_CLOCK_FROM_VIBE = .4f
 
+/** Sync for the car: the user can shift the visuals this far earlier (+) or later (−). */
+internal const val SYNC_LIMIT_MS = 150
+internal const val SYNC_STEP_MS = 10
+/** Tap test: taps needed, and the assumed screen delay added on top of what the taps measure. */
+internal const val SYNC_TAPS = 8
+internal const val SCREEN_DELAY_MS = 40f
+
+/**
+ * Tap-in-time calibration (like rhythm games): the user taps on the beat they HEAR; the median
+ * distance to our beat grid tells how much earlier/later the visuals must fire.
+ * Returns the new sync value (ms, + = earlier), or null while still collecting.
+ */
+internal class SyncTapper {
+    private val errors = ArrayList<Float>()
+    val taps: Int get() = errors.size
+    fun reset() = errors.clear()
+
+    /** False when the beat grid isn't known yet (the tap is ignored). */
+    fun tap(now: Long, f: HardstyleFrame): Int? {
+        val p = f.beatPeriod
+        if (f.beatConfidence < BEAT_CLOCK_MIN_CONFIDENCE || p <= 0f || f.beatAt <= 0L) return null
+        val raw = Math.floorMod(now - f.beatAt, p.toLong()).toFloat()
+        errors += if (raw > p / 2f) raw - p else raw     // −p/2..p/2: heard beat vs our grid
+        if (errors.size < SYNC_TAPS) return null
+        val median = errors.sorted()[errors.size / 2]
+        errors.clear()
+        // Heard beat = grid + median; visuals should land there after the screen delay.
+        val lead = -median + SCREEN_DELAY_MS
+        return (lead - BEAT_LEAD_MS).toInt().coerceIn(-SYNC_LIMIT_MS, SYNC_LIMIT_MS)
+    }
+}
+
 /** WCAG 2.3.1 / Epilepsy Society: at most 3 full-screen flashes in any 1 s, shared by ALL flash
  *  types (strobe, white heavy flash, drop hit). */
 internal const val MAX_FLASHES_PER_SECOND = 3
