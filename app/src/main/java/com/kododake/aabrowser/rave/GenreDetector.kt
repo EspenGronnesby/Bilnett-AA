@@ -596,8 +596,9 @@ internal class HardstyleStructure {
         val bar = f.beat / 4
         if (bar != lastBarLogged) {
             lastBarLogged = bar
-            Log.d("RaveGenre", "takt $barInPhrase/8 frase $phrase | $partName | sub %+.1f dB (treff %+.1f) diskant %+.1f dB build %.0f%% grit %.2f snare/s %.1f klar=$primed"
-                .format(subRel, subHitRel, airTrend, build * 100f, grit1, snareRate))
+            // Names go in as %s arguments: a name containing "%" must never be read as a format code.
+            Log.d("RaveGenre", "takt %d/8 frase %d | %s | sub %+.1f dB (treff %+.1f) diskant %+.1f dB build %.0f%% grit %.2f snare/s %.1f klar=%b"
+                .format(barInPhrase, phrase, partName, subRel, subHitRel, airTrend, build * 100f, grit1, snareRate, primed))
         }
 
         val boost = dropBoost
