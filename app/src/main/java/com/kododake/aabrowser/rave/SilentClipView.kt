@@ -14,7 +14,19 @@ internal class SilentClipView(context: Context, private val url: String,
     private var prepared = false
     private var wanted = false
     private var released = false
+    private var videoW = 0
+    private var videoH = 0
     private val timeout = Runnable { fail() }
+
+    /** Fill the view like «center crop»: square covers and 16:9 videos are never stretched. */
+    private fun crop() {
+        val vw = width.toFloat(); val vh = height.toFloat()
+        if (videoW <= 0 || videoH <= 0 || vw <= 0f || vh <= 0f) return
+        val scale = maxOf(vw / videoW, vh / videoH)
+        val m = android.graphics.Matrix()
+        m.setScale(videoW * scale / vw, videoH * scale / vh, vw / 2f, vh / 2f)
+        setTransform(m)
+    }
 
     init { surfaceTextureListener = this }
     override fun setPlaying(value: Boolean) {
@@ -33,6 +45,7 @@ internal class SilentClipView(context: Context, private val url: String,
                 p.setVolume(0f, 0f)
                 p.isLooping = false
                 p.setOnPreparedListener { prepared = true; setPlaying(wanted) }
+                p.setOnVideoSizeChangedListener { _, w, h -> videoW = w; videoH = h; crop() }
                 p.setOnCompletionListener {
                     if (!released && wanted) {
                         try { p.seekTo(0); p.start() } catch (_: Exception) { fail() }
@@ -61,6 +74,6 @@ internal class SilentClipView(context: Context, private val url: String,
         prepared = false
     }
     override fun onSurfaceTextureDestroyed(texture: SurfaceTexture): Boolean { release(); return true }
-    override fun onSurfaceTextureSizeChanged(texture: SurfaceTexture, width: Int, height: Int) = Unit
+    override fun onSurfaceTextureSizeChanged(texture: SurfaceTexture, width: Int, height: Int) = crop()
     override fun onSurfaceTextureUpdated(texture: SurfaceTexture) = Unit
 }

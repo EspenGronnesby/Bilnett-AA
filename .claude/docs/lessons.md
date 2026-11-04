@@ -5,6 +5,72 @@
 
 ---
 
+### Krasj på hver build-up: `%` i format-streng («BUILD-UP 66%»)
+**Dato:** 2026-11-04
+**Kategori:** Android / Kotlin
+**Berørte filer:** `app/src/main/java/com/kododake/aabrowser/rave/GenreDetector.kt` (takt-loggen)
+
+**Problem:** Appen startet på nytt hver gang en build-up startet, og sangteksten sto på «Henter tekst …». Det så ut som en tekstfeil.
+
+**Årsak:** Logglinjen bygde en streng med Kotlin-template (`"... | $partName | ...".format(...)`). Når `partName` var «BUILD-UP 66%», tolket `String.format` `%` som formatkode → `UnknownFormatConversionException` → krasj.
+
+**Løsning:** Aldri sett variabel tekst inn i selve format-strengen. Send den som argument: `"... | %s | ...".format(partName, ...)`.
+
+**Lærdom:** Når tekst «ikke laster» og det ligner nettverk/parsing, sjekk først `adb logcat | grep AndroidRuntime`. Krasj vises der, ikke i UI.
+
+---
+
+### WebView-video svart: iframe hadde høyde 0 px
+**Dato:** 2026-11-04
+**Kategori:** Android / WebView
+**Berørte filer:** `app/src/main/java/com/kododake/aabrowser/rave/YouTubeClipView.kt`
+
+**Problem:** YouTube-spilleren rapporterte PLAYING og tiden gikk, men skjermen var svart. Iframen var 923×0.
+
+**Årsak:** WebView lages i Compose/`AndroidView` før den får endelig størrelse. CSS `height:100%` og `100vh` ble derfor 0 px (body clientHeight 0, innerHeight 411).
+
+**Løsning:** Sett størrelsen i piksler fra JS (`innerWidth`/`innerHeight`) ved `onReady`, ved `resize`, og med jevne mellomrom.
+
+**Lærdom:** Mål før du gjetter. Logg hvert 3. s (`getCurrentTime`, `getBoundingClientRect` på iframe, body/html `clientHeight`) og fang det via `WebChromeClient.onConsoleMessage` til logcat. Ikke endre bakgrunnsfarge eller z-order før størrelsen er målt.
+
+---
+
+### YouTube-embed droppet i Rave
+**Dato:** 2026-11-04
+**Kategori:** Android / Video
+**Berørte filer:** `app/src/main/java/com/kododake/aabrowser/rave/SpotifyVideoLookup.kt` (`YOUTUBE_ON = false`)
+
+**Problem:** YouTube-grensesnittet (spinner, tittel, «Flere videoer», topic-kanaler med bare albumbilde) dukket opp i Rave, selv med `controls=0`, zoom/beskjæring og «vis først etter 2,5 s ren avspilling».
+
+**Årsak:** YouTube-iframen kan ikke skjules pålitelig. Overlegg og beskjæring hjelper, men ikke nok.
+
+**Løsning:** Espen valgte å droppe YouTube. Koden er beholdt bak bryteren `YOUTUBE_ON = false`. API-nøkkel ligger kun i `local.properties`, aldri i git.
+
+**Lærdom:** Stol ikke på at en tredjeparts-embed kan skjules i sin helhet. Bruk en kilde du kontrollerer. Se lesson om Apple-kilder under.
+
+---
+
+### Musikkvideo og animert cover fra Apple i stedet for YouTube
+**Dato:** 2026-11-04
+**Kategori:** Android / Video
+**Berørte filer:** `app/src/main/java/com/kododake/aabrowser/rave/SpotifyVideoLookup.kt`, `rave/SilentClipView.kt`
+
+**Problem:** Rave trengte videokilder uten YouTube-grensesnitt. Vanlig iTunes-søk bommer ofte, f.eks. «Dark Knight Dummo».
+
+**Årsak:** Funnet ved å lese iBailas URL-cache read-only (`~/Library/Caches/com.posegraphic.halo/Cache.db`, kopiert til tmp og spurt med `sqlite3`). iBaila bruker Apple-kilder som gir treff.
+
+**Løsning:**
+- Sangens egen musikkvideo: `itunes.apple.com/lookup?id=<artistId>&entity=musicVideo&limit=100&country=us`, deretter tittel-match. artistId/collectionId fra `search?entity=song`.
+- Animert albumcover: HTML fra `music.apple.com/us/album/<collectionId>`, nøkkel `"motionDetailSquare"`/`"motionDetailTall"`, HLS-URL (`mvod.itunes.apple.com/...m3u8`) ca. 400 tegn etter nøkkelen.
+- Animert artistbilde: `music.apple.com/us/artist/<artistId>`, nøkler `"motionArtistWide16x9"` / `"motionArtistFullscreen16x9"` / `"motionArtistSquare1x1"`.
+- Rekkefølge: Sang → Cover → Artistbilde → Album → Artist → Vibe.
+- `MediaPlayer` spiller HLS uten ekstra bibliotek. `TextureView` strekker video, så bruk center-crop via `setTransform(Matrix)` i `onSurfaceTextureSizeChanged`.
+- Søk med hovedartist + tittel uten «(feat. …)», f.eks. «BlocBoy JB, Drake» + «Look Alive», ikke «Look Alive (feat. Drake)».
+
+**Lærdom:** Les hva en fungerende app faktisk kaller (URL-cache) før du bygger søk fra bunnen. Apple-kilder er bedre enn generelt søk for musikkvideo.
+
+---
+
 ### Android Auto sa «du kjører» selv når bilen sto parkert (Kenwood DMX)
 **Dato:** 2026-11-03
 **Kategori:** Android Auto / Bil-installasjon

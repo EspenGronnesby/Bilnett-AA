@@ -492,7 +492,7 @@ class RaveActivity : ComponentActivity() {
         if (track.isBlank() || artistName.isBlank()) return
         videoCache[key]?.let { cached -> videoClips = cached.filter { it.url !in videoFailed }; return }
         Thread {
-            val clips = SpotifyVideoLookup.findAll(track, artistName,
+            val clips = SpotifyVideoLookup.findAll(track, artistName, album,
                 isActive = { videoKey == key },
                 // Grow the list in place: the clip already playing keeps its index.
                 onUpdate = { list -> runOnUiThread { if (videoKey == key && foreground) videoClips = list.filter { it.url !in videoFailed } } })

@@ -36,6 +36,8 @@ internal class YouTubeClipView(
 
     init {
         setBackgroundColor(Color.TRANSPARENT)
+        // Invisible until YouTube plays cleanly: no spinner, title, pause or end screen may ever show.
+        alpha = 0f
         isClickable = false
         isFocusable = false
         isVerticalScrollBarEnabled = false
@@ -65,11 +67,17 @@ internal class YouTubeClipView(
     }
 
     private inner class Bridge {
-        @JavascriptInterface fun playing() = post {
+        /** The player started (cancels the timeout); it stays hidden until [show]. */
+        @JavascriptInterface fun playing() = post { if (!released && !failed) removeCallbacks(timeout) }
+        /** Clean playback for a while: fade the video in. The first time also tells Rave a video is on. */
+        @JavascriptInterface fun show() = post {
             if (released || failed) return@post
             removeCallbacks(timeout)
-            if (!started) { started = true; Log.d("RaveVideo", "YouTube playing -> show"); onFrame() }
+            animate().alpha(1f).setDuration(300).start()
+            if (!started) { started = true; Log.d("RaveVideo", "YouTube clean -> show"); onFrame() }
         }
+        /** Buffering, paused, near the end …: hide at once so YouTube's own screens never show. */
+        @JavascriptInterface fun hide() = post { if (!released) animate().alpha(0f).setDuration(120).start() }
         @JavascriptInterface fun error(code: Int) = post { Log.w("RaveVideo", "YouTube player error $code"); fail() }
         @JavascriptInterface fun wanted() = wanted
     }
@@ -121,6 +129,22 @@ function fit(){
   f.style.left = (W - w) / 2 + 'px'; f.style.top = (H - h) / 2 + 'px';
 }
 addEventListener('resize', fit); setInterval(fit, 1000);
+// Show only after 2.5 s of clean playing (YouTube's title fades by then); hide on anything else:
+// buffering (spinner), paused (title + «More videos»), not started, or the last 2 s (end screen).
+var cleanSince = 0, shown = false;
+function vis(v){ if (v !== shown) { shown = v; if (v) Rave.show(); else Rave.hide(); } }
+setInterval(function(){
+  if (!ready || !player || !player.getPlayerState) return;
+  var st = player.getPlayerState(), t = player.getCurrentTime(), d = player.getDuration();
+  var nearEnd = d > 0 && d - t < 2;
+  if (st === YT.PlayerState.PLAYING && !nearEnd) {
+    if (!cleanSince) cleanSince = Date.now();
+    if (Date.now() - cleanSince >= 2500) vis(true);
+  } else {
+    cleanSince = 0; vis(false);
+    if (nearEnd && st === YT.PlayerState.PLAYING) player.seekTo(0, true); // loop while hidden
+  }
+}, 250);
 function onYouTubeIframeAPIReady(){
   player = new YT.Player('p', { videoId: '$id', width: innerWidth, height: innerHeight, host: 'https://www.youtube-nocookie.com',
     playerVars: { autoplay: 1, mute: 1, controls: 0, disablekb: 1, fs: 0, rel: 0, playsinline: 1,
@@ -131,15 +155,10 @@ function onYouTubeIframeAPIReady(){
         if (e.data === YT.PlayerState.PLAYING) {
           // Autoplay ignores a paused song; hold it until the music plays.
           if (!want) { player.pauseVideo(); return; }
-          var d = player.getDuration();
-          // Long concert sets: jump 10–70 % in, once, and show the video only after the jump.
-          if (!jumped && d > 240) {
-            jumped = true;
-            player.seekTo(d * (0.1 + Math.random() * 0.6), true);
-            setTimeout(function(){ if (player.getPlayerState() === YT.PlayerState.PLAYING) Rave.playing(); }, 2500);
-            return;
-          }
           Rave.playing();
+          var d = player.getDuration();
+          // Long concert sets: jump 10–70 % in, once (hidden; the check above shows it afterwards).
+          if (!jumped && d > 240) { jumped = true; cleanSince = 0; player.seekTo(d * (0.1 + Math.random() * 0.6), true); }
         }
         if (e.data === YT.PlayerState.ENDED) { player.seekTo(0, true); if (want) player.playVideo(); }
       },
