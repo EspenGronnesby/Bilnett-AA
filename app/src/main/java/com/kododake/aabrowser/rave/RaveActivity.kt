@@ -219,10 +219,17 @@ class RaveActivity : ComponentActivity() {
     private var lyricsKey = ""
 
     // Musikkvideo
-    private var videoId by mutableStateOf<String?>(null)
+    private var videoClips by mutableStateOf<List<SpotifyVideoLookup.VideoClip>>(emptyList())
+    private var videoIndex by mutableStateOf(0)
+    private val videoId: String? get() = videoClips.getOrNull(videoIndex)?.url
     private var videoOn by mutableStateOf(true)
     private var videoPlaying by mutableStateOf(false)
-    private var videoKey = ""
+    @Volatile private var videoKey = ""
+    private val videoFailed = HashSet<String>()
+    // Finished lookups per song, so coming back to Rave does not search everything again.
+    private val videoCache = object : LinkedHashMap<String, List<SpotifyVideoLookup.VideoClip>>() {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<SpotifyVideoLookup.VideoClip>>?) = size > 30
+    }
     private var foreground by mutableStateOf(false)
 
     private var msm: MediaSessionManager? = null
@@ -290,7 +297,7 @@ class RaveActivity : ComponentActivity() {
         foreground = false
         videoPlaying = false
         videoKey = ""
-        videoId = null
+        clearVideos()
         try { msm?.removeOnActiveSessionsChangedListener(sessionsListener) } catch (_: Exception) { }
         controller?.unregisterCallback(mediaCallback)
         controller = null
@@ -326,7 +333,7 @@ class RaveActivity : ComponentActivity() {
             title = ""; artist = ""; art = null; colors = DEFAULT_COLORS; playing = false
             lastState = null
             lyricsKey = ""; lyrics = emptyList(); plainLyrics = null; lyricsState = ""
-            videoKey = ""; videoId = null; videoPlaying = false
+            videoKey = ""; clearVideos(); videoPlaying = false
             return
         }
         next.registerCallback(mediaCallback)
@@ -374,13 +381,35 @@ class RaveActivity : ComponentActivity() {
         val key = "$artistName|$track|$album"
         if (key == videoKey) return
         videoKey = key
-        videoId = null
+        clearVideos()
         videoPlaying = false
         if (track.isBlank() || artistName.isBlank()) return
+        videoCache[key]?.let { cached -> videoClips = cached.filter { it.url !in videoFailed }; return }
         Thread {
-            val clip = SpotifyVideoLookup.find(track, artistName, album)
-            runOnUiThread { if (videoKey == key && foreground) videoId = clip }
+            val clips = SpotifyVideoLookup.findAll(track, artistName, album,
+                isActive = { videoKey == key },
+                // Grow the list in place: the clip already playing keeps its index.
+                onUpdate = { list -> runOnUiThread { if (videoKey == key && foreground) videoClips = list.filter { it.url !in videoFailed } } })
+            runOnUiThread { if (videoKey == key) videoCache[key] = clips }
         }.start()
+    }
+
+    private fun clearVideos() { videoClips = emptyList(); videoIndex = 0 }
+
+    private fun nextVideo() {
+        if (videoClips.size < 2) return
+        videoPlaying = false
+        videoIndex = (videoIndex + 1) % videoClips.size
+    }
+
+    // A clip that will not play is dropped, and the next one takes its place.
+    private fun dropVideo(url: String) {
+        val i = videoClips.indexOfFirst { it.url == url }
+        videoFailed += url
+        if (i < 0) return
+        videoPlaying = false
+        videoClips = videoClips.filterIndexed { j, _ -> j != i }
+        if (videoIndex > i || videoIndex >= videoClips.size) videoIndex = (videoIndex - 1).coerceAtLeast(0)
     }
 
     // ---------- Sangtekst (LRCLIB) ----------
@@ -885,9 +914,9 @@ class RaveActivity : ComponentActivity() {
             if (foreground && videoOn && videoId != null) {
                 androidx.compose.runtime.key(videoId) {
                     AndroidView(
-                        factory = { ctx -> SilentClipView(ctx, videoId!!,
+                        factory = { ctx -> val url = videoId!!; SilentClipView(ctx, url,
                             onFrame = { videoPlaying = true },
-                            onFailure = { videoPlaying = false; videoId = null }) },
+                            onFailure = { dropVideo(url) }) },
                         update = { it.setPlaying(playing) },
                         onRelease = { it.release() },
                         // The music video shakes with the scene too (zoomed slightly so edges never show).
@@ -1116,6 +1145,7 @@ class RaveActivity : ComponentActivity() {
             if (mediaVisible) {
                 LyricsButton()
                 if (videoId != null) VideoButton()
+                if (videoOn && videoClips.size > 1) NextVideoButton()
             }
             if (controls.hardstyle) {
                 Box(Modifier.height(64.u).clip(RoundedCornerShape(50))
@@ -1180,6 +1210,22 @@ class RaveActivity : ComponentActivity() {
             contentAlignment = Alignment.Center
         ) {
             Text("Tekst", fontFamily = FontFamily.Default, maxLines = 1, softWrap = false, color = if (on) Color(0xFF0A0A0A) else Color(0xFFF5F2EC), fontSize = 18.us, fontWeight = FontWeight.SemiBold)
+        }
+    }
+
+    @Composable
+    private fun NextVideoButton() {
+        val clip = videoClips.getOrNull(videoIndex) ?: return
+        Box(
+            Modifier.height(64.u).clip(RoundedCornerShape(50))
+                .background(Color(0x22FFFFFF))
+                .clickable { buttonInteraction(); nextVideo() }
+                .padding(horizontal = 24.u),
+            contentAlignment = Alignment.Center
+        ) {
+            Text("Neste · ${videoIndex + 1}/${videoClips.size} · ${clip.source.label}",
+                fontFamily = FontFamily.Default, maxLines = 1, softWrap = false,
+                color = Color(0xFFF5F2EC), fontSize = 18.us, fontWeight = FontWeight.SemiBold)
         }
     }
 
