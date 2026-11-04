@@ -67,6 +67,76 @@ internal fun blendFrames(a: HardstyleFrame, b: HardstyleFrame, t: Float): Hardst
     return b.copy(bass = l(a.bass, b.bass), kick = l(a.kick, b.kick), heavy = l(a.heavy, b.heavy), grit = l(a.grit, b.grit))
 }
 
+// ---- Vibe meter: one vertical slider (0 = calm … 1 = full hardstyle/rock) replaces the genre buttons.
+// 0 → ROLIG, .25 → RAP, .5 → EDM, 1 → HARD (hardstyle and rock fused, mixed by `rockness`).
+
+/** Where the auto mode puts the slider for a detected genre. */
+internal fun Genre.vibeTarget(): Float = when (this) {
+    Genre.STANDARD -> 0f
+    Genre.RAP -> .25f
+    Genre.EDM -> .5f
+    Genre.HARDSTYLE, Genre.ROCK -> 1f
+}
+
+/** 0..1: how far into the HARD part of the slider we are (0 at EDM, 1 at the top). */
+internal fun hardWeight(v: Float) = ((v - .5f) / .5f).coerceIn(0f, 1f)
+/** 0..1: how much song structure (calm intro, max on the drop) applies — off below RAP, full from EDM. */
+internal fun structureWeight(v: Float) = ((v - .25f) / .25f).coerceIn(0f, 1f)
+
+private fun lerpF(a: Float, b: Float, t: Float) = a + (b - a) * t
+private fun lerpProfile(a: PartyProfile, b: PartyProfile, t: Float) = PartyProfile(
+    lerpF(a.spike, b.spike, t), lerpF(a.particles, b.particles, t), lerpF(a.shake, b.shake, t),
+    lerpF(a.strobe, b.strobe, t), lerpF(a.density, b.density, t), lerpF(a.softness, b.softness, t))
+
+/**
+ * HARD = hardstyle and rock merged into one: both reactions run all the time and the strongest
+ * wins, every frame. Hardstyle hits on distorted bass kicks, rock on snares/guitar hits — so a
+ * song gets whichever is harder (Espen found rock mode often harder than hardstyle mode, even
+ * on hardstyle songs).
+ */
+@Suppress("UNUSED_PARAMETER")
+internal fun hardFusion(f: HardstyleFrame, rockness: Float): HardstyleFrame {
+    val rock = Genre.ROCK.shape(f)
+    val edm = Genre.EDM.shape(f)
+    return f.copy(
+        kick = max(f.kick, rock.kick),
+        heavy = maxOf(f.heavy, rock.heavy, edm.heavy),
+        bass = max(f.bass, rock.bass),
+        grit = maxOf(f.grit, rock.grit, edm.grit)
+    )
+}
+
+/** The audio frame reshaped for slider value [v]. */
+internal fun vibeShape(f: HardstyleFrame, v: Float, rockness: Float): HardstyleFrame = when {
+    v <= .25f -> blendFrames(Genre.STANDARD.shape(f), Genre.RAP.shape(f), v / .25f)
+    v <= .5f -> blendFrames(Genre.RAP.shape(f), Genre.EDM.shape(f), (v - .25f) / .25f)
+    else -> {
+        // Upper half: the merged hardstyle + rock reaction is fully in from ~65 % (so drum hits
+        // in hardstyle songs keep landing); below the top it is just a bit weaker, not different.
+        val h = hardWeight(v)
+        val fused = hardFusion(f, rockness)
+        val scaled = fused.copy(
+            kick = fused.kick * (.7f + .3f * h),      // pump
+            heavy = fused.heavy * (.6f + .4f * h),    // heaviness: spikes, shake, flash
+            grit = fused.grit * (.8f + .2f * h)       // ripples around the cover
+        )
+        blendFrames(Genre.EDM.shape(f), scaled, ((v - .5f) / .15f).coerceIn(0f, 1f))
+    }
+}
+
+/** Effect strengths for slider value [v]. */
+internal fun vibeProfile(v: Float, rockness: Float): PartyProfile {
+    // Strongest of both profiles per effect (in practice the hardstyle one, which is the bigger).
+    val hs = Genre.HARDSTYLE.profile(); val rk = Genre.ROCK.profile()
+    val hard = PartyProfile(max(hs.spike, rk.spike), max(hs.particles, rk.particles),
+        max(hs.shake, rk.shake), max(hs.strobe, rk.strobe))
+    return when {
+        v <= .25f -> lerpProfile(Genre.STANDARD.profile(), Genre.RAP.profile(), v / .25f)
+        v <= .5f -> lerpProfile(Genre.RAP.profile(), Genre.EDM.profile(), (v - .25f) / .25f)
+        else -> lerpProfile(Genre.EDM.profile(), hard, hardWeight(v))
+    }
+}
+
 /** Apple Music's genre name → profile, or null when it does not say enough. */
 internal fun genreFromApple(name: String?): Genre? {
     val g = name?.lowercase() ?: return null
@@ -124,9 +194,20 @@ internal class GenreDetector {
     private var dropSince = 0L
     /** Once a song has proven to be hardstyle, it stays hardstyle (calm parts are handled by SongPhase). */
     private var hardstyleThisTrack = false
+    val provenHardstyle: Boolean get() = hardstyleThisTrack
+
+    /**
+     * 0 = the HARD reaction is pure hardstyle, 1 = pure rock. Rises with live drums (snare hits
+     * without a dense four-on-the-floor kick, little sub bass); held at 0 once a song has shown
+     * real zaag distortion. Only learned in loud parts: build-ups/breakdowns lose the kick and
+     * have snare rolls, which would otherwise look like rock.
+     */
+    var rockness = .1f
+        private set
 
     fun newTrack(now: Long) {
         apple = null; appleName = null; trackStart = now; announcedThisTrack = false; hardstyleThisTrack = false
+        rockness = .1f
         candidate = genre; candidateSince = now
     }
 
@@ -154,10 +235,12 @@ internal class GenreDetector {
         kickRate = kickRate * decay + kickHit / 8f
         snareRate = snareRate * decay + snareHit / 8f
 
+        updateRockness(f, dt)
+
         if (now - lastLog >= 5_000L) {
             lastLog = now
-            Log.d("RaveGenre", "nå=${genre.label} apple=$appleName bpm=%.0f grit=%.2f sub=%.2f kick/s=%.2f snare/s=%.2f → lyd sier ${audioGuess(f.bpm).label}"
-                .format(f.bpm, grit, sub, kickRate, snareRate))
+            Log.d("RaveGenre", "nå=${genre.label} apple=$appleName bpm=%.0f grit=%.2f sub=%.2f kick/s=%.2f snare/s=%.2f rock=%.2f → lyd sier ${audioGuess(f.bpm).label}"
+                .format(f.bpm, grit, sub, kickRate, snareRate, rockness))
         }
         manual?.let { if (it != genre) commit(it, now, "valgt"); return genre }
         // Raw drop: heavy, distorted bass right now → hardstyle chaos within ~1 s, in any song,
@@ -201,6 +284,24 @@ internal class GenreDetector {
         }
         if (candidate != genre && now - candidateSince >= needed) commit(candidate, now, if (calm) "rolig del" else "lyd")
         return genre
+    }
+
+    private fun updateRockness(f: HardstyleFrame, dt: Float) {
+        val target = when {
+            hardstyleThisTrack || apple == Genre.HARDSTYLE -> 0f
+            // Steady fast four-on-the-floor kick = hardstyle/EDM, not live drums.
+            f.bpm in 138f..210f && kickRate > 2.2f -> 0f
+            else -> {
+                val fewKicks = ((2.5f - kickRate) / .8f).coerceIn(0f, 1f)
+                val snares = ((snareRate - .6f) / 1f).coerceIn(0f, 1f)
+                val lowSub = 1f - .5f * ((sub - .5f) / .15f).coerceIn(0f, 1f)
+                val sound = fewKicks * (.4f + .6f * snares) * lowSub
+                if (apple == Genre.ROCK) max(sound, .7f) else sound
+            }
+        }
+        // Proven hardstyle drops straight away; otherwise learn slowly and only while it is loud.
+        if (hardstyleThisTrack || apple == Genre.HARDSTYLE) rockness = 0f
+        else if (f.energy > .4f) rockness += (target - rockness) * (1f - exp(-dt / 4f))
     }
 
     // Tuned on real songs (log 2026-11-03, hardstyle + rap): hardstyle shows strong distortion
