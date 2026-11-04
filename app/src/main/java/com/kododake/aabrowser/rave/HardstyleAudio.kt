@@ -2,6 +2,19 @@ package com.kododake.aabrowser.rave
 
 import kotlin.math.*
 
+// ---- Detection tunables (research 2026-11-04, see FestivalShow.kt for the show side) ----
+/** Song reference: the loudest bass of the last ~25 s (decays slowly), so a breakdown after a drop is
+ *  NOT auto-gained back up to "loud" within 3 s (WLED/FastLED: slow AGC + noise gate). */
+internal const val SONG_REF_DECAY_S = 25f
+/** Auto-gain never normalises against less than this share of the song reference. */
+internal const val SONG_REF_SHARE = .55f
+/** Bass below this share of the song reference (≈ −20 dB) counts as silence (noise gate). */
+internal const val QUIET_GATE = .1f
+/** Zaag/distortion is measured in the kick's TAIL (research: tail = 50–250 ms after the hit), so pads,
+ *  leads and vocals between kicks don't count as distortion. */
+internal const val GRIT_TAIL_FROM_MS = 50L
+internal const val GRIT_TAIL_TO_MS = 250L
+
 internal data class HardstyleFrame(val bass: Float = 0f, val kick: Float = 0f, val highs: Float = 0f,
     val energy: Float = 0f, val burst: Float = 0f, val build: Float = 0f,
     val spectrum: List<Float> = SILENT_SPECTRUM, val highMotion: Float = 0f,
@@ -34,7 +47,13 @@ internal data class HardstyleFrame(val bass: Float = 0f, val kick: Float = 0f, v
     /** Beat clock: time (uptime ms) of the last grid beat, its period (ms) and how sure the tracker is. */
     val beatAt: Long = 0L,
     val beatPeriod: Float = 0f,
-    val beatConfidence: Int = 0)
+    val beatConfidence: Int = 0,
+    /** 0..1 spectral flatness 2–12 kHz: high for noise (white-noise risers in a build-up), low for tones. */
+    val noise: Float = 0f,
+    /** Spectral centroid 250 Hz–12 kHz in Hz: climbs during filter sweeps / pitch risers. */
+    val centroid: Float = 0f,
+    /** 0..1: share of bass hits landing between the kicks (reverse bass = euphoric/classic hardstyle). */
+    val offbeat: Float = 0f)
 
 /** Independent from the original visualizer. Input sample rate is Hz, not Android's milliHz. */
 internal class HardstyleAudio {
@@ -51,6 +70,9 @@ internal class HardstyleAudio {
     private var snareAvg = 0f; private var lastSnareValue = 0f; private var lastSnare = -1000L
     private var crashAvg = 0f; private var lastCrashValue = 0f; private var lastCrash = -1000L
     private var screechAvg = 0f
+    private var songRef = 0f
+    private var lastHeldGrit = 0f
+    private var offbeatScore = 0f
     private val beats = BeatTracker()
     private var fluxAvg = 0f
     private var lastCandidate = -1000L
@@ -60,6 +82,7 @@ internal class HardstyleAudio {
         peak = 8f; average = 0f; lastBass = 0f; lastAt = 0; lastKick = -1000; lastBurst = -5000
         shortAverage = 0f; longAverage = 0f; beatPeriod = 0f
         snareAvg = 0f; lastSnareValue = 0f; lastSnare = -1000; crashAvg = 0f; lastCrashValue = 0f; lastCrash = -1000; screechAvg = 0f
+        songRef = 0f; lastHeldGrit = 0f; offbeatScore = 0f
         beats.reset(); fluxAvg = 0f; lastCandidate = -1000
         frame = HardstyleFrame()
     }
@@ -67,9 +90,14 @@ internal class HardstyleAudio {
         if (sampleRate <= 0 || fft.size < 4) return HardstyleFrame()
         var low = 0f; var bass = 0f; var high = 0f; var mid = 0f; var snareBand = 0f; var air = 0f; var scr = 0f
         var nl = 0; var nb = 0; var nh = 0; var nm = 0; var ns = 0; var na = 0; var nsc = 0
+        // Spectral flatness (2–12 kHz) and centroid (250 Hz–12 kHz) for build-up detection.
+        var flatLog = 0f; var flatSum = 0f; var nf = 0
+        var centNum = 0f; var centDen = 0f
         for (k in 1 until fft.size / 2) {
             val hz = k.toFloat() * sampleRate / fft.size
             val magnitude = hypot(fft[2*k].toFloat(), fft[2*k+1].toFloat())
+            if (hz in 2000f..12000f) { flatLog += ln(magnitude + 1f); flatSum += magnitude + 1f; nf++ }
+            if (hz in 250f..12000f) { centNum += hz * magnitude; centDen += magnitude }
             when {
                 hz in 30f..<90f -> { low += magnitude; nl++ }
                 hz in 90f..<250f -> { bass += magnitude; nb++ }
@@ -87,7 +115,13 @@ internal class HardstyleAudio {
         val dt = if (lastAt == 0L) 0.016f else ((now-lastAt)/1000f).coerceIn(.001f, .2f)
         lastAt = now
         peak = max(8f, max(value, peak * exp(-dt / 3f)))
-        val norm = if (value < 2f) 0f else (value / (peak * 1.3f)).coerceIn(0f, 1f)
+        // Rises over ~2 s (one loud click/door slam can't set it), falls over ~25 s.
+        songRef = if (value > songRef) songRef + (value - songRef) * (1f - exp(-dt / 2f)) else songRef * exp(-dt / SONG_REF_DECAY_S)
+        val reference = max(peak, songRef * SONG_REF_SHARE)
+        val norm = if (value < 2f || value < songRef * QUIET_GATE) 0f else (value / (reference * 1.3f)).coerceIn(0f, 1f)
+        val flatWeight = if (nf > 0) ((flatSum / nf - 2f) / 3f).coerceIn(0f, 1f) else 0f
+        val noise = if (flatWeight > 0f) (exp(flatLog / nf) / (flatSum / nf)).coerceIn(0f, 1f) * flatWeight else 0f
+        val centroid = if (centDen > 1f) centNum / centDen else 0f
         val onset = value > 3f && value > lastBass * 1.12f && value > average * 1.15f && now-lastKick >= 120
         if (onset) {
             // Tempo from kick spacing (40–240 BPM), smoothed so single misses don't matter.
@@ -106,6 +140,12 @@ internal class HardstyleAudio {
         val candidate = value > 3f && flux > max(1.5f, fluxAvg * 1.6f) && now - lastCandidate >= 100
         if (candidate) lastCandidate = now
         fluxAvg = fluxAvg * .9f + flux * .1f
+        // Reverse bass: bass hits halfway between the kicks (phase read before the tracker re-syncs).
+        if (onset && beats.period > 0f && beats.lastBeat > 0L && beats.confidence >= 3) {
+            val phase = (((now - beats.lastBeat) % beats.period.toLong()).toFloat() / beats.period)
+            val off = if (phase in .4f..(.6f)) 1f else 0f
+            offbeatScore = offbeatScore * .92f + off * .08f
+        }
         val beat = beats.update(now, candidate || onset, norm > .3f)
         val burst = onset && norm > .55f && frame.energy < .35f && now-lastBurst >= 1800
         if (burst) lastBurst = now
@@ -116,7 +156,17 @@ internal class HardstyleAudio {
         longAverage = if (longAverage == 0f) value else smooth(longAverage, value, 12f)
         // Require real bass in absolute terms, so mid-heavy passages with little bass
         // (vocals, lead synths after autogain) do not count as distortion.
-        val grit = ((mid / max(value, 12f) - .35f) / .5f).coerceIn(0f, 1f) * (value / 20f).coerceIn(0f, 1f)
+        val gritNow = ((mid / max(value, 12f) - .35f) / .5f).coerceIn(0f, 1f) * (value / 20f).coerceIn(0f, 1f)
+        // Measure distortion only in the kick tail; between kicks just hold it (pads/leads don't count).
+        // No kick heard for a while (long zaag tails can hide the attack) → measure as before.
+        val anchor = max(lastKick, beats.lastBeat)
+        val sinceKick = now - anchor
+        val grit = when {
+            sinceKick > 600L -> gritNow
+            sinceKick in GRIT_TAIL_FROM_MS..GRIT_TAIL_TO_MS -> gritNow
+            else -> lastHeldGrit * exp(-dt / .6f)
+        }
+        lastHeldGrit = grit
         val lift = ((shortAverage / max(4f, longAverage) - 1f) / .8f).coerceIn(0f, 1f)
         val heavyRaw = norm * norm * (.5f * grit + .3f * lift + .2f * norm)
         val heavyTarget = ((heavyRaw - .12f) / .4f).coerceIn(0f, 1f)
@@ -153,7 +203,10 @@ internal class HardstyleAudio {
             beats.count,
             beats.lastBeat,
             beats.period,
-            beats.confidence)
+            beats.confidence,
+            smooth(frame.noise, noise, .3f),
+            smooth(frame.centroid, centroid, .3f),
+            offbeatScore)
         average = smooth(average, value, .5f); lastBass = value
         screechAvg = if (screechAvg == 0f) scr else smooth(screechAvg, scr, 6f)
         snareAvg = smooth(snareAvg, snareBand, .6f); lastSnareValue = snareBand
@@ -175,7 +228,7 @@ internal class BeatTracker {
     private val onsets = LongArray(48)
     private var onsetCount = 0
     private var onsetNext = 0
-    private val bins = FloatArray(28)          // 250..530 ms in 10 ms steps
+    private val bins = FloatArray(29)          // 240..530 ms in 10 ms steps (113–250 BPM)
     var period = 0f
         private set
     var lastBeat = 0L
@@ -204,8 +257,8 @@ internal class BeatTracker {
                 // A spacing of 1, 2 or 3 beats all vote for the same beat length.
                 for (k in 1..3) {
                     val p = d / k
-                    if (p < 250f || p >= 530f) continue
-                    bins[((p - 250f) / 10f).toInt()] += 1f / k
+                    if (p < 240f || p >= 530f) continue
+                    bins[((p - 240f) / 10f).toInt()] += 1f / k
                 }
             }
         }
@@ -216,7 +269,13 @@ internal class BeatTracker {
             if (score > bestScore) { bestScore = score; best = b }
         }
         if (best >= 0 && bestScore >= 3f) {
-            val estimate = 255f + best * 10f
+            // Very fast estimates (< 280 ms ≈ > 214 BPM) are often 8th notes of a ~120 BPM song:
+            // prefer the double period when it has at least half the votes.
+            if (best < 4) {
+                val double = best * 2 + 24
+                if (double < bins.size && bins[double] >= bins[best] * .5f) best = double
+            }
+            val estimate = 245f + best * 10f
             period = if (period == 0f) estimate else period * .8f + estimate * .2f
         }
     }

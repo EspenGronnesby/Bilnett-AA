@@ -245,7 +245,8 @@ internal class GenreDetector {
         manual?.let { if (it != genre) commit(it, now, "valgt"); return genre }
         // Raw drop: heavy, distorted bass right now → hardstyle chaos within ~1 s, in any song,
         // without waiting for the slow averages.
-        if (f.heavy > .45f && f.grit > .3f) { if (dropSince == 0L) dropSince = now } else if (f.heavy < .2f) dropSince = 0L
+        // Not for songs Apple calls rock/metal: metalcore breakdowns are heavy and distorted too.
+        if (apple != Genre.ROCK && f.heavy > .45f && f.grit > .3f) { if (dropSince == 0L) dropSince = now } else if (f.heavy < .2f) dropSince = 0L
         if (dropSince > 0L && now - dropSince >= 800L && genre != Genre.HARDSTYLE) commit(Genre.HARDSTYLE, now, "rått drop")
         if ((apple == null || apple == Genre.EDM) && now - trackStart < 8_000L) return genre
         // Show what we think once per song, even when the profile stays the same.
@@ -258,7 +259,7 @@ internal class GenreDetector {
         val calm = f.energy < .2f
         // Apple's "Dance" at hardstyle tempo is hardstyle (euphoric hardstyle has little distortion).
         // 138–210 BPM covers hardstyle, rawstyle, hardcore and uptempo.
-        val hardstyleTempo = f.bpm in 138f..210f
+        val hardstyleTempo = f.bpm in 138f..250f
         // Obvious hardstyle (fast four-on-the-floor) beats Apple's label — rap never has a steady
         // 150+ BPM kick (log 2026-11-03: a raw track was tagged "Hip-Hop/Rap").
         val obviousHardstyle = hardstyleTempo && kickRate > 2.2f
@@ -290,7 +291,7 @@ internal class GenreDetector {
         val target = when {
             hardstyleThisTrack || apple == Genre.HARDSTYLE -> 0f
             // Steady fast four-on-the-floor kick = hardstyle/EDM, not live drums.
-            f.bpm in 138f..210f && kickRate > 2.2f -> 0f
+            f.bpm in 138f..250f && kickRate > 2.2f -> 0f
             else -> {
                 val fewKicks = ((2.5f - kickRate) / .8f).coerceIn(0f, 1f)
                 val snares = ((snareRate - .6f) / 1f).coerceIn(0f, 1f)
@@ -309,8 +310,9 @@ internal class GenreDetector {
     // distortion from guitars but has fewer kicks (< 2.2/s). Tempo jumps a lot → only support.
     // Rock is mainly recognised via Apple's genre; the sound rule is deliberately strict.
     private fun audioGuess(bpm: Float): Genre = when {
-        grit > .25f && kickRate >= 2.3f -> Genre.HARDSTYLE
-        grit > .2f && sub > .53f && kickRate > 2.3f -> Genre.HARDSTYLE
+        // Metal double-kick also gives many kicks: hardstyle needs its tempo window too.
+        grit > .25f && kickRate >= 2.3f && bpm in 138f..250f -> Genre.HARDSTYLE
+        grit > .2f && sub > .53f && kickRate > 2.3f && bpm in 138f..250f -> Genre.HARDSTYLE
         // Hysteresis: stay in hardstyle until the distortion has really gone.
         genre == Genre.HARDSTYLE && grit > .12f && kickRate >= 2f -> Genre.HARDSTYLE
         grit > .2f && kickRate < 2.2f && sub < .5f && snareRate > 1.2f -> Genre.ROCK
@@ -343,7 +345,9 @@ internal class GenreDetector {
  */
 internal enum class SongPart(val label: String) {
     INTRO("intro"), VOCAL("synging"), BREAKDOWN("breakdown"), BUILDUP("build-up"),
-    DROP("drop"), GROOVE("mellom drops"), OUTRO("avslutning")
+    DROP("drop"), GROOVE("mellom drops"), OUTRO("avslutning"),
+    /** Raw hardstyle: where a melodic climax would be, a dark, sparse part with screeches and kick rolls. */
+    ANTI_CLIMAX("anti-climax")
 }
 
 /** Which drop this is: the first is strong, middle drops full, the last one (in the final part
@@ -367,6 +371,9 @@ internal data class StructureHud(
  *  - Leaving a drop and other section changes need a whole bar of evidence, so a zaag kick
  *    (energy jumping between sub and mids every beat) can't flip the section by itself.
  */
+/** No new drop within this time of a confirmed one. */
+internal const val DROP_LOCKOUT_MS = 16_000L
+
 internal class HardstyleStructure {
     var part = SongPart.INTRO
         private set
@@ -389,6 +396,9 @@ internal class HardstyleStructure {
     private var subFast = 0f; private var sub1 = 0f; private var sub8 = 0f
     private var air1 = 0f; private var air8 = 0f
     private var grit1 = 0f
+    // Noise risers (flatness) and filter sweeps (centroid), fast vs slow (FastLED-style trend).
+    private var noise1 = 0f; private var noise8 = 0f
+    private var lastRealDropAt = 0L
     private var subRef = 0f        // sub peak-hold (falls slowly, ~25 s)
     private var subMin = 0f        // recent sub minimum (rises 1.5 dB/s)
     private var snareRate = 0f; private var lastSnare = 0f
@@ -418,6 +428,7 @@ internal class HardstyleStructure {
         primed = false; introOver = false; buildSince = 0L; notBuildSince = 0L; dropHitAt = 0L; dropLowSince = 0L
         realDrops = 0; boostNext = false; dropBoost = 0f; intensity = .4f; lastBannerAt = 0L
         phaseVotes.fill(0); lastBarLogged = -1; lastKickAt = 0L; snareRate = 0f; grit1 = 0f
+        noise1 = 0f; noise8 = 0f; lastRealDropAt = 0L
     }
 
     // Floor 2.5: 8-bit FFT values of 0/1 would otherwise flicker ±6 dB in quiet parts.
@@ -436,6 +447,7 @@ internal class HardstyleStructure {
             SongPart.BUILDUP -> { primed = true; introOver = true; show("BUILD-UP", now) }
             SongPart.BREAKDOWN -> { primed = true; introOver = true; show("BREAKDOWN", now) }
             SongPart.VOCAL -> { primed = true; introOver = true; show("BREAKDOWN (SYNG?)", now) }
+            SongPart.ANTI_CLIMAX -> { primed = true; introOver = true; show("ANTI-CLIMAX", now) }
             else -> {}
         }
     }
@@ -446,19 +458,23 @@ internal class HardstyleStructure {
         if (trackStart == 0L) { trackStart = now; partSince = now }
         fun ema(old: Float, v: Float, s: Float) = old + (v - old) * (1f - exp(-dt / s))
         val subDb = db(f.subLevel); val airDb = db(f.air)
-        if (!started) { subFast = subDb; sub1 = subDb; sub8 = subDb; air1 = airDb; air8 = airDb; subRef = subDb; subMin = subDb; started = true }
+        if (!started) {
+            subFast = subDb; sub1 = subDb; sub8 = subDb; air1 = airDb; air8 = airDb; subRef = subDb; subMin = subDb
+            noise1 = f.noise; noise8 = f.noise; started = true
+        }
         subFast = ema(subFast, subDb, .25f); sub1 = ema(sub1, subDb, 1f); sub8 = ema(sub8, subDb, 8f)
         subRef = max(sub1, subRef - dt * (6f / 25f))      // peak-hold, falls ~6 dB over 25 s
         subMin = minOf(sub1, subMin + dt * 1.5f)          // recent low point
         air1 = ema(air1, airDb, 1f); air8 = ema(air8, airDb, 8f)
         grit1 = ema(grit1, f.grit, 1f)
+        noise1 = ema(noise1, f.noise, 1f); noise8 = ema(noise8, f.noise, 8f)
         val kickHit = f.kick > .95f && lastKick <= .95f
         val snareHit = f.snare > .95f && lastSnare <= .95f
         lastKick = f.kick; lastSnare = f.snare
         if (kickHit) lastKickAt = now
         snareRate = snareRate * exp(-dt / 2f) + (if (snareHit) 1f else 0f) / 2f
 
-        val barMs = if (f.bpm in 100f..240f) 240_000f / f.bpm else 1600f
+        val barMs = if (f.bpm in 100f..260f) 240_000f / f.bpm else 1600f
         val subRel = sub1 - sub8          // dB vs the last ~8 s
         val subHitRel = subFast - sub8
         val airTrend = air1 - air8
@@ -470,9 +486,13 @@ internal class HardstyleStructure {
 
         // Build-up intensity (after FastLED's buildup detector): sub falling + treble rising +
         // denser snare rolls. Needs the treble/rolls part, so a sub dip alone (zaag) isn't one.
-        val build = (.45f * (-subRel / 6f).coerceIn(0f, 1f) + .35f * (airTrend / 4f).coerceIn(0f, 1f) +
-            .2f * ((snareRate - 1f) / 3f).coerceIn(0f, 1f))
-        val buildEvidence = build >= .55f && subRel < -3f && (airTrend > 1.5f || snareRate > 2f)
+        // Risers: white noise gets flatter, filter sweeps push the centroid up (research 2026-11-04).
+        // Only flatness (the centroid also climbs when the kick simply leaves), and only while the
+        // treble is actually rising — a breakdown that just loses its drums is not a riser.
+        val riser = if (airTrend > 0f) ((noise1 - noise8) / .12f).coerceIn(0f, 1f) else 0f
+        val build = (.4f * (-subRel / 6f).coerceIn(0f, 1f) + .25f * (airTrend / 4f).coerceIn(0f, 1f) +
+            .15f * ((snareRate - 1f) / 3f).coerceIn(0f, 1f) + .2f * riser)
+        val buildEvidence = build >= .55f && subRel < -3f && (airTrend > 1.5f || snareRate > 2f || riser > .5f)
         if (buildEvidence) { if (buildSince == 0L) buildSince = now; notBuildSince = 0L }
         else { if (notBuildSince == 0L) notBuildSince = now; if (now - notBuildSince > 1_000L) buildSince = 0L }
 
@@ -483,6 +503,7 @@ internal class HardstyleStructure {
                 if (dropKind == DropKind.PENDING && now - dropHitAt >= barMs) {
                     if (sub1 - dropBaseline >= 3f) {
                         realDrops++
+                        lastRealDropAt = dropHitAt
                         primed = false
                         dropBoost = if (boostNext) .1f else 0f; boostNext = false
                         dropKind = when {
@@ -494,10 +515,16 @@ internal class HardstyleStructure {
                         Log.d("RaveGenre", "ekte drop #$realDrops → ${dropKind.label} (%.0f%% ut, sub +%.1f dB)".format(songFraction * 100f, sub1 - dropBaseline))
                     } else {
                         boostNext = true
-                        show("FAKE DROP", now, always = true)
-                        Log.d("RaveGenre", "FAKE DROP (sub bare +%.1f dB etter 1 takt)".format(sub1 - dropBaseline))
                         dropKind = DropKind.NONE
-                        enter(if (kickGone) SongPart.BREAKDOWN else SongPart.BUILDUP, now, "fake drop")
+                        // Raw: screeches over a held-back low end is the anti-climax, not a failed drop.
+                        if (f.screech > .35f && grit1 > .25f) {
+                            Log.d("RaveGenre", "ANTI-CLIMAX (sub bare +%.1f dB, screech %.2f)".format(sub1 - dropBaseline, f.screech))
+                            enter(SongPart.ANTI_CLIMAX, now, "anti-climax")
+                        } else {
+                            show("FAKE DROP", now, always = true)
+                            Log.d("RaveGenre", "FAKE DROP (sub bare +%.1f dB etter 1 takt)".format(sub1 - dropBaseline))
+                            enter(if (kickGone) SongPart.BREAKDOWN else SongPart.BUILDUP, now, "fake drop")
+                        }
                         primed = true
                     }
                 }
@@ -517,7 +544,12 @@ internal class HardstyleStructure {
             else -> {
                 // DROP HIT: after a build-up/breakdown (or still in the intro), the sub slams back
                 // ≥ +6 dB over its recent average with a kick → at once, no delay.
-                val mayDrop = primed || part == SongPart.BUILDUP || part == SongPart.BREAKDOWN || part == SongPart.VOCAL
+                // No new drop within 16 s of a confirmed one (a drop lasts ≥ 8 bars; kick rolls and
+                // re-entries inside it are not new drops — FastLED/Yadati use a similar lockout).
+                // 8 bars at most, so fast uptempo/frenchcore drops close together are still caught.
+                val lockedOut = lastRealDropAt > 0L && now - lastRealDropAt < minOf(DROP_LOCKOUT_MS, (8 * barMs).toLong())
+                val mayDrop = !lockedOut && (primed || part == SongPart.BUILDUP || part == SongPart.BREAKDOWN ||
+                    part == SongPart.VOCAL || part == SongPart.ANTI_CLIMAX)
                 // Also after a short build-up (where the 8 s average hasn't sunk much): the sub is back
                 // near its peak level after a clear dip of ≥ 6 dB.
                 val backFromDip = subFast - subMin >= 6f && subFast >= subRef - 3f
@@ -531,6 +563,9 @@ internal class HardstyleStructure {
                         remainingMs in 0L..(16 * barMs).toLong() && now - trackStart > 30_000L -> SongPart.OUTRO
                         buildSince > 0L && now - buildSince >= 2_000L -> SongPart.BUILDUP
                         part == SongPart.BUILDUP && buildSince > 0L -> SongPart.BUILDUP
+                        // Raw anti-climax: after a build-up/breakdown, screeches while the low end stays held back.
+                        primed && (part == SongPart.BUILDUP || part == SongPart.BREAKDOWN || part == SongPart.ANTI_CLIMAX) &&
+                            f.screech > .35f && subRel < -2f && !kickGone && grit1 > .25f -> SongPart.ANTI_CLIMAX
                         kickGone && part != SongPart.INTRO -> if (f.presence > 3f && f.highs > .08f) SongPart.VOCAL else SongPart.BREAKDOWN
                         kickGone && part == SongPart.INTRO && now - trackStart > 8_000L -> SongPart.BREAKDOWN
                         !introOver -> SongPart.INTRO
@@ -578,6 +613,7 @@ internal class HardstyleStructure {
                 DropKind.NONE -> 1f
             }
             SongPart.GROOVE -> .55f
+            SongPart.ANTI_CLIMAX -> .6f
             SongPart.OUTRO -> .35f
         }
         val rate = if (target > intensity && part == SongPart.DROP) .05f else .6f
@@ -598,7 +634,9 @@ internal enum class HardSub(val label: String, val shake: Float, val strobe: Flo
     // Very distorted, heavy kicks at 160–190 BPM: heavy and hard.
     HARDCORE("HARDCORE", shake = 1.1f, strobe = .9f, spike = 1f, particles = 1.1f, screech = 1f),
     // 190–220+ BPM: fast and dense — many particles, slightly less shake per kick.
-    UPTEMPO("UPTEMPO", shake = .9f, strobe = .8f, spike = 1f, particles = 1.2f, screech = .8f)
+    UPTEMPO("UPTEMPO", shake = .9f, strobe = .8f, spike = 1f, particles = 1.2f, screech = .8f),
+    // 220–250 BPM, distorted kicks with offbeat bass: very fast — lots of particles, lighter shake.
+    FRENCHCORE("FRENCHCORE", shake = .8f, strobe = .7f, spike = 1f, particles = 1.3f, screech = .7f)
 }
 
 /** Picks the hardstyle sub-genre from tempo, distortion and screeches (stable per song). */
@@ -613,6 +651,7 @@ internal class HardSubDetector {
     private var lastSample = 0L
     private var grit = 0f
     private var screech = 0f
+    private var offbeat = 0f
     private var lastUpdate = 0L
     private var candidate = HardSub.RAW
     private var candidateSince = 0L
@@ -626,14 +665,19 @@ internal class HardSubDetector {
         val d = exp(-dt / 8f)
         grit = grit * d + f.grit * (1f - d)
         screech = screech * d + f.screech * (1f - d)
+        offbeat = offbeat * d + f.offbeat * (1f - d)
         if (f.bpm > 0f && now - lastSample >= 1_000L) {
             lastSample = now; bpms[idx] = f.bpm; idx = (idx + 1) % bpms.size; n = minOf(n + 1, bpms.size)
         }
         if (n < 5) return sub
         val bpm = bpms.copyOf(n).sorted()[n / 2]
         val guess = when {
+            // Tempo ranges from research 2026-11-04: hardcore 160–180, uptempo 190–220+, frenchcore up to 250.
+            bpm >= 222f -> HardSub.FRENCHCORE
             bpm >= 188f -> HardSub.UPTEMPO
-            bpm >= 170f -> HardSub.HARDCORE
+            bpm >= 162f -> HardSub.HARDCORE
+            // Reverse bass between the kicks + only moderate distortion = euphoric, even with bright leads.
+            offbeat > .5f && grit < .35f -> HardSub.EUPHORIC
             grit > .22f || screech > .08f -> HardSub.RAW
             else -> HardSub.EUPHORIC
         }

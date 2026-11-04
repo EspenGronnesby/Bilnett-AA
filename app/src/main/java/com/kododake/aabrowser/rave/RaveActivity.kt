@@ -755,7 +755,7 @@ class RaveActivity : ComponentActivity() {
                     // was missed — then stop holding back (why some hardstyle felt better in rock mode).
                     // Build-ups and breakdowns are meant to hold back, so they never count.
                     val heldOnPurpose = songPhase.part == SongPart.DROP || songPhase.part == SongPart.BUILDUP ||
-                        songPhase.part == SongPart.BREAKDOWN
+                        songPhase.part == SongPart.BREAKDOWN || songPhase.part == SongPart.ANTI_CLIMAX
                     if (!playing || heldOnPurpose || rawTarget.energy < .3f) loudNoDropS = 0f
                     else if (rawTarget.energy > .55f) loudNoDropS += dt
                     val missedDrop = ((loudNoDropS - 20f) / 10f).coerceIn(0f, 1f)

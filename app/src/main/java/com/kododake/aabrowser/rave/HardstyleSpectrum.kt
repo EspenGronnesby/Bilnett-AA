@@ -11,6 +11,7 @@ internal class HardstyleSpectrum {
     private val raw = FloatArray(SPECTRUM_BANDS)
     private val previousRaw = FloatArray(SPECTRUM_BANDS)
     private var reference = 8f
+    private var songReference = 0f
     var highMotion: Float = 0f
         private set
 
@@ -19,6 +20,7 @@ internal class HardstyleSpectrum {
         raw.fill(0f)
         previousRaw.fill(0f)
         reference = 8f
+        songReference = 0f
         highMotion = 0f
     }
 
@@ -44,7 +46,11 @@ internal class HardstyleSpectrum {
         for (i in 32 until SPECTRUM_BANDS) positiveFlux += max(0f, raw[i] - previousRaw[i])
         highMotion = (positiveFlux / 16f / max(8f, reference) * 3f).coerceIn(0f, 1f)
         raw.copyInto(previousRaw)
-        reference = max(8f, max(raw.maxOrNull() ?: 0f, reference * exp(-dt / 3f)))
+        val loudest = raw.maxOrNull() ?: 0f
+        songReference = if (loudest > songReference) songReference + (loudest - songReference) * (1f - exp(-dt / 2f))
+            else songReference * exp(-dt / SONG_REF_DECAY_S)
+        // Never normalise against less than part of the song's loud level: quiet parts stay quiet.
+        reference = max(8f, maxOf(loudest, reference * exp(-dt / 3f), songReference * SONG_REF_SHARE))
         for (i in levels.indices) {
             val neighbor = raw[max(0, i - 1)] * .15f + raw[i] * .7f + raw[min(raw.lastIndex, i + 1)] * .15f
             val ratio = neighbor / reference
