@@ -135,6 +135,8 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     implementation(libs.okhttp)
+    implementation(libs.androidx.media3.exoplayer)
+    implementation(libs.androidx.media3.exoplayer.hls)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.google.oss.licenses)
     implementation("com.github.woheller69:FreeDroidWarn:V1.+")

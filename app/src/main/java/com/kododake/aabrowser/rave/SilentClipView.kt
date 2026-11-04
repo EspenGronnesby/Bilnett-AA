@@ -2,21 +2,33 @@ package com.kododake.aabrowser.rave
 
 import android.content.Context
 import android.graphics.SurfaceTexture
-import android.media.MediaPlayer
 import android.view.Surface
 import android.view.TextureView
+import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.common.VideoSize
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 
+/**
+ * Silent, looping music video behind Rave (Apple music videos .m4v and animated covers .m3u8).
+ * Played with ExoPlayer through [RaveVideoCache], so a clip seen before plays from the phone.
+ */
+@UnstableApi
 internal class SilentClipView(context: Context, private val url: String,
-    private val onFrame: () -> Unit, private val onFailure: () -> Unit
+    private val onFrame: () -> Unit,
+    /** permanent = the clip is broken; false = only no network now (keep it for later). */
+    private val onFailure: (permanent: Boolean) -> Unit
 ) : TextureView(context), TextureView.SurfaceTextureListener, ClipPlayer {
-    private var player: MediaPlayer? = null
+    private var player: ExoPlayer? = null
     private var surface: Surface? = null
-    private var prepared = false
     private var wanted = false
     private var released = false
     private var videoW = 0
     private var videoH = 0
-    private val timeout = Runnable { fail() }
+    private val timeout = Runnable { fail(permanent = false) }
 
     /** Fill the view like «center crop»: square covers and 16:9 videos are never stretched. */
     private fun crop() {
@@ -29,50 +41,53 @@ internal class SilentClipView(context: Context, private val url: String,
     }
 
     init { surfaceTextureListener = this }
+
     override fun setPlaying(value: Boolean) {
         wanted = value
-        val p = player ?: return
-        if (!prepared) return
-        try { if (value && !p.isPlaying) p.start() else if (!value && p.isPlaying) p.pause() }
-        catch (_: Exception) { fail() }
+        player?.playWhenReady = value
     }
+
     override fun onSurfaceTextureAvailable(texture: SurfaceTexture, width: Int, height: Int) {
         if (released) return
         surface = Surface(texture)
         try {
-            player = MediaPlayer().also { p ->
-                p.setSurface(surface)
-                p.setVolume(0f, 0f)
-                p.isLooping = false
-                p.setOnPreparedListener { prepared = true; setPlaying(wanted) }
-                p.setOnVideoSizeChangedListener { _, w, h -> videoW = w; videoH = h; crop() }
-                p.setOnCompletionListener {
-                    if (!released && wanted) {
-                        try { p.seekTo(0); p.start() } catch (_: Exception) { fail() }
-                    }
+            player = ExoPlayer.Builder(context)
+                .setMediaSourceFactory(DefaultMediaSourceFactory(RaveVideoCache.dataSource(context)))
+                .build().also { p ->
+                    p.setVideoSurface(surface)
+                    p.volume = 0f
+                    p.repeatMode = Player.REPEAT_MODE_ONE
+                    p.addListener(object : Player.Listener {
+                        override fun onRenderedFirstFrame() { removeCallbacks(timeout); onFrame() }
+                        override fun onPlayerError(error: PlaybackException) {
+                            // No signal (car, tunnel) is not a broken clip: skip it now, keep it stored.
+                            val network = error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ||
+                                error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ||
+                                error.errorCode == PlaybackException.ERROR_CODE_IO_UNSPECIFIED
+                            fail(permanent = !network)
+                        }
+                        override fun onVideoSizeChanged(videoSize: VideoSize) {
+                            // Account for non-square pixels so covers keep their shape.
+                            videoW = (videoSize.width * videoSize.pixelWidthHeightRatio).toInt(); videoH = videoSize.height; crop()
+                        }
+                    })
+                    p.setMediaItem(MediaItem.fromUri(url))
+                    p.playWhenReady = wanted
+                    p.prepare()
+                    postDelayed(timeout, 12000)
                 }
-                p.setOnInfoListener { _, what, _ ->
-                    if (what == MediaPlayer.MEDIA_INFO_VIDEO_RENDERING_START) {
-                        removeCallbacks(timeout)
-                        onFrame()
-                    }
-                    false
-                }
-                p.setOnErrorListener { _, _, _ -> fail(); true }
-                p.setDataSource(url)
-                p.prepareAsync()
-                postDelayed(timeout, 12000)
-            }
-        } catch (_: Exception) { fail() }
+        } catch (_: Exception) { fail(permanent = true) }
     }
-    private fun fail() { if (!released) { release(); onFailure() } }
+
+    private fun fail(permanent: Boolean) { if (!released) { release(); onFailure(permanent) } }
+
     override fun release() {
         released = true
         removeCallbacks(timeout)
         player?.release(); player = null
         surface?.release(); surface = null
-        prepared = false
     }
+
     override fun onSurfaceTextureDestroyed(texture: SurfaceTexture): Boolean { release(); return true }
     override fun onSurfaceTextureSizeChanged(texture: SurfaceTexture, width: Int, height: Int) = crop()
     override fun onSurfaceTextureUpdated(texture: SurfaceTexture) = Unit

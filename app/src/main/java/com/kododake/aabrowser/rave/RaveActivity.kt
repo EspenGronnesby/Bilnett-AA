@@ -342,6 +342,8 @@ class RaveActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         YouTubeLookup.init(applicationContext)
+        // Open the video store off the main thread (disk + database work), so the first clip does not stutter.
+        Thread { RaveVideoCache.warmUp(applicationContext) }.start()
         // Skjermen skal aldri slukke mens Rave vises (gjelder bare mens vinduet er synlig).
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         showAnalysis = try { getSharedPreferences("rave", MODE_PRIVATE).getBoolean("analysis", true) } catch (_: Exception) { true }
@@ -492,10 +494,26 @@ class RaveActivity : ComponentActivity() {
         if (track.isBlank() || artistName.isBlank()) return
         videoCache[key]?.let { cached -> videoClips = cached.filter { it.url !in videoFailed }; return }
         Thread {
+            // Played before (last 30 days): use the stored list, no searching; the clips play from the phone.
+            RaveVideoCache.loadList(this, key)?.let { stored ->
+                android.util.Log.d("RaveVideo", "fra lagret liste: '$key' -> ${stored.size} klipp")
+                runOnUiThread {
+                    if (videoKey != key) return@runOnUiThread
+                    videoCache[key] = stored
+                    if (foreground) videoClips = stored.filter { it.url !in videoFailed }
+                }
+                stored.getOrNull(1)?.let { RaveVideoCache.preload(this, it) }
+                return@Thread
+            }
             val clips = SpotifyVideoLookup.findAll(track, artistName, album,
                 isActive = { videoKey == key },
                 // Grow the list in place: the clip already playing keeps its index.
                 onUpdate = { list -> runOnUiThread { if (videoKey == key && foreground) videoClips = list.filter { it.url !in videoFailed } } })
+            // Only a complete lookup is remembered (an interrupted one may be missing videos).
+            if (videoKey == key) {
+                RaveVideoCache.saveList(this, key, clips)
+                clips.getOrNull(1)?.let { RaveVideoCache.preload(this, it) }
+            }
             runOnUiThread { if (videoKey == key) videoCache[key] = clips }
         }.start()
     }
@@ -509,9 +527,13 @@ class RaveActivity : ComponentActivity() {
     }
 
     // A clip that will not play is dropped, and the next one takes its place.
-    private fun dropVideo(url: String) {
+    /** [permanent] false = it only failed for lack of network: skip it now, but keep it in the stored list. */
+    private fun dropVideo(url: String, permanent: Boolean = true) {
         val i = videoClips.indexOfFirst { it.url == url }
         videoFailed += url
+        val key = videoKey
+        videoCache[key]?.let { list -> videoCache[key] = list.filter { it.url != url } }
+        if (permanent) Thread { RaveVideoCache.removeClip(this, key, url) }.start()
         if (i < 0) return
         videoPlaying = false
         videoClips = videoClips.filterIndexed { j, _ -> j != i }
@@ -1121,7 +1143,7 @@ class RaveActivity : ComponentActivity() {
                             val clip = videoClips[videoIndex]; val url = clip.url
                             if (clip.kind == SpotifyVideoLookup.Kind.YOUTUBE)
                                 YouTubeClipView(ctx, url, onFrame = { videoPlaying = true }, onFailure = { dropVideo(url) })
-                            else SilentClipView(ctx, url, onFrame = { videoPlaying = true }, onFailure = { dropVideo(url) })
+                            else SilentClipView(ctx, url, onFrame = { videoPlaying = true }, onFailure = { permanent -> dropVideo(url, permanent) })
                         },
                         update = { (it as ClipPlayer).setPlaying(playing) },
                         onRelease = { (it as ClipPlayer).release() },
