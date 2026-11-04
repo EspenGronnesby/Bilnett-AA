@@ -8,7 +8,7 @@ import android.view.TextureView
 
 internal class SilentClipView(context: Context, private val url: String,
     private val onFrame: () -> Unit, private val onFailure: () -> Unit
-) : TextureView(context), TextureView.SurfaceTextureListener {
+) : TextureView(context), TextureView.SurfaceTextureListener, ClipPlayer {
     private var player: MediaPlayer? = null
     private var surface: Surface? = null
     private var prepared = false
@@ -17,7 +17,7 @@ internal class SilentClipView(context: Context, private val url: String,
     private val timeout = Runnable { fail() }
 
     init { surfaceTextureListener = this }
-    fun setPlaying(value: Boolean) {
+    override fun setPlaying(value: Boolean) {
         wanted = value
         val p = player ?: return
         if (!prepared) return
@@ -53,7 +53,7 @@ internal class SilentClipView(context: Context, private val url: String,
         } catch (_: Exception) { fail() }
     }
     private fun fail() { if (!released) { release(); onFailure() } }
-    fun release() {
+    override fun release() {
         released = true
         removeCallbacks(timeout)
         player?.release(); player = null
