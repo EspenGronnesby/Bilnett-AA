@@ -1002,13 +1002,7 @@ class RaveActivity : ComponentActivity() {
                         validTap = validTap && event.changes.none { it.isConsumed }
                         controls = controls.touch(SystemClock.elapsedRealtime())
                         if (event.changes.none { it.pressed }) {
-                            if (validTap) {
-                                val now = SystemClock.elapsedRealtime()
-                                // 5 quick taps toggle Party on/off; a short «PARTY ON/OFF» label shows it.
-                                val fifth = controls.isFifthTap(now)
-                                controls = controls.tap(now)
-                                if (fifth) setHardstyle()
-                            }
+                            if (validTap) controls = controls.tap(SystemClock.elapsedRealtime())
                             break
                         }
                     } while (true)
@@ -1261,6 +1255,29 @@ class RaveActivity : ComponentActivity() {
     }
 
     /** Reserve exactly the normal cover slot so text and controls never move when toggling. */
+    // 5 quick taps on the cover switch Party on/off (with a short «PARTY ON/OFF» label).
+    private var coverTaps = 0
+    private var coverFirstTap = 0L
+
+    /** Counts taps anywhere on the cover square. Not consumed, so a tap still shows the buttons. */
+    private fun Modifier.partyTaps(): Modifier = pointerInput(Unit) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            var isTap = true
+            while (true) {
+                val event = awaitPointerEvent()
+                val c = event.changes.firstOrNull { it.id == down.id }
+                if (c == null) { isTap = false; break }
+                if ((c.position - down.position).getDistance() > viewConfiguration.touchSlop) isTap = false
+                if (!c.pressed) break
+            }
+            if (!isTap) return@awaitEachGesture
+            val now = SystemClock.uptimeMillis()
+            if (coverTaps == 0 || now - coverFirstTap > 1_500L) { coverTaps = 1; coverFirstTap = now } else coverTaps++
+            if (coverTaps >= 5) { coverTaps = 0; setHardstyle() }
+        }
+    }
+
     @Composable
     private fun ReactiveCover(
         size: Dp,
@@ -1270,10 +1287,10 @@ class RaveActivity : ComponentActivity() {
         onPosition: (Offset, Float) -> Unit
     ) {
         if (!hardstyleOn) {
-            Cover(size)
+            Box(Modifier.size(size).partyTaps()) { Cover(size) }
             return
         }
-        Box(Modifier.size(size).onGloballyPositioned { coordinates ->
+        Box(Modifier.size(size).partyTaps().onGloballyPositioned { coordinates ->
             val position = coordinates.positionInRoot() - sceneOrigin
             onPosition(
                 Offset(position.x + coordinates.size.width/2f, position.y + coordinates.size.height/2f),
