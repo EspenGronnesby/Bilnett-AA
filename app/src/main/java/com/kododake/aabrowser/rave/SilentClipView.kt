@@ -20,7 +20,9 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 internal class SilentClipView(context: Context, private val url: String,
     private val onFrame: () -> Unit,
     /** permanent = the clip is broken; false = only no network now (keep it for later). */
-    private val onFailure: (permanent: Boolean) -> Unit
+    private val onFailure: (permanent: Boolean) -> Unit,
+    /** Store this clip on the phone (only the song's first-choice video is stored). */
+    private val store: Boolean = false
 ) : TextureView(context), TextureView.SurfaceTextureListener, ClipPlayer {
     private var player: ExoPlayer? = null
     private var surface: Surface? = null
@@ -52,7 +54,7 @@ internal class SilentClipView(context: Context, private val url: String,
         surface = Surface(texture)
         try {
             player = ExoPlayer.Builder(context)
-                .setMediaSourceFactory(DefaultMediaSourceFactory(RaveVideoCache.dataSource(context)))
+                .setMediaSourceFactory(DefaultMediaSourceFactory(RaveVideoCache.dataSource(context, store)))
                 .build().also { p ->
                     p.setVideoSurface(surface)
                     p.volume = 0f

@@ -397,6 +397,7 @@ class RaveActivity : ComponentActivity() {
     }
 
     override fun onStop() {
+        Thread { RaveVideoCache.flush(applicationContext) }.start() // pending watch time
         super.onStop()
         foreground = false
         videoPlaying = false
@@ -492,7 +493,11 @@ class RaveActivity : ComponentActivity() {
         clearVideos()
         videoPlaying = false
         if (track.isBlank() || artistName.isBlank()) return
-        videoCache[key]?.let { cached -> videoClips = cached.filter { it.url !in videoFailed }; return }
+        videoCache[key]?.let { cached ->
+            val ordered = RaveVideoCache.favouriteFirst(key, cached)
+            videoCache[key] = ordered
+            videoClips = ordered.filter { it.url !in videoFailed }; return
+        }
         Thread {
             // Played before (last 30 days): use the stored list, no searching; the clips play from the phone.
             RaveVideoCache.loadList(this, key)?.let { stored ->
@@ -502,19 +507,19 @@ class RaveActivity : ComponentActivity() {
                     videoCache[key] = stored
                     if (foreground) videoClips = stored.filter { it.url !in videoFailed }
                 }
-                stored.getOrNull(1)?.let { RaveVideoCache.preload(this, it) }
                 return@Thread
             }
             val clips = SpotifyVideoLookup.findAll(track, artistName, album,
                 isActive = { videoKey == key },
                 // Grow the list in place: the clip already playing keeps its index.
-                onUpdate = { list -> runOnUiThread { if (videoKey == key && foreground) videoClips = list.filter { it.url !in videoFailed } } })
+                onUpdate = { list -> val ordered = RaveVideoCache.favouriteFirst(key, list)
+                    runOnUiThread { if (videoKey == key && foreground) videoClips = ordered.filter { it.url !in videoFailed } } })
             // Only a complete lookup is remembered (an interrupted one may be missing videos).
             if (videoKey == key) {
                 RaveVideoCache.saveList(this, key, clips)
-                clips.getOrNull(1)?.let { RaveVideoCache.preload(this, it) }
             }
-            runOnUiThread { if (videoKey == key) videoCache[key] = clips }
+            val ordered = RaveVideoCache.favouriteFirst(key, clips)
+            runOnUiThread { if (videoKey == key) videoCache[key] = ordered }
         }.start()
     }
 
@@ -1136,6 +1141,18 @@ class RaveActivity : ComponentActivity() {
             }
 
             val showVideo = foreground && videoOn && videoPlaying && videoId != null
+            // Count how long each clip is actually watched; the one watched longest becomes the song's
+            // first video next time and is the one stored on the phone.
+            LaunchedEffect(videoId, showVideo, playing) {
+                val url = videoId ?: return@LaunchedEffect
+                if (!showVideo || !playing) return@LaunchedEffect
+                val key = videoKey
+                var acc = 0L
+                fun flush() { val ms = acc; acc = 0L; if (ms > 0) Thread { RaveVideoCache.addWatch(this@RaveActivity, key, url, ms) }.start() }
+                try {
+                    while (true) { delay(1_000); acc += 1_000; if (acc >= 10_000) flush() }
+                } finally { flush() }
+            }
             if (foreground && videoOn && videoId != null) {
                 androidx.compose.runtime.key(videoId) {
                     AndroidView(
@@ -1143,7 +1160,10 @@ class RaveActivity : ComponentActivity() {
                             val clip = videoClips[videoIndex]; val url = clip.url
                             if (clip.kind == SpotifyVideoLookup.Kind.YOUTUBE)
                                 YouTubeClipView(ctx, url, onFrame = { videoPlaying = true }, onFailure = { dropVideo(url) })
-                            else SilentClipView(ctx, url, onFrame = { videoPlaying = true }, onFailure = { permanent -> dropVideo(url, permanent) })
+                            else SilentClipView(ctx, url, onFrame = { videoPlaying = true }, onFailure = { permanent -> dropVideo(url, permanent) },
+                                // One video per song on the phone: the first choice (the song's own video when it has one).
+                                // Stored: the song's favourite, or the first choice when none has been watched long enough.
+                                store = url == (RaveVideoCache.favouriteOf(videoKey) ?: videoClips.firstOrNull()?.url))
                         },
                         update = { (it as ClipPlayer).setPlaying(playing) },
                         onRelease = { (it as ClipPlayer).release() },

@@ -18,11 +18,13 @@ internal object SpotifyVideoLookup {
     data class VideoClip(val url: String, val source: Source, val kind: Kind = Kind.MP4)
 
     /**
-     * Ranked, de-duplicated videos. Apple first, as before: the song itself, the same album and
-     * the same artist (up to [MAX]). YouTube comes on top of that, never instead of it: the
-     * song's full music video and a video by a similar artist (Deezer). Apple genre videos fill
-     * in when there are still few. [onUpdate] receives the list after every step so the first
-     * video can start early; the lookup stops as soon as [isActive] turns false (song changed).
+     * The videos for a song, best first: the song's own music video → animated album cover →
+     * animated artist image → other videos from the album → other artist videos. Album and artist
+     * videos are sorted by theme (same album, lyrics about the same things). Genre videos («Vibe»)
+     * only when nothing else was found, so there is always at least one; no filling up to [MAX].
+     * The viewer's favourite (watched longest) is put first by [RaveVideoCache.favouriteFirst].
+     * [onUpdate] receives the list after every step so the first video can start early; the lookup
+     * stops as soon as [isActive] turns false (the song changed).
      */
     fun findAll(
         title: String, artist: String, album: String,
@@ -61,8 +63,13 @@ internal object SpotifyVideoLookup {
 
         fun titleMatches(name: String): Boolean {
             val t = norm(name)
-            // Prefix match only when the title was actually shortened, and never on very short titles.
-            return t == norm(title) || t == norm(cleanTitle) ||
+            // A remix / live / acoustic version is not the song itself unless the playing title says so as often
+            // («Live Forever (Live)» is not «Live Forever»).
+            if (VERSION_WORDS.any { w -> count(t, w) > count(norm(title), w) }) return false
+            // «X (Pt. 2)» is another song than «X»: part words and numbers must agree.
+            if (numbers(name) != numbers(title)) return false
+            // Extras like «(feat. Lil Tjay)» may be on either side: Apple «Mood Swings (feat. Lil Tjay)» = Spotify «Mood Swings».
+            return t == norm(title) || t == norm(cleanTitle) || (bareTitle(name).isNotBlank() && bareTitle(name) == bareTitle(title)) ||
                 (cleanTitle != title && norm(cleanTitle).length >= 4 && t.startsWith(norm(cleanTitle) + " "))
         }
         /** Adds an Apple Music motion artwork stream (an .m3u8 loop). */
@@ -81,24 +88,36 @@ internal object SpotifyVideoLookup {
         val collectionId = exactSong?.optLong("collectionId")?.takeIf { it > 0 }
         val artistVideos = if (artistId != null && isActive()) lookup(artistId, "musicVideo") else emptyList()
         add(artistVideos.filter { titleMatches(it.optString("trackName")) }, Source.SONG)
-        if (collectionId != null && isActive()) addMotion(motionFrom("https://music.apple.com/us/album/$collectionId", ALBUM_MOTION_KEYS), Source.COVER)
-        if (artistId != null && isActive()) addMotion(motionFrom("https://music.apple.com/us/artist/$artistId", ARTIST_MOTION_KEYS), Source.ARTIST_ART)
 
         // 1. The song itself (Apple search).
         val songHits = (both("$mainArtist $cleanTitle") + if (mainArtist != artist || cleanTitle != title) both("$artist $title") else emptyList())
         add(songHits.filter { titleMatches(it.optString("trackName")) && sameArtist(it.optString("artistName"), artist) }, Source.SONG)
+
+        if (collectionId != null && isActive()) addMotion(motionFrom("https://music.apple.com/us/album/$collectionId", ALBUM_MOTION_KEYS), Source.COVER)
+
+        // No video of the song itself: rank the artist videos by theme (same album, lyrics about the same
+        // things – a girl, money, partying …) so the best fit is the first «Artist» clip, not a random one.
+        val themeScores = if (out.values.none { it.source == Source.SONG } && isActive())
+            themeScores(artistVideos.filter { !titleMatches(it.optString("trackName")) }, mainArtist, cleanTitle, collectionId, isActive)
+            else emptyMap()
+
+        if (artistId != null && isActive()) addMotion(motionFrom("https://music.apple.com/us/artist/$artistId", ARTIST_MOTION_KEYS), Source.ARTIST_ART)
 
         // 2. The same album. Spotify album names often carry "(Deluxe)" / "Remastered"; Apple's may not.
         val wantAlbum = norm(album.replace(Regex("\\s*[-–(\\[].*$"), ""))
         if (wantAlbum.isNotBlank() && isActive()) {
             add(both("$artist $album").filter {
                 val c = norm(it.optString("collectionName"))
-                (c.startsWith(wantAlbum) || wantAlbum.startsWith(c)) && c.isNotBlank() && sameArtist(it.optString("artistName"), artist)
-            }, Source.ALBUM)
+                (c.startsWith(wantAlbum) || wantAlbum.startsWith(c)) && c.isNotBlank() && sameArtist(it.optString("artistName"), artist) &&
+                    !junkVideo(it.optString("trackName"))
+            }.sortedByDescending { themeScores[it.optString("previewUrl")] ?: 0.0 }, Source.ALBUM)
         }
 
         // 3. The same artist.
-        add((artistVideos + songHits + both(mainArtist)).filter { sameArtist(it.optString("artistName"), artist) }, Source.ARTIST)
+        // Artist videos closest in theme first; interviews, trailers and visualizers last.
+        val rankedArtistVideos = artistVideos.sortedWith(compareBy<JSONObject> { junkVideo(it.optString("trackName")) }
+            .thenByDescending { themeScores[it.optString("previewUrl")] ?: 0.0 })
+        add((rankedArtistVideos + songHits + both(mainArtist)).filter { sameArtist(it.optString("artistName"), artist) && !junkVideo(it.optString("trackName")) }, Source.ARTIST)
 
         // 4. Extra: the song's full music video on YouTube.
         if (YOUTUBE_ON && isActive()) addYouTube(YouTubeLookup.songFor(title, artist), Source.YOUTUBE)
@@ -106,8 +125,9 @@ internal object SpotifyVideoLookup {
         // 5. Extra: same vibe on YouTube – a video by a similar artist (Deezer); hardstyle gets festival footage.
         var vibeFromYouTube = YOUTUBE_ON && isActive() && addYouTube(YouTubeLookup.vibeFor(artist, title), Source.VIBE)
 
-        // 6. Few videos so far: genre videos (YouTube festival footage, else Apple).
-        if (appleCount() < VIBE_WHEN_BELOW && isActive()) {
+        // 6. Nothing found for the song, album or artist: genre videos, so there is always at least one
+        //    video. No filling up otherwise – one good video is better than eight loose ones.
+        if (out.isEmpty() && isActive()) {
             val appleGenre = genreFor(title, artist)
             val fromApple = genreFromApple(appleGenre)
             // Apple calls hardstyle "Dance"; for dance songs the artist's live footage (Defqon, Qlimax …) tells.
@@ -158,9 +178,82 @@ internal object SpotifyVideoLookup {
      */
     private const val YOUTUBE_ON = false
     private const val MAX = 8
-    private const val VIBE_WHEN_BELOW = 4
-    private const val VIBE_COUNT = 5
+    /** Genre videos used only when nothing else was found (at least one video, a few to choose from). */
+    private const val VIBE_COUNT = 3
     private fun valid(url: String) = url.startsWith("https://")
+
+    // ---------- Theme: which artist video fits this song best ----------
+
+    /** Lyrics are only a theme hint: short timeout so a slow LRCLIB never holds up the videos. */
+    private val lyricsClient by lazy { client.newBuilder().callTimeout(4, TimeUnit.SECONDS).build() }
+    private fun count(text: String, word: String) = Regex("(^| )${Regex.escape(word)}( |$)").findAll(text).count()
+    private fun numbers(t: String): List<String> {
+        // Featured artists («feat. 21 Savage», «with 50 Cent») do not count.
+        val n = norm(t.replace(Regex("[(\\[]\\s*(feat|ft|with)\\b[^)\\]]*[)\\]]|\\s(feat|ft)\\.?\\s.*$", RegexOption.IGNORE_CASE), ""))
+        return Regex("\\b(\\d+|pt|part|vol|ii|iii|iv)\\b").findAll(n).map { it.value.replace("part", "pt") }.toList()
+    }
+    private val VERSION_WORDS = listOf("remix", "live", "acoustic", "instrumental", "sped up", "slowed", "edit", "version")
+    private const val THEME_CANDIDATES = 6
+    private val JUNK_VIDEO = listOf("interview", "visualizer", "visualiser", "trailer", "behind the scenes",
+        "documentary", "fire in the booth", "teaser", "making of", "commentary")
+    private fun junkVideo(name: String): Boolean {
+        val n = name.lowercase(Locale.ROOT)
+        return JUNK_VIDEO.any { n.contains(it) } || Regex(" on [\"“]").containsMatchIn(n)
+    }
+    private fun bareTitle(t: String) = norm(t.replace(Regex("\\s+[-–]\\s+.*$|\\s*[(\\[].*$"), ""))
+
+    // Common words that say nothing about the theme. Words like girl, baby, love, money stay in.
+    private val STOP = ("the and you your that this with for but not are was were what when they them then just like got get " +
+        "yeah yea uh oh ooh ayy huh hey know all can cause cuz don ain its i'm ima gon gonna wanna said say from out now how who " +
+        "too off one see her him his she have has had she's he's it's that's there their what's where why will would could should " +
+        "been being into onto than some any every each make made take let back come came going way still yes nah okay i'll you're we're " +
+        "they're can't don't won't ain't i've you've me my mine our ours we us im dont cant wont thats youre").split(" ").toSet()
+
+    private fun words(text: String?): Map<String, Int> =
+        (text ?: "").lowercase(Locale.ROOT).split(Regex("[^\\p{L}']+"))
+            .map { it.trim('\'') }.filter { it.length >= 3 && it !in STOP }
+            .groupingBy { it }.eachCount()
+
+    private fun cosine(a: Map<String, Int>, b: Map<String, Int>): Double {
+        if (a.isEmpty() || b.isEmpty()) return 0.0
+        val dot = a.entries.sumOf { (w, c) -> c.toDouble() * (b[w] ?: 0) }
+        val na = kotlin.math.sqrt(a.values.sumOf { it.toDouble() * it }); val nb = kotlin.math.sqrt(b.values.sumOf { it.toDouble() * it })
+        return if (na == 0.0 || nb == 0.0) 0.0 else dot / (na * nb)
+    }
+
+    /** Plain lyrics from LRCLIB, or null. */
+    private fun lyricsFor(artist: String, title: String): String? = try {
+        val url = "https://lrclib.net/api/search?track_name=${URLEncoder.encode(title, "UTF-8")}&artist_name=${URLEncoder.encode(artist, "UTF-8")}"
+        lyricsClient.newCall(Request.Builder().url(url).header("User-Agent", "Bilnett Rave").build()).execute().use { r ->
+            if (!r.isSuccessful) return null
+            val arr = org.json.JSONArray(r.body.string())
+            (0 until arr.length()).map { arr.getJSONObject(it) }
+                .firstOrNull { !it.isNull("plainLyrics") && it.optString("plainLyrics").isNotBlank() }?.optString("plainLyrics")
+        }
+    } catch (_: Exception) { null }
+
+    /**
+     * Score 0..1 per artist video (by preview URL): +0.3 when the video's song is on the same album,
+     * plus how alike the lyrics are (word overlap). Only the first few candidates are scored.
+     */
+    private fun themeScores(videos: List<JSONObject>, artist: String, title: String, collectionId: Long?, isActive: () -> Boolean): Map<String, Double> {
+        val candidates = videos.filter { !junkVideo(it.optString("trackName")) && valid(it.optString("previewUrl")) }
+            .distinctBy { bareTitle(it.optString("trackName")) }
+        if (candidates.isEmpty()) return emptyMap()
+        val albumTracks = if (collectionId != null) lookup(collectionId, "song").map { bareTitle(it.optString("trackName")) }.toSet() else emptySet()
+        val inAlbum = candidates.filter { bareTitle(it.optString("trackName")) in albumTracks }
+        val toScore = (inAlbum + candidates).distinctBy { it.optString("previewUrl") }.take(THEME_CANDIDATES)
+        val mine = if (isActive()) words(lyricsFor(artist, title)) else emptyMap()
+        val scores = toScore.associate { v ->
+            val name = v.optString("trackName")
+            val album = if (bareTitle(name) in albumTracks) 0.3 else 0.0
+            // Song changed: stop fetching lyrics, the rest scores on album only.
+            val text = if (mine.isEmpty() || !isActive()) 0.0 else cosine(mine, words(lyricsFor(artist, name.replace(Regex("\\s*[(\\[].*$"), ""))))
+            v.optString("previewUrl") to album + text
+        }
+        android.util.Log.d("RaveVideo", "tema for '$title': " + toScore.joinToString { "${it.optString("trackName").take(28)}=${"%.2f".format(scores[it.optString("previewUrl")])}" })
+        return scores
+    }
 
     // Apple Music web pages carry animated artwork as HLS loops; the first key found wins.
     // Square album motion and wide artist motion are cropped to fill the screen by SilentClipView.
