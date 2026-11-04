@@ -341,6 +341,7 @@ class RaveActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        YouTubeLookup.init(applicationContext)
         // Skjermen skal aldri slukke mens Rave vises (gjelder bare mens vinduet er synlig).
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         showAnalysis = try { getSharedPreferences("rave", MODE_PRIVATE).getBoolean("analysis", true) } catch (_: Exception) { true }
@@ -491,7 +492,7 @@ class RaveActivity : ComponentActivity() {
         if (track.isBlank() || artistName.isBlank()) return
         videoCache[key]?.let { cached -> videoClips = cached.filter { it.url !in videoFailed }; return }
         Thread {
-            val clips = SpotifyVideoLookup.findAll(track, artistName, album,
+            val clips = SpotifyVideoLookup.findAll(track, artistName,
                 isActive = { videoKey == key },
                 // Grow the list in place: the clip already playing keeps its index.
                 onUpdate = { list -> runOnUiThread { if (videoKey == key && foreground) videoClips = list.filter { it.url !in videoFailed } } })
@@ -1122,11 +1123,14 @@ class RaveActivity : ComponentActivity() {
             if (foreground && videoOn && videoId != null) {
                 androidx.compose.runtime.key(videoId) {
                     AndroidView(
-                        factory = { ctx -> val url = videoId!!; SilentClipView(ctx, url,
-                            onFrame = { videoPlaying = true },
-                            onFailure = { dropVideo(url) }) },
-                        update = { it.setPlaying(playing) },
-                        onRelease = { it.release() },
+                        factory = { ctx ->
+                            val clip = videoClips[videoIndex]; val url = clip.url
+                            if (clip.kind == SpotifyVideoLookup.Kind.YOUTUBE)
+                                YouTubeClipView(ctx, url, onFrame = { videoPlaying = true }, onFailure = { dropVideo(url) })
+                            else SilentClipView(ctx, url, onFrame = { videoPlaying = true }, onFailure = { dropVideo(url) })
+                        },
+                        update = { (it as ClipPlayer).setPlaying(playing) },
+                        onRelease = { (it as ClipPlayer).release() },
                         // The music video shakes with the scene too (zoomed slightly so edges never show).
                         modifier = Modifier.fillMaxSize().sceneShake(overscan = true)
                     )

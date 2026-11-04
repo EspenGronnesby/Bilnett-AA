@@ -22,6 +22,13 @@ android {
         versionName = "3.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // YouTube Data API key for concert videos in Rave. Lives only in local.properties (gitignored).
+        val youtubeKey = Properties().apply {
+            val file = rootProject.file("local.properties")
+            if (file.exists()) file.inputStream().use { load(it) }
+        }.getProperty("YOUTUBE_API_KEY") ?: System.getenv("YOUTUBE_API_KEY") ?: ""
+        buildConfigField("String", "YOUTUBE_API_KEY", "\"$youtubeKey\"")
     }
 
     signingConfigs {

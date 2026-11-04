@@ -12,53 +12,66 @@ internal object SpotifyVideoLookup {
     private val client = OkHttpClient.Builder().callTimeout(8, TimeUnit.SECONDS).build()
     private fun norm(s: String) = s.lowercase(Locale.ROOT).replace(Regex("[^\\p{L}\\p{N}]+"), " ").trim()
 
-    enum class Source(val label: String) { SONG("Sang"), ALBUM("Album"), ARTIST("Artist"), VIBE("Vibe") }
-    data class VideoClip(val url: String, val source: Source)
+    enum class Source(val label: String) { SONG("Sang"), ARTIST("Artist"), YOUTUBE("YouTube"), VIBE("Vibe") }
+    enum class Kind { MP4, YOUTUBE }
+    /** [url] is a preview URL for MP4 clips and a video id for YouTube ones. */
+    data class VideoClip(val url: String, val source: Source, val kind: Kind = Kind.MP4)
 
     /**
-     * Ranked, de-duplicated video candidates: the song itself first, then the same album,
-     * the same artist and finally videos with the same vibe (genre). [onUpdate] receives the
-     * list after every step so the first video can start before the slower steps finish;
-     * the lookup stops as soon as [isActive] turns false (the song changed).
+     * At most one video per step, in this order: the song itself (Apple preview), another video
+     * by the artist, the song's full music video on YouTube, and a video with the same vibe =
+     * genre (festival footage on YouTube, else an Apple video in the same genre). [onUpdate] receives the list after every step so
+     * the first video can start before the slower steps finish; the lookup stops as soon as
+     * [isActive] turns false (the song changed).
      */
     fun findAll(
-        title: String, artist: String, album: String,
+        title: String, artist: String,
         isActive: () -> Boolean = { true },
         onUpdate: (List<VideoClip>) -> Unit = {},
     ): List<VideoClip> {
         val out = LinkedHashMap<String, VideoClip>()
         val seenTracks = HashSet<String>()
-        fun add(hits: List<JSONObject>, source: Source, max: Int = MAX) {
-            val before = out.size
+        fun publish() { if (isActive()) onUpdate(out.values.toList()) }
+        /** Adds the first usable Apple video; true when one was added. */
+        fun addApple(hits: List<JSONObject>, source: Source): Boolean {
             for (h in hits) {
-                if (out.size >= max) break
                 val url = h.optString("previewUrl")
                 // The same video can have different preview URLs in the NO and US stores.
                 val track = norm(h.optString("artistName")) + "|" + norm(h.optString("trackName"))
-                if (!valid(url) || url in out || !seenTracks.add(track)) continue
-                out[url] = VideoClip(url, source)
+                if (!valid(url) || url in out || track in seenTracks) continue
+                seenTracks += track
+                out[url] = VideoClip(url, source); publish(); return true
             }
-            if (out.size > before && isActive()) onUpdate(out.values.toList())
+            return false
+        }
+        fun addYouTube(hits: List<YouTubeLookup.Hit>, source: Source): Boolean {
+            val h = hits.firstOrNull { it.id !in out } ?: return false
+            out[h.id] = VideoClip(h.id, source, Kind.YOUTUBE); publish(); return true
         }
         fun both(term: String) = if (isActive()) search(term, "no") + search(term, "us") else emptyList()
 
+        // 1. The song itself.
         val songHits = both("$artist $title")
-        add(songHits.filter { norm(it.optString("trackName")) == norm(title) && sameArtist(it.optString("artistName"), artist) }, Source.SONG)
+        addApple(songHits.filter { norm(it.optString("trackName")) == norm(title) && sameArtist(it.optString("artistName"), artist) }, Source.SONG)
 
-        // Spotify album names often carry "(Deluxe)" / "Remastered"; Apple's may not, or vice versa.
-        val wantAlbum = norm(album.replace(Regex("\\s*[-–(\\[].*$"), ""))
-        if (wantAlbum.isNotBlank()) {
-            add(both("$artist $album").filter {
-                val c = norm(it.optString("collectionName"))
-                (c.startsWith(wantAlbum) || wantAlbum.startsWith(c)) && c.isNotBlank() && sameArtist(it.optString("artistName"), artist)
-            }, Source.ALBUM)
+        // 2. Another video by the same artist.
+        addApple((songHits + both(artist)).filter { sameArtist(it.optString("artistName"), artist) }, Source.ARTIST)
+
+        // 3. The song's music video on YouTube.
+        if (isActive()) addYouTube(YouTubeLookup.songFor(title, artist), Source.YOUTUBE)
+
+        // 4. Same vibe: a video by a similar artist (Deezer), which matches the mood, not just the genre.
+        if (isActive() && addYouTube(YouTubeLookup.vibeFor(artist, title), Source.VIBE) || !isActive()) {
+            android.util.Log.d("RaveVideo", "findAll '$artist - $title' -> ${out.values.joinToString { it.source.label }}")
+            return out.values.toList()
         }
-
-        add((songHits + both(artist)).filter { sameArtist(it.optString("artistName"), artist) }, Source.ARTIST)
-
-        if (out.size < VIBE_WHEN_BELOW && isActive()) {
-            val appleGenre = genreFor(title, artist)
-            val wanted = genreFromApple(appleGenre)
+        // Fallback when Deezer knows nothing: festival footage for the genre, else an Apple video in the genre.
+        val appleGenre = genreFor(title, artist)
+        val fromApple = genreFromApple(appleGenre)
+        // Apple calls hardstyle "Dance"; for dance songs the artist's live footage (Defqon, Qlimax …) tells.
+        val wanted = if (fromApple == Genre.EDM && YouTubeLookup.enabled && isActive() &&
+            YouTubeLookup.looksHardstyle(YouTubeLookup.liveFor(artist))) Genre.HARDSTYLE else fromApple
+        if (isActive() && !addYouTube(YouTubeLookup.festivalFor(wanted, appleGenre), Source.VIBE) && isActive()) {
             val vibe: List<JSONObject> = when {
                 // Apple files hardstyle under "Dance"; searching known hardstyle artists works far better.
                 wanted == Genre.HARDSTYLE -> HARDSTYLE_ARTISTS.shuffled().take(2).flatMap { name ->
@@ -68,8 +81,9 @@ internal object SpotifyVideoLookup {
                 appleGenre != null -> search(appleGenre, "us").filter { it.optString("primaryGenreName").equals(appleGenre, ignoreCase = true) }
                 else -> emptyList()
             }
-            add(vibe.filterNot { sameArtist(it.optString("artistName"), artist) }.shuffled(), Source.VIBE, out.size + VIBE_COUNT)
+            addApple(vibe.filterNot { sameArtist(it.optString("artistName"), artist) }.shuffled(), Source.VIBE)
         }
+        android.util.Log.d("RaveVideo", "findAll '$artist - $title' -> ${out.values.joinToString { it.source.label }}")
         return out.values.toList()
     }
 
@@ -96,9 +110,6 @@ internal object SpotifyVideoLookup {
         val wanted = artist.split(Regex("\\s*(?:,|&| feat\\.? | featuring )\\s*", RegexOption.IGNORE_CASE)).map(::norm)
         return wanted.any { it.isNotBlank() && it in candidates }
     }
-    private const val MAX = 8
-    private const val VIBE_WHEN_BELOW = 4
-    private const val VIBE_COUNT = 5
     private fun valid(url: String) = url.startsWith("https://")
 
     private fun search(term: String, country: String, entity: String = "musicVideo"): List<JSONObject> {
