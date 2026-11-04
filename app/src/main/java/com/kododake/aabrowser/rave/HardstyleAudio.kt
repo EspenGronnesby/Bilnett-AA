@@ -30,7 +30,11 @@ internal data class HardstyleFrame(val bass: Float = 0f, val kick: Float = 0f, v
     /** Raw presence level (1.2–5 kHz) — zaag/screech/vocals live here. */
     val presence: Float = 0f,
     /** Beats counted by the beat tracker (heard + filled in) since the song started. */
-    val beat: Int = 0)
+    val beat: Int = 0,
+    /** Beat clock: time (uptime ms) of the last grid beat, its period (ms) and how sure the tracker is. */
+    val beatAt: Long = 0L,
+    val beatPeriod: Float = 0f,
+    val beatConfidence: Int = 0)
 
 /** Independent from the original visualizer. Input sample rate is Hz, not Android's milliHz. */
 internal class HardstyleAudio {
@@ -146,7 +150,10 @@ internal class HardstyleAudio {
             air,
             low,
             scr,
-            beats.count)
+            beats.count,
+            beats.lastBeat,
+            beats.period,
+            beats.confidence)
         average = smooth(average, value, .5f); lastBass = value
         screechAvg = if (screechAvg == 0f) scr else smooth(screechAvg, scr, 6f)
         snareAvg = smooth(snareAvg, snareBand, .6f); lastSnareValue = snareBand
@@ -171,9 +178,11 @@ internal class BeatTracker {
     private val bins = FloatArray(28)          // 250..530 ms in 10 ms steps
     var period = 0f
         private set
-    private var lastBeat = 0L
+    var lastBeat = 0L
+        private set
     private var lastOnset = 0L
-    private var confidence = 0
+    var confidence = 0
+        private set
     private var predictedInRow = 0
     /** Number of beats so far (heard or filled in). */
     var count = 0

@@ -379,6 +379,8 @@ internal class HardstyleStructure {
         private set
     var hud = StructureHud()
         private set
+    /** Confirmed (real) drops so far in this song. */
+    val drops: Int get() = realDrops
 
     private var lastUpdate = 0L
     private var trackStart = 0L

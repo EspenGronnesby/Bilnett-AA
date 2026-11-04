@@ -156,6 +156,20 @@ class RaveActivity : ComponentActivity() {
     private var partyProfile by mutableStateOf(vibeProfile(1f, 0f))
     /** Seconds of loud music without a recognised drop (see the missed-drop safety net). */
     private var loudNoDropS = 0f
+    // ---- Festival show (FestivalShow.kt) ----
+    private val beatClock = BeatClock()
+    private val flashBudget = FlashBudget()
+    /** 0..1: the "breath in" before a drop darkens the scene (festival trick: dark, then hit). */
+    private var dip by mutableFloatStateOf(0f)
+    /** 0..1: the single big hit on the drop's first beat, fading out. */
+    private var dropHit by mutableFloatStateOf(0f)
+    private var lastPart = SongPart.INTRO
+    /** When the current dip started (0 = none) and whether this build-up already used its dip. */
+    private var dipStartedAt = 0L
+    private var dipSpent = false
+    /** Look inside a drop (changes every 8 bars and per drop): 0 shake, 1 spikes/ripples, 2 colours. */
+    private var dropLook by mutableIntStateOf(0)
+    private var flashesNow by mutableIntStateOf(0)
     private var genreAnnouncedAt by mutableLongStateOf(0L)
     // Vibe meter (vertical slider): 0 = calm … 1 = full hardstyle/rock. In auto mode the app moves
     // it to fit the music; dragging it takes over until "Auto" is tapped. Remembered between sessions.
@@ -390,6 +404,8 @@ class RaveActivity : ComponentActivity() {
             genreDetector.newTrack(SystemClock.uptimeMillis())
             songPhase.newTrack(SystemClock.uptimeMillis())
             loudNoDropS = 0f
+            beatClock.reset(); dip = 0f; dropHit = 0f; lastPart = SongPart.INTRO; dropLook = 0
+            dipStartedAt = 0L; dipSpent = false
             hardSubDetector.newTrack()
             val t = m?.getString(MediaMetadata.METADATA_KEY_TITLE).orEmpty()
             val a = m?.getString(MediaMetadata.METADATA_KEY_ARTIST).orEmpty()
@@ -683,7 +699,7 @@ class RaveActivity : ComponentActivity() {
         val shakeDirection = remember { FloatArray(2) } // [angle, armed]
         val density = androidx.compose.ui.platform.LocalDensity.current
         LaunchedEffect(hardstyleOn, foreground, playing) {
-            if (!hardstyleOn || !foreground) { shakeX = 0f; shakeY = 0f; shakeRotation = 0f; return@LaunchedEffect }
+            if (!hardstyleOn || !foreground) { shakeX = 0f; shakeY = 0f; shakeRotation = 0f; dip = 0f; dropHit = 0f; return@LaunchedEffect }
             var previous = 0L
             while (true) {
                 withFrameNanos { now ->
@@ -715,7 +731,13 @@ class RaveActivity : ComponentActivity() {
                     val v = vibe
                     val r = rockness
                     val hardW = hardWeight(v)
-                    val shapedFull = vibeShape(rawTarget, v, r)
+                    // Beat clock: pump on the PREDICTED beat (slightly early) instead of after the kick
+                    // is heard. The analysis (genre, song parts) still uses the detected kick.
+                    if (!playing || !fresh) beatClock.reset()
+                    val clockOn = v >= BEAT_CLOCK_FROM_VIBE
+                    val clockKick = if (playing && fresh && clockOn) beatClock.pulse(rawTarget, nowMs) else null
+                    val visualInput = if (clockKick != null) rawTarget.copy(kick = clockKick) else rawTarget
+                    val shapedFull = vibeShape(visualInput, v, r)
                     // Song structure (hardstyle/EDM): calm intro, rising build-up, max chaos on the drop.
                     val phaseIntensity = if (playing && fresh)
                         songPhase.update(rawTarget, nowMs, positionMs(), if (songDurationMs > 0L) songDurationMs else -1L) else 1f
@@ -773,15 +795,50 @@ class RaveActivity : ComponentActivity() {
                             grit = if (missedDrop >= 1f) shapedFull.grit else shapedFull.grit * (1f - sw)
                         )
                     }
+                    // ---- Festival show rules (FestivalShow.kt) ----
+                    val showW = structureWeight(v) * (1f - .7f * r * hardW)
+                    val hud = songPhase.hud
+                    val part = songPhase.part
+                    // Build-up RISES (denser particles, pump on the snare roll) instead of only being held back.
+                    val buildRise = if (part == SongPart.BUILDUP) hud.build.coerceIn(0f, 1f) * showW else 0f
+                    // Breath in before the drop: last bar of the phrase in a ready build-up, or a
+                    // build-up near its peak → the scene darkens; the drop then hits out of the dark.
+                    // "Last bar of the phrase" is only trusted once a drop has locked the phrase grid.
+                    val hadDip = dip > .3f || dipStartedAt > 0L || dipSpent   // read before the reset below
+                    if (part != SongPart.BUILDUP) { dipStartedAt = 0L; dipSpent = false }
+                    val dipWanted = if (part == SongPart.BUILDUP && hud.ready && !dipSpent) showW * maxOf(
+                        if (songPhase.drops >= 1 && hud.barInPhrase == 8) 1f else 0f,
+                        ((hud.build - PRE_DROP_BUILD_START) / (1f - PRE_DROP_BUILD_START)).coerceIn(0f, 1f)) else 0f
+                    if (dipWanted > .3f && dipStartedAt == 0L) dipStartedAt = nowMs
+                    // Never stay dark: one dip per build-up, at most PRE_DROP_DIP_MAX_MS.
+                    if (dipStartedAt > 0L && nowMs - dipStartedAt > PRE_DROP_DIP_MAX_MS) dipSpent = true
+                    val dipGoal = if (dipSpent) 0f else dipWanted
+                    val dipNext = if (part == SongPart.DROP) 0f
+                        else dip + (dipGoal - dip) * (1f - kotlin.math.exp(-dt / if (dipGoal > dip) .3f else .5f))
+                    dip = kotlin.math.round(dipNext * 100f) / 100f
+                    // The drop lands: ONE big hit on beat one (strobe only after the drop is confirmed).
+                    // Full strength when it came out of a breath-in (a real build-up); softer otherwise,
+                    // since an unprepared drop may still turn out to be a fake.
+                    if (part == SongPart.DROP && lastPart != SongPart.DROP && showW > .3f && flashBudget.tryFlash(nowMs))
+                        dropHit = if (hadDip) 1f else DROP_HIT_UNSURE
+                    else if (dropHit > 0f) dropHit = (dropHit * kotlin.math.exp(-dt / DROP_HIT_DECAY_S)).let { if (it < .01f) 0f else it }
+                    lastPart = part
+                    // A new look every 8 bars (one phrase) and for each drop, so a long drop never goes flat.
+                    val inShowDrop = part == SongPart.DROP && showW > 0f
+                    dropLook = if (inShowDrop) (hud.phrase + songPhase.drops) % 3 else 0
+                    val lookSpike = if (!inShowDrop) 1f else when (dropLook) { 1 -> 1.2f; else -> .95f }
+                    val lookShake = if (!inShowDrop) 1f else when (dropLook) { 0 -> 1.15f; 1 -> .75f; else -> .9f }
+                    val lookParticles = if (inShowDrop && dropLook == 1) 1.1f else 1f
+                    flashesNow = flashBudget.perSecond(nowMs)
                     val p = vibeProfile(v, r)
                     // Strobe only in the drop; shake/particles/spikes follow the song part.
                     partyProfile = PartyProfile(
-                        p.spike * (.75f + .25f * pi) * subMul(sub.spike),
-                        p.particles * (.6f + .4f * pi) * subMul(sub.particles),
-                        p.shake * pi * subMul(sub.shake),
+                        p.spike * (.75f + .25f * pi) * subMul(sub.spike) * lookSpike,
+                        p.particles * (.6f + .4f * pi) * subMul(sub.particles) * (1f + .8f * buildRise) * lookParticles,
+                        p.shake * pi * subMul(sub.shake) * lookShake,
                         p.strobe * (if (effectsOn && pi >= .9f) 1f else 0f) * subMul(sub.strobe),
-                        p.density, p.softness)
-                    val target = shaped
+                        p.density * (1f + .5f * buildRise), p.softness)
+                    val target = if (buildRise > 0f) shaped.copy(kick = max(shaped.kick, shaped.snare * .6f * buildRise)) else shaped
                     val liveSpectrum = playing && fresh
                     for (i in 0 until SPECTRUM_BANDS) {
                         val goal = if (liveSpectrum) target.spectrum[i] else 0f
@@ -792,8 +849,9 @@ class RaveActivity : ComponentActivity() {
                         smoothSpectrum[i] = value
                     }
                     displayedFrame = HardstyleFrame(blend(displayedFrame.bass,target.bass),
-                        blend(displayedFrame.kick,target.kick),blend(displayedFrame.highs,target.highs),
-                        blend(displayedFrame.energy,target.energy),blend(displayedFrame.burst,target.burst),blend(displayedFrame.build,target.build),
+                        // Hits (kick, burst) pass straight through: smoothing them only made them late and soft.
+                        if (clockOn) target.kick else blend(displayedFrame.kick, target.kick),blend(displayedFrame.highs,target.highs),
+                        blend(displayedFrame.energy,target.energy),if (clockOn) target.burst else blend(displayedFrame.burst, target.burst),blend(displayedFrame.build,target.build),
                         spectrum = smoothSpectrum.toList(),
                         highMotion = blend(displayedFrame.highMotion, if (playing && fresh) target.highMotion else 0f),
                         heavy = blend(displayedFrame.heavy, target.heavy),
@@ -837,6 +895,8 @@ class RaveActivity : ComponentActivity() {
                 Color(android.graphics.Color.HSVToColor(hsv))
             }.ifEmpty { listOf(Color.Cyan, Color(0xFFAA44FF)) }
         }
+        // Drop look 2: the colours rotate (one step per phrase), like an LD switching palettes.
+        val showPalette = if (dropLook == 2 && hardPalette.size > 1) hardPalette.drop(1) + hardPalette.take(1) else hardPalette
         val transition = rememberInfiniteTransition(label = "drift")
         val lightCycleMillis = if (hardstyleOn) 8_000 else 32_000
         val t by transition.animateFloat(
@@ -914,7 +974,12 @@ class RaveActivity : ComponentActivity() {
                         (displayedFrame.spectrum.maxOrNull() ?: 0f) * .25f * volumeGain(volume)).coerceAtMost(1.6f)
                 else 0f
                 val heavyFlash = if (hardstyleOn) displayedFrame.heavy * displayedFrame.kick * (.6f + .4f * loudness(volume)) else 0f
-                palette.forEachIndexed { i, col ->
+                // Sub bass → glow; screech → colour shift toward the next palette colour.
+                val showOn = if (hardstyleOn) structureWeight(vibe) else 0f
+                val subGlow = .12f * displayedFrame.sub * displayedFrame.bass * showOn
+                val screechTint = (displayedFrame.screech * .7f * showOn).coerceAtMost(.7f)
+                palette.forEachIndexed { i, paletteColor ->
+                    val col = if (screechTint > .01f) androidx.compose.ui.graphics.lerp(paletteColor, palette[(i + 1) % palette.size], screechTint) else paletteColor
                     val a = t + i * 2.1f
                     val drift = Offset(w * (0.5f + lightTravel * cos(a)), h * (0.5f + lightTravel * .9f * sin(a * 1.3f)))
                     val hitAngle = i * 2.399963f
@@ -923,7 +988,7 @@ class RaveActivity : ComponentActivity() {
                     val r = base * (0.6f + 0.35f * energy) * (1f + partyHit * .1f)
                     drawCircle(
                         brush = Brush.radialGradient(
-                            listOf(col.copy(alpha = ((0.45f + 0.35f * energy + partyHit * .18f)).coerceIn(0f,.95f)), Color.Transparent),
+                            listOf(col.copy(alpha = ((0.45f + 0.35f * energy + partyHit * .18f + subGlow)).coerceIn(0f,.95f)), Color.Transparent),
                         center = c, radius = r
                         ),
                         radius = r, center = c
@@ -937,6 +1002,8 @@ class RaveActivity : ComponentActivity() {
                         )
                     )
                 }
+                // Breath in before the drop: the lights go almost dark.
+                if (dip > .01f) drawRect(Color.Black.copy(alpha = PRE_DROP_DIP_DEPTH * dip))
                 // Strobe: max volume + heavy distorted kicks (zaag etc.) flash the whole scene,
                 // alternating cover colours. Kick decays in ~85 ms, so each flash is short.
                 // Rock flashes on cymbal crashes instead; rap and standard have no strobe.
@@ -949,11 +1016,13 @@ class RaveActivity : ComponentActivity() {
                 // Safety: never more than 2.5 flashes per second (under the 3 Hz limit for people
                 // sensitive to flashing light) — matters at uptempo, where kicks come 3+ times/s.
                 val strobeNow = SystemClock.uptimeMillis()
-                if (strobeRaw > .3f && strobeNow - lastStrobeAt >= 400L) { lastStrobeAt = strobeNow; strobeColorIndex++ }
+                // All flash types share one budget: at most 3 full-screen flashes in any second.
+                if (strobeRaw > .3f && strobeNow - lastStrobeAt >= 400L && flashBudget.tryFlash(strobeNow)) { lastStrobeAt = strobeNow; strobeColorIndex++ }
                 val strobe = if (strobeNow - lastStrobeAt < 120L) strobeRaw else 0f
                 if (strobe > 0.03f) {
                     // Each flash takes the next cover colour.
-                    val strobeColor = hardPalette[strobeColorIndex % hardPalette.size]
+                    // Mixed with white: no saturated (red) colour flashes.
+                    val strobeColor = androidx.compose.ui.graphics.lerp(hardPalette[strobeColorIndex % hardPalette.size], Color.White, STROBE_WHITE_MIX)
                     drawRect(strobeColor.copy(alpha = (0.45f * strobe).coerceAtMost(.45f)))
                     drawRect(
                         Brush.radialGradient(
@@ -964,7 +1033,8 @@ class RaveActivity : ComponentActivity() {
                 }
                 // The white heavy-flash obeys the same 2.5-flashes-per-second cap as the strobe.
                 val flashNow = SystemClock.uptimeMillis()
-                if (heavyFlash > .3f && flashNow - lastHeavyFlashAt >= 400L) lastHeavyFlashAt = flashNow
+                if (heavyFlash > .3f && flashNow - lastHeavyFlashAt >= 400L && flashNow - lastStrobeAt >= 120L &&
+                    flashBudget.tryFlash(flashNow)) lastHeavyFlashAt = flashNow
                 if (heavyFlash > 0.02f && flashNow - lastHeavyFlashAt < 120L) {
                     drawRect(
                         Brush.radialGradient(
@@ -973,6 +1043,14 @@ class RaveActivity : ComponentActivity() {
                         )
                     )
                 }
+                // The drop's single big hit (fades out over ~0.6 s).
+                val hit = dropHit
+                if (hit > .02f) drawRect(
+                    Brush.radialGradient(
+                        listOf(Color.White.copy(alpha = .6f * hit), hardPalette.first().copy(alpha = .3f * hit), Color.Transparent),
+                        center = center, radius = max(w, h) * .9f
+                    )
+                )
                 drawRect(
                     Brush.radialGradient(
                         listOf(Color.Transparent, Color.Black.copy(alpha = 0.65f)),
@@ -998,7 +1076,8 @@ class RaveActivity : ComponentActivity() {
 
             if (hardstyleOn && foreground) {
                 coverCenter?.let { center ->
-                    HardstyleBackdrop(Modifier.fillMaxSize().sceneShake(), displayedFrame, visualTime, hardPalette, showVideo,
+                    HardstyleBackdrop(Modifier.fillMaxSize().graphicsLayer { alpha = 1f - PRE_DROP_DIP_DEPTH * dip }.sceneShake(),
+                        displayedFrame, visualTime, showPalette, showVideo,
                         center, coverRadius, audioIntensity, volume, particles = partyProfile.particles,
                         density = partyProfile.density, softness = partyProfile.softness)
                 }
@@ -1038,7 +1117,7 @@ class RaveActivity : ComponentActivity() {
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
-                            ReactiveCover(coverSize, displayedFrame, hardPalette, sceneOrigin) { center, radius ->
+                            ReactiveCover(coverSize, displayedFrame, showPalette, sceneOrigin) { center, radius ->
                                 coverCenter = center; coverRadius = radius
                             }
                             Spacer(Modifier.height(12.u))
@@ -1077,7 +1156,7 @@ class RaveActivity : ComponentActivity() {
                     val artSize: Dp = if (wide) (min(maxHeight.value * 0.72f, 340f * LocalRaveScale.current) * f).dp else (min(maxWidth.value * 0.75f, 340f * LocalRaveScale.current) * f).dp
                     if (wide) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-                        ReactiveCover(artSize, displayedFrame, hardPalette, sceneOrigin) { center, radius ->
+                        ReactiveCover(artSize, displayedFrame, showPalette, sceneOrigin) { center, radius ->
                             coverCenter = center; coverRadius = radius
                         }
                         Spacer(Modifier.width(40.u))
@@ -1085,7 +1164,7 @@ class RaveActivity : ComponentActivity() {
                     }
                 } else {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                        ReactiveCover(artSize, displayedFrame, hardPalette, sceneOrigin) { center, radius ->
+                        ReactiveCover(artSize, displayedFrame, showPalette, sceneOrigin) { center, radius ->
                             coverCenter = center; coverRadius = radius
                         }
                         Spacer(Modifier.height(32.u))
@@ -1142,6 +1221,13 @@ class RaveActivity : ComponentActivity() {
                 HardstyleOrb(Modifier.fillMaxSize(), frame, palette, roundedSquare = true, volume = volume, spikeGain = partyProfile.spike)
             }
             Cover(size * .86f, scale = 1f + frame.kick * (.045f + frame.heavy * .09f) * volumeGain(volume) * (.4f + .6f * phaseLevel))
+            // Snare → a short glow around the cover's edge (its own hero, so the kick isn't doing everything).
+            val edge = frame.snare * structureWeight(vibe)
+            if (edge > .05f) Canvas(Modifier.size(size * .9f)) {
+                drawRoundRect(Color.White.copy(alpha = (.55f * edge).coerceAtMost(.55f)),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(this.size.minDimension * .12f),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(3.dp.toPx()))
+            }
         }
     }
 
@@ -1411,6 +1497,8 @@ class RaveActivity : ComponentActivity() {
             meter("Zaag/grit", h.grit / .6f, "%.2f".format(h.grit))
             meter("Screech", h.screech, "%.2f".format(h.screech))
             meter("Rock", rockness, "%.0f %%".format(rockness * 100f))
+            Text("takt-klokke ${if (beatClock.active) "på" else "av"} · look ${dropLook + 1} · blink/s $flashesNow${if (dip > .05f) " · pust inn" else ""}",
+                color = dim, fontSize = 11.us, maxLines = 1)
         }
     }
 
