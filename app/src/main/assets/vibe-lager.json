@@ -1,0 +1,63 @@
+{
+  "_info": "Reservevideoer per vibe for Rave. Lastes ned på Wi-Fi og brukes når ingen annen video kan spilles. Offisielle Apple-musikkvideoer (forhåndsvisninger). Valgt av Espen 2026-11-05.",
+  "HARDSTYLE": [
+    {
+      "artist": "Timmy Trumpet & Sub Zero Project",
+      "title": "Project X",
+      "url": "https://video-ssl.itunes.apple.com/itunes-assets/Video124/v4/ba/0b/1f/ba0b1ff8-dc47-8ef2-7326-ef2ec237b0d8/mzvf_6828689109927462719.1920w.h264lc.U.p.m4v"
+    },
+    {
+      "artist": "Scooter & Xillions",
+      "title": "Rave Teacher (Somebody Like Me)",
+      "url": "https://video-ssl.itunes.apple.com/itunes-assets/Video126/v4/2a/72/6f/2a726f22-b6fd-abb1-ad84-4dd89fde55ba/mzvf_16944348209414490733.1920w.h264lc.U.p.m4v"
+    }
+  ],
+  "RAP": [
+    {
+      "artist": "A$AP Mob",
+      "title": "Yamborghini High (feat. Juicy J)",
+      "url": "https://video-ssl.itunes.apple.com/itunes-assets/Video124/v4/b7/48/0b/b7480b48-7128-5c96-8128-81ce03e65156/mzvf_13597922587387929957.1920w.h264lc.U.p.m4v"
+    },
+    {
+      "artist": "Playboi Carti",
+      "title": "Magnolia",
+      "url": "https://video-ssl.itunes.apple.com/itunes-assets/Video113/v4/5c/cd/a7/5ccda75c-8874-5558-ebde-c6b5f5532e91/mzvf_585554540784930429.1920w.h264lc.U.p.m4v"
+    }
+  ],
+  "ROCK": [
+    {
+      "artist": "The Weeknd",
+      "title": "Gasoline",
+      "url": "https://video-ssl.itunes.apple.com/itunes-assets/Video116/v4/e5/80/04/e5800473-dbb2-51b5-1869-651ea9a69d5b/mzvf_7567492902445940999.1920w.h264lc.U.p.m4v"
+    },
+    {
+      "artist": "Linkin Park",
+      "title": "Numb (Live from iTunes Festival, London, 2011)",
+      "url": "https://video-ssl.itunes.apple.com/itunes-assets/Video126/v4/2a/8f/4b/2a8f4b8d-7168-05d6-0cf1-4d134a166bce/mzvf_1871059724296670762.1920w.h264lc.U.p.m4v"
+    }
+  ],
+  "EDM": [
+    {
+      "artist": "Avicii",
+      "title": "Levels",
+      "url": "https://video-ssl.itunes.apple.com/itunes-assets/Video124/v4/2a/4c/14/2a4c1459-c4cd-cff1-2581-e129de84542a/mzvf_8667790334846458931.1920w.h264lc.U.p.m4v"
+    },
+    {
+      "artist": "Swedish House Mafia",
+      "title": "Greyhound",
+      "url": "https://video-ssl.itunes.apple.com/itunes-assets/Video211/v4/3d/b6/31/3db63139-0de0-352b-c189-9557e554547a/mzvf_3892559910374287456.1920w.h264lc.U.p.m4v"
+    }
+  ],
+  "STANDARD": [
+    {
+      "artist": "The Weeknd",
+      "title": "Blinding Lights",
+      "url": "https://video-ssl.itunes.apple.com/itunes-assets/Video113/v4/6a/e8/e0/6ae8e039-4855-c1ec-ab87-1a349010859a/mzvf_5162835731448030244.1920w.h264lc.U.p.m4v"
+    },
+    {
+      "artist": "The Weeknd & Ariana Grande",
+      "title": "Save Your Tears",
+      "url": "https://video-ssl.itunes.apple.com/itunes-assets/Video126/v4/29/18/ff/2918ff05-1a1e-f2e5-568b-ec36721d3d81/mzvf_3547631354101689958.1920w.h264lc.U.p.m4v"
+    }
+  ]
+}

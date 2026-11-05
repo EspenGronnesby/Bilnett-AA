@@ -134,19 +134,51 @@ internal object SpotifyVideoLookup {
             val wanted = if (fromApple == Genre.EDM && YOUTUBE_ON && YouTubeLookup.enabled && isActive() &&
                 YouTubeLookup.looksHardstyle(YouTubeLookup.liveFor(artist))) Genre.HARDSTYLE else fromApple
             if (YOUTUBE_ON && !vibeFromYouTube && isActive()) vibeFromYouTube = addYouTube(YouTubeLookup.festivalFor(wanted, appleGenre), Source.VIBE)
-            val vibe: List<JSONObject> = when {
-                // Apple files hardstyle under "Dance"; searching known hardstyle artists works far better.
-                wanted == Genre.HARDSTYLE -> HARDSTYLE_ARTISTS.shuffled().take(2).flatMap { name ->
-                    search(name, "us").filter { norm(it.optString("artistName")).contains(norm(name)) }
-                }
-                wanted != null -> search(VIBE_TERMS.getValue(wanted), "us").filter { genreFromApple(it.optString("primaryGenreName")) == wanted }
-                appleGenre != null -> search(appleGenre, "us").filter { it.optString("primaryGenreName").equals(appleGenre, ignoreCase = true) }
-                else -> emptyList()
-            }
-            if (isActive()) add(vibe.filterNot { sameArtist(it.optString("artistName"), artist) }.shuffled(), Source.VIBE, appleCount() + VIBE_COUNT)
+            // Same vibe: videos by artists Deezer calls similar (Supersci → Atmosphere, Brother Ali …),
+            // then the genre. The vibe stash (VibeStash) is the last resort, in RaveActivity.
+            if (isActive()) add(relatedVibe(artist, title, isActive), Source.VIBE, VIBE_COUNT)
+            if (out.isEmpty() && isActive()) add(genreVideos(wanted, appleGenre).filterNot { sameArtist(it.optString("artistName"), artist) }.shuffled(), Source.VIBE, VIBE_COUNT)
         }
         android.util.Log.d("RaveVideo", "findAll '$artist - $title' -> ${out.values.joinToString { it.source.label + if (it.kind == Kind.YOUTUBE) "(YT)" else "" }}")
         return out.values.toList()
+    }
+
+    /** Apple music videos in a genre (hardstyle: known hardstyle artists, since Apple files it under "Dance"). */
+    private fun genreVideos(wanted: Genre?, appleGenre: String?): List<JSONObject> = when {
+        wanted == Genre.HARDSTYLE -> HARDSTYLE_ARTISTS.shuffled().take(2).flatMap { name ->
+            search(name, "us").filter { norm(it.optString("artistName")).contains(norm(name)) }
+        }
+        wanted != null -> search(VIBE_TERMS.getValue(wanted), "us").filter { genreFromApple(it.optString("primaryGenreName")) == wanted }
+        appleGenre != null -> search(appleGenre, "us").filter { it.optString("primaryGenreName").equals(appleGenre, ignoreCase = true) }
+        else -> emptyList()
+    }
+
+    /**
+     * Reserve videos with the same vibe when every clip of a song failed: similar artists first,
+     * then the genre ([knownGenre] when Rave already has it). [exclude] = clips that already failed.
+     */
+    fun reserve(title: String, artist: String, exclude: Set<String>, count: Int, knownGenre: Genre? = null): List<VideoClip> {
+        val related = relatedVibe(artist, title) { true }
+        val appleGenre = if (related.size < count && knownGenre == null) genreFor(title, artist) else null
+        val genre = if (related.size < count) genreVideos(knownGenre ?: genreFromApple(appleGenre), appleGenre).shuffled() else emptyList()
+        return (related + genre).map { it.optString("previewUrl") }
+            .filter { valid(it) && it !in exclude }.distinct().take(count)
+            .map { VideoClip(it, Source.VIBE) }
+    }
+
+    /**
+     * Same vibe: one music video each from the artists Deezer calls most similar (in Deezer's order).
+     * Real vibe instead of «any hip hop video» (Supersci → Atmosphere, Brother Ali, CunninLynguists).
+     */
+    private fun relatedVibe(artist: String, title: String, isActive: () -> Boolean): List<JSONObject> {
+        val out = ArrayList<JSONObject>()
+        for (name in DeezerLookup.related(artist, title)) {
+            if (!isActive() || out.size >= VIBE_COUNT + 2) break
+            val id = search(name, "us", "musicArtist").firstOrNull { norm(it.optString("artistName")) == norm(name) }?.optLong("artistId") ?: continue
+            lookup(id, "musicVideo").firstOrNull { valid(it.optString("previewUrl")) && !junkVideo(it.optString("trackName")) }?.let { out += it }
+        }
+        android.util.Log.d("RaveVideo", "vibe fra lignende artister: ${out.joinToString { it.optString("artistName").take(20) + " – " + it.optString("trackName").take(24) }}")
+        return out
     }
 
     private val VIBE_TERMS = mapOf(Genre.RAP to "hip hop", Genre.ROCK to "rock", Genre.EDM to "edm", Genre.STANDARD to "pop")

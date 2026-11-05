@@ -344,6 +344,8 @@ class RaveActivity : ComponentActivity() {
         YouTubeLookup.init(applicationContext)
         // Open the video store off the main thread (disk + database work), so the first clip does not stutter.
         Thread { RaveVideoCache.warmUp(applicationContext) }.start()
+        // Vibe stash: two videos per vibe on the phone, downloaded on Wi-Fi (last resort, works offline).
+        Thread { VibeStash.downloadIfWifi(applicationContext) }.start()
         // Skjermen skal aldri slukke mens Rave vises (gjelder bare mens vinduet er synlig).
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         showAnalysis = try { getSharedPreferences("rave", MODE_PRIVATE).getBoolean("analysis", true) } catch (_: Exception) { true }
@@ -388,6 +390,7 @@ class RaveActivity : ComponentActivity() {
     }
 
     override fun onStart() {
+        Thread { VibeStash.downloadIfWifi(applicationContext) }.start() // fill the stash when back on Wi-Fi
         super.onStart()
         hardstyleAudio.reset()
         hardstyleFrame = HardstyleFrame()
@@ -462,10 +465,12 @@ class RaveActivity : ComponentActivity() {
             hardSubDetector.newTrack()
             val t = m?.getString(MediaMetadata.METADATA_KEY_TITLE).orEmpty()
             val a = m?.getString(MediaMetadata.METADATA_KEY_ARTIST).orEmpty()
+            songVibe = null // new song: its own vibe arrives below
             if (t.isNotBlank() && a.isNotBlank()) Thread {
                 val appleGenre = SpotifyVideoLookup.genreFor(t, a)
                 runOnUiThread {
                     if (trackIdentity == identity) {
+                        songVibe = genreFromApple(appleGenre) // only for the song still playing
                         genreDetector.setAppleGenre(appleGenre, SystemClock.uptimeMillis())
                         genre = genreDetector.genre
                     }
@@ -492,11 +497,14 @@ class RaveActivity : ComponentActivity() {
         videoKey = key
         clearVideos()
         videoPlaying = false
+        // New song: fresh tries, and clips that only lacked signal may be tried again.
+        videoTries.remove(key); videoSkipped.clear(); stashGiven.remove(key); reserveRunning = false
         if (track.isBlank() || artistName.isBlank()) return
+        lastTrack = track; lastArtist = artistName
         videoCache[key]?.let { cached ->
             val ordered = RaveVideoCache.favouriteFirst(key, cached)
             videoCache[key] = ordered
-            videoClips = ordered.filter { it.url !in videoFailed }; return
+            videoClips = ordered.filter { usable(it.url) }; return
         }
         Thread {
             // Played before (last 30 days): use the stored list, no searching; the clips play from the phone.
@@ -505,7 +513,7 @@ class RaveActivity : ComponentActivity() {
                 runOnUiThread {
                     if (videoKey != key) return@runOnUiThread
                     videoCache[key] = stored
-                    if (foreground) videoClips = stored.filter { it.url !in videoFailed }
+                    if (foreground) videoClips = stored.filter { usable(it.url) }
                 }
                 return@Thread
             }
@@ -513,13 +521,18 @@ class RaveActivity : ComponentActivity() {
                 isActive = { videoKey == key },
                 // Grow the list in place: the clip already playing keeps its index.
                 onUpdate = { list -> val ordered = RaveVideoCache.favouriteFirst(key, list)
-                    runOnUiThread { if (videoKey == key && foreground) videoClips = ordered.filter { it.url !in videoFailed } } })
+                    runOnUiThread { if (videoKey == key && foreground) videoClips = ordered.filter { usable(it.url) } } })
             // Only a complete lookup is remembered (an interrupted one may be missing videos).
             if (videoKey == key) {
                 RaveVideoCache.saveList(this, key, clips)
             }
             val ordered = RaveVideoCache.favouriteFirst(key, clips)
-            runOnUiThread { if (videoKey == key) videoCache[key] = ordered }
+            runOnUiThread {
+                if (videoKey != key) return@runOnUiThread
+                videoCache[key] = ordered
+                // The lookup found nothing that is left to play: go straight to reserve videos.
+                if (videoClips.isEmpty()) fetchReserve(key)
+            }
         }.start()
     }
 
@@ -533,16 +546,82 @@ class RaveActivity : ComponentActivity() {
 
     // A clip that will not play is dropped, and the next one takes its place.
     /** [permanent] false = it only failed for lack of network: skip it now, but keep it in the stored list. */
+    /** The song's vibe from Apple (null offline/unknown) – picks the right videos from the vibe stash. */
+    @Volatile private var songVibe: Genre? = null
+
+    /** Stash videos for the song's vibe: Apple's genre, else what Party hears, else «Rolig». */
+    private fun stashClips(): List<SpotifyVideoLookup.VideoClip> =
+        VibeStash.forGenre(this, songVibe ?: genre.takeIf { hardstyleOn }).filter { usable(it.url) }
+
+    /** Clips from the net tried per song that would not play; the stash never counts (see [fetchReserve]). */
+    private val videoTries = HashMap<String, Int>()
+    /** Clips that failed only for lack of signal: skipped for this song, tried again next time. */
+    private val videoSkipped = HashSet<String>()
+    private fun usable(url: String) = url !in videoFailed && url !in videoSkipped
+    private var reserveRunning = false
+    private val stashGiven = HashSet<String>()
+    private var lastTrack = ""; private var lastArtist = ""
+
+    private fun isOnline(): Boolean {
+        val cm = getSystemService(android.net.ConnectivityManager::class.java) ?: return false
+        val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
+        return caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+    }
+
+    /**
+     * Every clip of the song failed: reserve videos with the same vibe (similar artists, then genre),
+     * and the vibe stash always at the end – it is on the phone, so Rave always ends with a video.
+     * Net clips are limited to [MAX_VIDEO_TRIES] tries per song; the stash is always offered once.
+     * Without signal Rave goes straight to the stash instead of waiting for net clips to time out.
+     */
+    private fun fetchReserve(key: String) {
+        if (reserveRunning || videoClips.isNotEmpty()) return
+        val stash = stashClips()
+        val netLeft = MAX_VIDEO_TRIES - (videoTries[key] ?: 0)
+        if (!isOnline() || netLeft <= 0) {
+            if (key in stashGiven || stash.isEmpty()) { android.util.Log.d("RaveVideo", "ingen flere videoer å prøve: '$key'"); return }
+            stashGiven += key
+            android.util.Log.d("RaveVideo", "reserve for '$key' -> rett til lager (${stash.size}), ${if (netLeft <= 0) "forsøk brukt opp" else "ingen nett"}")
+            videoIndex = 0; videoClips = stash
+            return
+        }
+        reserveRunning = true
+        val track = lastTrack; val artistName = lastArtist
+        val failed = HashSet(videoFailed).apply { addAll(videoSkipped) }; val vibe = songVibe
+        Thread {
+            val net = try { SpotifyVideoLookup.reserve(track, artistName, failed, netLeft, vibe) } catch (_: Exception) { emptyList() }
+            runOnUiThread {
+                reserveRunning = false
+                if (videoKey != key) return@runOnUiThread
+                val given = key in stashGiven
+                stashGiven += key
+                // Net clips first, the stash last (only once per song) so it is always reached.
+                val clips = (net + if (given) emptyList() else stash).distinctBy { it.url }.filter { usable(it.url) }
+                android.util.Log.d("RaveVideo", "reserve for '$key' -> ${net.size} fra nett + ${if (given) 0 else stash.size} fra lager")
+                if (clips.isEmpty()) return@runOnUiThread
+                videoIndex = 0
+                videoClips = clips
+            }
+        }.start()
+    }
+
+    /** [permanent] false = it only failed for lack of network: skip it now, but keep it in the stored list. */
     private fun dropVideo(url: String, permanent: Boolean = true) {
         val i = videoClips.indexOfFirst { it.url == url }
-        videoFailed += url
+        if (i < 0) return
+        if (permanent) videoFailed += url else videoSkipped += url
+        // Stash clips do not use up the song's tries.
+        if (!VibeStash.isStash(this, url)) videoTries[videoKey] = (videoTries[videoKey] ?: 0) + 1
         val key = videoKey
         videoCache[key]?.let { list -> videoCache[key] = list.filter { it.url != url } }
         if (permanent) Thread { RaveVideoCache.removeClip(this, key, url) }.start()
-        if (i < 0) return
         videoPlaying = false
         videoClips = videoClips.filterIndexed { j, _ -> j != i }
-        if (videoIndex > i || videoIndex >= videoClips.size) videoIndex = (videoIndex - 1).coerceAtLeast(0)
+        // Next in line: the clip after the failed one (same index), or from the top when it was the last.
+        if (videoIndex > i) videoIndex -= 1
+        if (videoIndex >= videoClips.size) videoIndex = 0
+        // Nothing left that plays: keep trying with reserve videos (only once the lookup is finished).
+        if (videoClips.isEmpty() && videoCache.containsKey(key)) fetchReserve(key)
     }
 
     // ---------- Sangtekst (LRCLIB) ----------
@@ -1806,6 +1885,8 @@ class RaveActivity : ComponentActivity() {
     }
 
     companion object {
+        /** At most this many clips are tried per song before Rave gives up on video. */
+        private const val MAX_VIDEO_TRIES = 8
         private const val SPOTIFY = "com.spotify.music"
         private val BodyFont = FontFamily(Font(R.font.grenze_gotisch))
         private val DEFAULT_COLORS = listOf(Color(0xFF6B4F3A), Color(0xFF2E4A5C), Color(0xFF4A3550))

@@ -54,7 +54,7 @@ internal class SilentClipView(context: Context, private val url: String,
         surface = Surface(texture)
         try {
             player = ExoPlayer.Builder(context)
-                .setMediaSourceFactory(DefaultMediaSourceFactory(RaveVideoCache.dataSource(context, store)))
+                .setMediaSourceFactory(DefaultMediaSourceFactory(if (VibeStash.isStash(context, url)) VibeStash.dataSource(context) else RaveVideoCache.dataSource(context, store)))
                 .build().also { p ->
                     p.setVideoSurface(surface)
                     p.volume = 0f
