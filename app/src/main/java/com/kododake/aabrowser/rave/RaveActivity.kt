@@ -121,8 +121,41 @@ class RaveActivity : ComponentActivity() {
     // Party profile per genre (hardstyle, rap, rock, EDM, standard), detected automatically.
     private val genreDetector = GenreDetector()
     private val songPhase = HardstyleStructure()
+    /** Shadow analysis: what the automatic song-part detection would say (logged in manual mode). */
+    private val autoPhase = HardstyleStructure()
+    /** What the app would say right now (shown in the feedback panel). */
+    private var autoShownPart by mutableStateOf(SongPart.INTRO)
+    /** Party analysis log on the phone (step 0 of the genre plan): one CSV line per bar. */
+    private val analysisLog by lazy { com.kododake.aabrowser.rave.party.AnalysisLog(java.io.File(filesDir, "rave-analyse")) }
+    private val logFrame = com.kododake.aabrowser.rave.party.AnalysisLog.Frame()
+    /** Raw FFT recording per song, replayed on the Mac to tune the analysis against Espen's feedback. */
+    private val fftRecorder by lazy { com.kododake.aabrowser.rave.party.FftRecorder(java.io.File(filesDir, "rave-analyse/fft")) }
     private val hardSubDetector = HardSubDetector()
     private var hardSub by mutableStateOf(HardSub.RAW)
+    /** Espen's corrections of the song part, remembered per song (replayed on the next play). */
+    private val songMarks by lazy { com.kododake.aabrowser.rave.party.SongMarks(java.io.File(filesDir, "song-marks.json")) }
+    private var songKey = ""
+    private var marksForSong: List<com.kododake.aabrowser.rave.party.SongMarks.Mark> = emptyList()
+    private var lastMarkCheckPos = -1L
+    /**
+     * Espen's «for mye» / «for lite» per genre + song part (e.g. hardstyle intro): multiplies the
+     * effects at once and is saved, so it holds for every song of that genre (prefs «rave», tune_*).
+     */
+    private val partTune = HashMap<String, Float>()
+    private fun tuneKey(g: Genre, p: SongPart) = "tune_${g.name}_${(if (p == SongPart.VOCAL) SongPart.BREAKDOWN else p).name}"
+    private fun tuneOf(g: Genre, p: SongPart): Float = partTune.getOrPut(tuneKey(g, p)) {
+        try { getSharedPreferences("rave", MODE_PRIVATE).getFloat(tuneKey(g, p), 1f) } catch (_: Exception) { 1f }
+    }
+    /** One step more (or less) for the current genre and song part; returns the new level. */
+    private fun adjustTune(more: Boolean): Float {
+        val k = tuneKey(genre, songPhase.part)
+        val v = (tuneOf(genre, songPhase.part) * if (more) TUNE_STEP_UP else TUNE_STEP_DOWN).coerceIn(TUNE_MIN, TUNE_MAX)
+        partTune[k] = v
+        try { getSharedPreferences("rave", MODE_PRIVATE).edit().putFloat(k, v).apply() } catch (_: Exception) { }
+        return v
+    }
+    /** The song part right now (for highlighting the correction buttons). */
+    private var shownPart by mutableStateOf(SongPart.INTRO)
     private var partLabelAt by mutableLongStateOf(0L)
     private var subChangedAt by mutableLongStateOf(0L)
     private var lastStrobeAt = 0L
@@ -263,6 +296,7 @@ class RaveActivity : ComponentActivity() {
         if (hardstyleOn) {
             hardstyleAudioAt = SystemClock.uptimeMillis()
             hardstyleFrame = hardstyleAudio.accept(fft, sampleRateHz, hardstyleAudioAt)
+            if (playing) fftRecorder.record(fft, sampleRateHz, hardstyleAudioAt, positionMs())
         } else onFft(fft)
     }
 
@@ -301,7 +335,7 @@ class RaveActivity : ComponentActivity() {
     private var plainLyrics by mutableStateOf<String?>(null)
     private var lyricsState by mutableStateOf("")
     private var pos by mutableLongStateOf(0L)
-    private var lastState: PlaybackState? = null
+    @Volatile private var lastState: PlaybackState? = null
     private var lyricsKey = ""
     /** Chosen lyrics style (swipe the lyrics to change) and glass box vs. open text (double-tap). */
     private var lyricsStyle by mutableStateOf(LyricsStyle.SCROLL)
@@ -436,6 +470,8 @@ class RaveActivity : ComponentActivity() {
 
     override fun onStop() {
         Thread { RaveVideoCache.flush(applicationContext) }.start() // pending watch time
+        analysisLog.endSong()
+        fftRecorder.endSong()
         super.onStop()
         foreground = false
         videoPlaying = false
@@ -496,6 +532,7 @@ class RaveActivity : ComponentActivity() {
             hardstyleFrame = HardstyleFrame()
             genreDetector.newTrack(SystemClock.uptimeMillis())
             songPhase.newTrack(SystemClock.uptimeMillis())
+            autoPhase.newTrack(SystemClock.uptimeMillis())
             loudNoDropS = 0f
             beatClock.reset(); dip = 0f; dropHit = 0f; lastPart = SongPart.INTRO; dropLook = 0
             dipStartedAt = 0L; dipSpent = false
@@ -503,6 +540,11 @@ class RaveActivity : ComponentActivity() {
             hardSubDetector.newTrack()
             val t = m?.getString(MediaMetadata.METADATA_KEY_TITLE).orEmpty()
             val a = m?.getString(MediaMetadata.METADATA_KEY_ARTIST).orEmpty()
+            analysisLog.startSong(t, a)
+            songKey = songMarks.key(a, t)
+            marksForSong = songMarks.marks(songKey)
+            lastMarkCheckPos = -1L
+            fftRecorder.startSong(t, a)
             songVibe = null // new song: its own vibe arrives below
             songGenre = ""
             songDeezerGenres = emptyList()
@@ -746,6 +788,8 @@ class RaveActivity : ComponentActivity() {
         try {
             val v = Visualizer(0)
             val range = Visualizer.getCaptureSizeRange()
+            android.util.Log.d("RaveGenre", "visualizer: maks fangst %.1f/s, størrelse %d–%d"
+                .format(java.util.Locale.US, Visualizer.getMaxCaptureRate() / 1000f, range[0], range[1]))
             v.captureSize = (if (hardstyleOn) 2048 else 512).coerceIn(range[0], range[1])
             v.setDataCaptureListener(object : Visualizer.OnDataCaptureListener {
                 override fun onWaveFormDataCapture(vis: Visualizer?, waveform: ByteArray?, samplingRate: Int) {}
@@ -883,11 +927,39 @@ class RaveActivity : ComponentActivity() {
                     if (!playing || !fresh) beatClock.reset()
                     val clockOn = v >= BEAT_CLOCK_FROM_VIBE
                     val clockKick = if (playing && fresh && clockOn) beatClock.pulse(rawTarget, nowMs, BEAT_LEAD_MS + syncMs) else null
-                    val visualInput = if (clockKick != null) rawTarget.copy(kick = clockKick) else rawTarget
+                    val clocked = if (clockKick != null) rawTarget.copy(kick = clockKick) else rawTarget
+                    // In a build-up the snare roll must not become kicks, bass and grit through the rock
+                    // half of the slider's top (that made the build-up wilder than the drop, log 2026-11-06).
+                    val visualInput = if (songPhase.part == SongPart.BUILDUP) clocked.copy(snare = clocked.snare * .3f) else clocked
                     val shapedFull = vibeShape(visualInput, v, r)
                     // Song structure (hardstyle/EDM): calm intro, rising build-up, max chaos on the drop.
                     val phaseIntensity = if (playing && fresh)
                         songPhase.update(rawTarget, nowMs, positionMs(), if (songDurationMs > 0L) songDurationMs else -1L) else 1f
+                    // Manual mode while «Analyse» is on: Espen decides the song part; the automatic guess
+                    // keeps running in the shadow instance only for the log.
+                    val manualParts = showAnalysis
+                    if (songPhase.manual != manualParts) {
+                        songPhase.manual = manualParts
+                        // Switching manual on mid-song: start from what the automatic analysis says now.
+                        if (manualParts && autoPhase.part != songPhase.part) songPhase.force(autoPhase.part, nowMs, "start manuell")
+                    }
+                    if (playing && fresh) autoPhase.update(rawTarget, nowMs, positionMs(), if (songDurationMs > 0L) songDurationMs else -1L)
+                    if (autoShownPart != autoPhase.part) autoShownPart = autoPhase.part
+                    // Remembered corrections for this song: switch when playback passes one (a little
+                    // early, since Espen tapped after hearing it). Only for normal playback, not seeks.
+                    if (playing && fresh && marksForSong.isNotEmpty()) {
+                        val pos = positionMs()
+                        val prev = lastMarkCheckPos
+                        if (prev >= 0L && pos > prev && pos - prev < 1_000L) marksForSong.forEach { m ->
+                            val at = m.positionMs - MARK_LEAD_MS
+                            if (at in (prev + 1)..pos) runCatching { SongPart.valueOf(m.part) }.getOrNull()
+                                ?.let { songPhase.force(it, nowMs, "husket ${"%.1f".format(m.positionMs / 1000f)} s") }
+                        }
+                        // Position jitters back a little sometimes: never move the check point backwards
+                        // for small steps (a mark would fire twice); a real seek back resets it.
+                        lastMarkCheckPos = if (pos >= prev || prev - pos > 2_000L) pos else prev
+                    }
+                    if (shownPart != songPhase.part) shownPart = songPhase.part
                     partLabelAt = songPhase.labelAt
                     // HUD: only while shown, at most ~7 times a second (no needless recomposition).
                     if (showAnalysis && hardstyleOn && nowMs - lastHudAt >= 150L) { hudData = songPhase.hud; lastHudAt = nowMs }
@@ -897,7 +969,9 @@ class RaveActivity : ComponentActivity() {
                     // At the very top the song structure only holds back half as much (rock mode had
                     // none, which is part of why it felt harder): still calmer in intro/breakdown,
                     // max on the drop. Real rock lets go of it completely.
-                    val sw = structureWeight(v) * (1f - hardW * max(r, .5f))
+                    // Only real rock lets go of it (log 2026-11-06: half strength at the top kept the
+                    // effects on everywhere, so intros got «for mye» and drops looked no bigger).
+                    val sw = structureWeight(v) * (1f - hardW * r)
                     // Safety net: loud music for a long time without a recognised drop means the drop
                     // was missed — then stop holding back (why some hardstyle felt better in rock mode).
                     // Build-ups and breakdowns are meant to hold back, so they never count.
@@ -906,7 +980,12 @@ class RaveActivity : ComponentActivity() {
                     if (!playing || heldOnPurpose || rawTarget.energy < .3f) loudNoDropS = 0f
                     else if (rawTarget.energy > .55f) loudNoDropS += dt
                     val missedDrop = ((loudNoDropS - 20f) / 10f).coerceIn(0f, 1f)
-                    val pi = max(1f + (phaseIntensity - 1f) * sw, .9f * missedDrop)
+                    // The end of every song calms down like an outro (Espen 2026-11-06), whatever part it is
+                    // in and also when he steers the parts by hand: the last OUTRO_FADE_MS fade to a calm level.
+                    val remainingMs = if (songDurationMs > 0L) songDurationMs - positionMs() else -1L
+                    val outroFade = if (remainingMs in 0L until OUTRO_FADE_MS)
+                        OUTRO_FLOOR + (1f - OUTRO_FLOOR) * (remainingMs.toFloat() / OUTRO_FADE_MS) else 1f
+                    val pi = max(1f + (phaseIntensity - 1f) * sw, .9f * missedDrop) * outroFade
                     val inDrop = sw > 0f && songPhase.part == SongPart.DROP
                     // Strobe and ripples wait until a drop has proven real (2 s) — no chaos on fake drops.
                     val effectsOn = sw <= .5f || songPhase.effectsAllowed || missedDrop >= 1f
@@ -933,7 +1012,9 @@ class RaveActivity : ComponentActivity() {
                         sw <= 0f -> shapedFull
                         // In the drop the effects follow the music's own heaviness (no forced full
                         // input — Espen prefers a bit too little over too much chaos).
-                        inDrop -> shapedFull.copy(heavy = (shapedFull.heavy * pi).coerceAtMost(1f),
+                        // In a confirmed drop the heaviness never falls under a floor, so the drop stays a drop.
+                        inDrop -> shapedFull.copy(heavy = max(shapedFull.heavy * pi,
+                                if (effectsOn) DROP_HEAVY_FLOOR * sw * pi.coerceAtMost(1f) else 0f).coerceAtMost(1f),
                             grit = if (effectsOn) shapedFull.grit else 0f)
                         // Outside the drop: keep pumping to every beat; only the chaos is held back.
                         else -> shapedFull.copy(
@@ -977,14 +1058,16 @@ class RaveActivity : ComponentActivity() {
                     val lookShake = if (!inShowDrop) 1f else when (dropLook) { 0 -> 1.15f; 1 -> .75f; else -> .9f }
                     val lookParticles = if (inShowDrop && dropLook == 1) 1.1f else 1f
                     flashesNow = flashBudget.perSecond(nowMs)
+                    // Espen's saved «for mye / for lite» for this genre and song part.
+                    val tune = tuneOf(genre, part)
                     val p = vibeProfile(v, r)
                     // Strobe only in the drop; shake/particles/spikes follow the song part.
                     partyProfile = PartyProfile(
-                        p.spike * (.75f + .25f * pi) * subMul(sub.spike) * lookSpike,
-                        p.particles * (.6f + .4f * pi) * subMul(sub.particles) * (1f + .8f * buildRise) * lookParticles,
-                        p.shake * pi * subMul(sub.shake) * lookShake,
+                        p.spike * (.75f + .25f * pi) * subMul(sub.spike) * lookSpike * tune,
+                        p.particles * (.6f + .4f * pi) * subMul(sub.particles) * (1f + BUILD_PARTICLE_RISE * buildRise) * lookParticles * tune,
+                        p.shake * pi * subMul(sub.shake) * lookShake * tune,
                         p.strobe * (if (effectsOn && pi >= .9f) 1f else 0f) * subMul(sub.strobe),
-                        p.density * (1f + .5f * buildRise), p.softness)
+                        p.density * (1f + BUILD_DENSITY_RISE * buildRise), p.softness)
                     // Pop: calm in the verse, a little more push in the chorus (Espen 2026-11-06) — small steps.
                     val popLift = if (vibeAuto && genre == Genre.POP) genreDetector.chorus else 0f
                     if (popLift > 0f) partyProfile = partyProfile.copy(
@@ -992,7 +1075,11 @@ class RaveActivity : ComponentActivity() {
                         particles = partyProfile.particles * (1f + .4f * popLift))
                     val shapedPop = if (popLift > 0f) shaped.copy(kick = (shaped.kick * (1f + .6f * popLift)).coerceAtMost(1f),
                         bass = (shaped.bass * (1f + .15f * popLift)).coerceAtMost(1f)) else shaped
-                    val target = if (buildRise > 0f) shapedPop.copy(kick = max(shapedPop.kick, shapedPop.snare * .6f * buildRise)) else shapedPop
+                    val untuned = if (buildRise > 0f) shapedPop.copy(kick = max(shapedPop.kick, rawTarget.snare * .45f * buildRise)) else shapedPop
+                    // The pump follows the «for mye / for lite» level a little (not heavy: strobe and shake
+                    // multiply kick × heavy × shake, so tuning all of them would stack up and kill the drop).
+                    val target = if (tune == 1f) untuned else
+                        untuned.copy(kick = (untuned.kick * tune.coerceIn(.75f, 1.15f)).coerceAtMost(1f))
                     val liveSpectrum = playing && fresh
                     for (i in 0 until SPECTRUM_BANDS) {
                         val goal = if (liveSpectrum) target.spectrum[i] else 0f
@@ -1021,6 +1108,7 @@ class RaveActivity : ComponentActivity() {
                         val punch = partyProfile.shake * f.kick * volumeGain(volume) *
                             (f.heavy * (10.dp.toPx() + loudness(volume) * 4.dp.toPx()) * (1f + ramp * .8f) + ramp * 5.dp.toPx())
                         val tremble = screechShake * f.screech * 7.dp.toPx() * volumeGain(volume)
+                        logFrame.shakePx = (punch + tremble) / density.density   // in dp, comparable between phones
                         if (f.kick < .3f) shakeDirection[1] = 1f
                         if (f.kick > .55f && shakeDirection[1] == 1f) {
                             shakeDirection[1] = 0f
@@ -1035,6 +1123,27 @@ class RaveActivity : ComponentActivity() {
                         shakeY = if (big) y else 0f
                         // A hint of rotation only on heavy hits (max ~0.8°).
                         shakeRotation = if (big) (f.heavy * f.kick * .8f * if (shakeDirection[0] > PI) -1f else 1f) else 0f
+                    }
+                    // Analysis log: what was measured and what the effects did (one CSV line per bar).
+                    if (playing && fresh) with(logFrame) {
+                        positionMs = positionMs()
+                        beat = rawTarget.beat
+                        this.part = part.name
+                        dropKind = songPhase.dropKind.name
+                        autoPart = autoPhase.part.name
+                        autoDrop = autoPhase.dropKind.name
+                        manual = songPhase.manual
+                        this.genre = this@RaveActivity.genre.name
+                        this.sub = sub.name
+                        vibe = v; this.sw = sw; this.effectsOn = effectsOn; this.pi = pi; this.buildRise = buildRise
+                        this.volume = this@RaveActivity.volume
+                        bass = rawTarget.bass; kick = rawTarget.kick; heavy = rawTarget.heavy; grit = rawTarget.grit
+                        screech = rawTarget.screech; subBass = rawTarget.sub; energy = rawTarget.energy
+                        highMotion = rawTarget.highMotion; snare = rawTarget.snare; bpm = rawTarget.bpm
+                        outHeavy = target.heavy; outGrit = target.grit; outKick = target.kick
+                        strobe = partyProfile.strobe; particles = partyProfile.particles
+                        spike = partyProfile.spike; this.density = partyProfile.density
+                        analysisLog.frame(this, nowMs)
                     }
                 }
             }
@@ -1353,9 +1462,14 @@ class RaveActivity : ComponentActivity() {
             if (hardstyleOn && showSongList)
                 SongList(Modifier.align(Alignment.TopStart).padding(start = if (partyControls) 100.u else 12.u, end = 12.u, bottom = 12.u,
                     top = if (transportVisible) 96.u else 12.u))
-            else if (hardstyleOn && showAnalysis && vibe >= .5f)
-                AnalysisHud(Modifier.align(Alignment.TopStart).padding(start = if (partyControls) 100.u else 12.u, end = 12.u, bottom = 12.u,
+            else if (hardstyleOn && showAnalysis)
+                // Analysis panel on the right, feedback buttons on the left (Espen 2026-11-06: swapped).
+                AnalysisHud(Modifier.align(Alignment.TopEnd).padding(start = 12.u, end = 12.u, bottom = 12.u,
                     top = if (transportVisible) 96.u else 12.u))
+            // Feedback buttons (with the analysis): Espen's answer key for training the genre rules.
+            // Left side, clear of the vibe slider while the Party controls show.
+            if (hardstyleOn && showAnalysis)
+                FeedbackPanel(Modifier.align(Alignment.BottomStart).padding(start = if (partyControls) 100.u else 16.u, bottom = 16.u))
             // Vibe slider: shown with the other buttons (one tap) while Party is on.
             if (partyControls) BoxWithConstraints(
                 Modifier.align(Alignment.CenterStart).fillMaxHeight()
@@ -1837,6 +1951,76 @@ class RaveActivity : ComponentActivity() {
     }
 
     /** Live analysis panel: section, phrase position and the meters behind the decisions. */
+    private var feedbackShown by mutableStateOf<String?>(null)
+    private var feedbackAt by mutableLongStateOf(0L)
+
+    /** Espen corrects the song part: switch now, remember it for this song, log it as the answer key. */
+    private fun correctPart(next: SongPart) {
+        val fake = songPhase.force(next, SystemClock.uptimeMillis(), "Espen")
+        shownPart = songPhase.part
+        val pos = positionMs()
+        analysisLog.mark("rett_${next.name.lowercase()}")
+        if (fake) analysisLog.mark("fake_drop")
+        if (songKey.isNotBlank()) { songMarks.add(songKey, pos, next.name); marksForSong = songMarks.marks(songKey) }
+    }
+
+    /**
+     * Big buttons (usable in the car). Top: «Nå er det …» corrects the song part (and is remembered for
+     * the song). Bottom: how it felt. Every tap is saved with the song position — see AnalysisLog.mark.
+     */
+    @Composable
+    private fun FeedbackPanel(modifier: Modifier) {
+        // In the last part of the song the INTRO button is OUTRO (Espen 2026-11-06).
+        val late = songDurationMs > 0L && positionMs() >= songDurationMs * OUTRO_FROM_SHARE
+        val parts = listOf((if (late) "OUTRO" to SongPart.OUTRO else "INTRO" to SongPart.INTRO), "BUILD-UP" to SongPart.BUILDUP,
+            "DROP" to SongPart.DROP, "BREAKDOWN" to SongPart.BREAKDOWN)
+        val feelings = listOf("FOR MYE" to "for_mye", "FOR LITE" to "for_lite", "BRA!" to "bra", "FEIL SJANGER" to "feil_sjanger")
+        LaunchedEffect(feedbackAt) {
+            if (feedbackAt > 0L) { kotlinx.coroutines.delay(1500L); feedbackShown = null }
+        }
+        @Composable
+        fun button(label: String, on: Boolean, onClick: () -> String?) = Box(
+            Modifier.height(46.u).widthIn(min = 112.u).clip(RoundedCornerShape(50))
+                .background(if (on) Color(0xFFF5F2EC) else Color(0x33FFFFFF))
+                .clickable { feedbackShown = onClick() ?: label; feedbackAt = SystemClock.uptimeMillis() }
+                .padding(horizontal = 14.u),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(label, maxLines = 1, softWrap = false, fontSize = 14.us, fontWeight = FontWeight.SemiBold,
+                color = if (on) Color(0xFF0A0A0A) else Color(0xFFF5F2EC))
+        }
+        val dim = Color(0xB3F5F2EC)
+        Column(modifier, horizontalAlignment = Alignment.Start, verticalArrangement = Arrangement.spacedBy(6.u)) {
+            feedbackShown?.let {
+                Text("Lagret: $it", color = Color(0xFF0A0A0A), fontSize = 14.us, fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.clip(RoundedCornerShape(50)).background(Color(0xFFF5F2EC))
+                        .padding(horizontal = 14.u, vertical = 6.u))
+            }
+            Text("Nå er det …  (appen tror: ${autoShownPart.label})", color = dim, fontSize = 12.us)
+            parts.chunked(2).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(6.u)) {
+                    row.forEach { (label, part) ->
+                        val on = shownPart == part || (part == SongPart.BREAKDOWN && shownPart == SongPart.VOCAL)
+                        button(label, on) { correctPart(part); null }
+                    }
+                }
+            }
+            Text("Følelse", color = dim, fontSize = 12.us)
+            feelings.chunked(2).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(6.u)) {
+                    row.forEach { (label, kind) -> button(label, false) {
+                        analysisLog.mark(kind)
+                        // For mye / for lite change the effects right away for this genre + part (saved).
+                        if (kind == "for_mye" || kind == "for_lite") {
+                            val v = adjustTune(more = kind == "for_lite")
+                            "$label · ${genre.label.lowercase()} ${songPhase.part.label} ${"%.0f".format(v * 100f)} %"
+                        } else null
+                    } }
+                }
+            }
+        }
+    }
+
     @Composable
     private fun AnalysisHud(modifier: Modifier) {
         val h = hudData

@@ -13,6 +13,15 @@ internal const val QUIET_GATE = .1f
 /** Zaag/distortion is measured in the kick's TAIL (research: tail = 50–250 ms after the hit), so pads,
  *  leads and vocals between kicks don't count as distortion. */
 internal const val GRIT_TAIL_FROM_MS = 50L
+/** Grit only counts when the bass is at least this share of the song's loud level (full from +range). */
+internal const val GRIT_BASS_FROM = .45f
+internal const val GRIT_BASS_RANGE = .3f
+/** Bass this strong (norm) keeps the beat going through missed kicks (dense zaag drops). */
+internal const val FLYWHEEL_NORM = .55f
+/** At most this many filled-in kicks in a row while the bass stays strong. */
+internal const val FLYWHEEL_BEATS = 8
+/** Kick value of a flywheel beat (under the .95 the song structure counts as a heard kick). */
+internal const val FLYWHEEL_KICK = .85f
 internal const val GRIT_TAIL_TO_MS = 250L
 
 internal data class HardstyleFrame(val bass: Float = 0f, val kick: Float = 0f, val highs: Float = 0f,
@@ -146,7 +155,7 @@ internal class HardstyleAudio {
             val off = if (phase in .4f..(.6f)) 1f else 0f
             offbeatScore = offbeatScore * .92f + off * .08f
         }
-        val beat = beats.update(now, candidate || onset, norm > .3f)
+        val beat = beats.update(now, candidate || onset, norm > .3f, norm > FLYWHEEL_NORM)
         val burst = onset && norm > .55f && frame.energy < .35f && now-lastBurst >= 1800
         if (burst) lastBurst = now
         fun smooth(old: Float, target: Float, seconds: Float) = old + (target-old)*(1-exp(-dt/seconds))
@@ -156,24 +165,36 @@ internal class HardstyleAudio {
         longAverage = if (longAverage == 0f) value else smooth(longAverage, value, 12f)
         // Require real bass in absolute terms, so mid-heavy passages with little bass
         // (vocals, lead synths after autogain) do not count as distortion.
-        val gritNow = ((mid / max(value, 12f) - .35f) / .5f).coerceIn(0f, 1f) * (value / 20f).coerceIn(0f, 1f)
+        // …and the bass must be near this song's own loud level: in a build-up the bass is filtered
+        // away while risers/screeches fill the mids, which made mid/bass (= grit) highest right
+        // BEFORE the drop and low in it (log 2026-11-06). That screech is tension, not heaviness.
+        val bassPresent = if (songRef > 0f) ((value / songRef - GRIT_BASS_FROM) / GRIT_BASS_RANGE).coerceIn(0f, 1f) else 0f
+        val gritNow = ((mid / max(value, 12f) - .35f) / .5f).coerceIn(0f, 1f) * (value / 20f).coerceIn(0f, 1f) * bassPresent
         // Measure distortion only in the kick tail; between kicks just hold it (pads/leads don't count).
         // No kick heard for a while (long zaag tails can hide the attack) → measure as before.
         val anchor = max(lastKick, beats.lastBeat)
         val sinceKick = now - anchor
         val grit = when {
-            sinceKick > 600L -> gritNow
+            // No kick for a while: nothing to measure the distortion of (fades out instead of
+            // reading pads, risers and screeches as zaag).
+            sinceKick > 600L -> lastHeldGrit * exp(-dt / .3f)
             sinceKick in GRIT_TAIL_FROM_MS..GRIT_TAIL_TO_MS -> gritNow
             else -> lastHeldGrit * exp(-dt / .6f)
         }
         lastHeldGrit = grit
         val lift = ((shortAverage / max(4f, longAverage) - 1f) / .8f).coerceIn(0f, 1f)
-        val heavyRaw = norm * norm * (.5f * grit + .3f * lift + .2f * norm)
+        // How loud the bass is against this song's own loud parts (songRef falls over ~25 s), so a
+        // long drop stays heavy instead of adapting away like `lift` (log 2026-11-06: heavy .13 at
+        // the drop, .00 fifteen seconds later — the shake died in the middle of the drop).
+        val loudRel = if (songRef > 0f) ((shortAverage / songRef - .45f) / .45f).coerceIn(0f, 1f) else 0f
+        val heavyRaw = norm * norm * (.4f * grit + .15f * lift + .25f * loudRel + .2f * norm)
         val heavyTarget = ((heavyRaw - .12f) / .4f).coerceIn(0f, 1f)
         frame = HardstyleFrame(
             smooth(frame.bass, norm, if (norm > frame.bass) .025f else .18f),
             // Grid beats hit fully; off-grid onsets (syncopated rap/rock kicks) still pulse a bit.
-            if (beat) 1f else if (onset) max(.7f, frame.kick * exp(-dt/.085f)) else frame.kick * exp(-dt/.085f),
+            // Flywheel beats (kicks only predicted, see BeatTracker) pulse a little softer and stay
+            // under .95, so the song-structure analysis does not count them as heard kicks.
+            if (beat) (if (beats.flywheeling) FLYWHEEL_KICK else 1f) else if (onset) max(.7f, frame.kick * exp(-dt/.085f)) else frame.kick * exp(-dt/.085f),
             smooth(frame.highs, (high / max(8f, peak)).coerceIn(0f,1f), .08f),
             smooth(frame.energy, norm, .8f),
             if (burst) 1f else frame.burst * exp(-dt/.35f),
@@ -237,6 +258,8 @@ internal class BeatTracker {
     var confidence = 0
         private set
     private var predictedInRow = 0
+    /** The last beat was predicted beyond the normal 2 (bass strong, kicks not heard). */
+    val flywheeling: Boolean get() = predictedInRow > 2
     /** Number of beats so far (heard or filled in). */
     var count = 0
         private set
@@ -280,8 +303,13 @@ internal class BeatTracker {
         }
     }
 
-    /** True when a beat (heard or predicted) lands in this frame. */
-    fun update(now: Long, onset: Boolean, bassPresent: Boolean): Boolean {
+    /**
+     * True when a beat (heard or predicted) lands in this frame. [strongBass]: the low end is as
+     * loud as in a drop — then keep the beat going longer (flywheel). In a dense zaag drop the bass
+     * barely dips between kicks, so the onset test misses them; stopping after 2 filled-in kicks
+     * made the effects (and the drop itself) stop in the middle of the drop.
+     */
+    fun update(now: Long, onset: Boolean, bassPresent: Boolean, strongBass: Boolean = false): Boolean {
         var beat = false
         if (onset) {
             addOnset(now)
@@ -303,11 +331,13 @@ internal class BeatTracker {
         // Predicted kick: the grid is steady and bass is sounding, but no kick was heard.
         // At most 2 filled-in kicks in a row: when the kick really stops (breakdown), stop too,
         // even if a bassline or melody keeps going.
-        if (!beat && period > 0f && lastBeat > 0L && confidence >= 3 && bassPresent && predictedInRow < 2 &&
+        if (!beat && period > 0f && lastBeat > 0L && confidence >= 3 && bassPresent &&
+            predictedInRow < (if (strongBass) FLYWHEEL_BEATS else 2) &&
             now - lastBeat >= period - 25f) {
             beat = true
             lastBeat += period.toLong()
-            confidence -= 1
+            // While the bass stays strong, lose confidence only every 4th beat (drift guard).
+            if (!strongBass || predictedInRow % 4 == 0) confidence -= 1
             predictedInRow++
         }
         if (period > 0f && lastBeat > 0L && now - lastBeat > period * 2.5f) confidence = 0

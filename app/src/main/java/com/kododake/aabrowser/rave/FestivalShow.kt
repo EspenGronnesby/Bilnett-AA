@@ -17,6 +17,18 @@ internal const val BEAT_PULSE_DECAY_MS = 85f
 internal const val PRE_DROP_DIP_DEPTH = .85f
 /** Build-up progress (0..1) from where the dip starts even without a known phrase end. */
 internal const val PRE_DROP_BUILD_START = .75f
+/** Heaviness a confirmed drop never falls under (log 2026-11-06: it fell to 0 and the drop «stopped»). */
+internal const val DROP_HEAVY_FLOOR = .35f
+/** How much a build-up adds to particles / density at full build (was .8 / .5 — more than the drop). */
+internal const val BUILD_PARTICLE_RISE = .25f
+internal const val BUILD_DENSITY_RISE = .2f
+/** Remembered part corrections switch this early (Espen taps after he hears the change). */
+internal const val MARK_LEAD_MS = 400L
+/** The last part of every song fades down like an outro, to this share of the normal level. */
+internal const val OUTRO_FADE_MS = 20_000L
+internal const val OUTRO_FLOOR = .3f
+/** From this share of the song, the INTRO correction button becomes OUTRO. */
+internal const val OUTRO_FROM_SHARE = .6f
 /** The single big hit on the first beat of the drop (time constant; visible for ~0.6–0.8 s). */
 internal const val DROP_HIT_DECAY_S = .2f
 /** The dip never lasts longer than this per build-up, so a build-up without a drop can't stay dark. */
@@ -118,3 +130,8 @@ internal const val PAUSE_AFTER_MS = 700L
 internal const val PAUSE_AFTER_GUESSED_MS = 2_000L
 /** …and hidden again this long before the next line, so it can be read in time. */
 internal const val PAUSE_BEFORE_NEXT_MS = 1_500L
+/** «For mye» / «for lite»: one tap = −15 % / +15 % for that genre + song part, kept within 50–200 %. */
+internal const val TUNE_STEP_UP = 1.15f
+internal const val TUNE_STEP_DOWN = .85f
+internal const val TUNE_MIN = .5f
+internal const val TUNE_MAX = 2f

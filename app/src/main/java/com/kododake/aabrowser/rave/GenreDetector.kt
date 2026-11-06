@@ -476,6 +476,16 @@ internal data class StructureHud(
  */
 /** No new drop within this time of a confirmed one. */
 internal const val DROP_LOCKOUT_MS = 16_000L
+/** Analysis started this far into a song → it joined mid-song (no intro). */
+internal const val MID_SONG_JOIN_MS = 30_000L
+/** A pending drop is real if the sub is within this many dB of the song's loud level (subRef). */
+internal const val DROP_LOUD_MARGIN_DB = 3f
+/** A correction from Espen holds the song part this many bars. */
+internal const val FORCE_HOLD_BARS = 8
+/** DROP corrected back to BUILD-UP within this time = a fake drop. */
+internal const val FAKE_DROP_WINDOW_MS = 10_000L
+/** A corrected build-up holds this long at most (a real drop ends it earlier). */
+internal const val FORCE_HOLD_BUILDUP_BARS = 16
 
 internal class HardstyleStructure {
     var part = SongPart.INTRO
@@ -509,6 +519,18 @@ internal class HardstyleStructure {
     private var snareRate = 0f; private var lastSnare = 0f
     private var lastKick = 0f; private var lastKickAt = 0L
     private var started = false
+    private var joinChecked = false
+    /** Espen corrected the song part: automatic changes wait until then (see [force]). */
+    private var forcedUntil = 0L
+    /** The correction allows a real drop to take over (only a corrected BUILD-UP does). */
+    private var forcedDropOk = true
+    /**
+     * Manual mode (Espen in «Analyse»): the song part only changes when he says so ([force]); the
+     * automatic guess runs in a separate shadow instance and is only logged.
+     */
+    var manual = false
+    private var lastBarMs = 1600f
+    private var lastSongFraction = -1f
     // section state
     private var primed = false
     private var introOver = false
@@ -529,11 +551,62 @@ internal class HardstyleStructure {
 
     fun newTrack(now: Long) {
         part = SongPart.INTRO; dropKind = DropKind.NONE; label = ""; labelAt = 0L; hud = StructureHud()
-        trackStart = now; partSince = now; started = false
+        trackStart = now; partSince = now; started = false; joinChecked = false; forcedUntil = 0L
         primed = false; introOver = false; buildSince = 0L; notBuildSince = 0L; dropHitAt = 0L; dropLowSince = 0L
         realDrops = 0; boostNext = false; dropBoost = 0f; intensity = .4f; lastBannerAt = 0L
         phaseVotes.fill(0); lastBarLogged = -1; lastKickAt = 0L; snareRate = 0f; grit1 = 0f
         noise1 = 0f; noise8 = 0f; lastRealDropAt = 0L; lastFakeAt = 0L
+    }
+
+    /**
+     * Espen's correction («nå er det DROP» …), live or replayed from the song's remembered marks.
+     * Switches at once and holds the part for [FORCE_HOLD_BARS] bars before automatic changes may
+     * happen again. A real drop can still be detected out of a corrected build-up/breakdown/intro.
+     */
+    fun force(next: SongPart, now: Long, why: String): Boolean {
+        // DROP and then back to BUILD-UP within a few seconds = a fake drop (Espen 2026-11-06):
+        // it doesn't count as a drop, and the real drop after it hits a bit harder.
+        val fake = next == SongPart.BUILDUP && part == SongPart.DROP && now - dropHitAt < FAKE_DROP_WINDOW_MS
+        if (fake) {
+            realDrops = maxOf(0, realDrops - 1)
+            boostNext = true
+            lastFakeAt = now
+            show("FAKE DROP", now, always = true)
+            Log.d("RaveGenre", "FAKE DROP (rettet: $why)")
+        }
+        when (next) {
+            SongPart.DROP -> {
+                if (part != SongPart.DROP || dropKind == DropKind.PENDING || dropKind == DropKind.NONE) {
+                    realDrops++
+                    lastRealDropAt = now; dropHitAt = now
+                    dropSubAtHit = subFast; dropBaseline = minOf(sub8, subMin + 3f)
+                    dropBoost = if (boostNext) .1f else 0f; boostNext = false
+                    dropKind = when {
+                        lastSongFraction >= .6f -> DropKind.LAST
+                        realDrops == 1 -> DropKind.FIRST
+                        else -> DropKind.MIDDLE
+                    }
+                    show(dropKind.label, now, always = true)
+                }
+                primed = false; introOver = true; dropLowSince = 0L; buildSince = 0L
+            }
+            else -> {
+                dropKind = DropKind.NONE; dropBoost = 0f; dropLowSince = 0L
+                if (next == SongPart.BUILDUP) buildSince = now - 2_000L
+                if (next != SongPart.INTRO) introOver = true
+                // Like enter(): after a build-up/breakdown the next sub slam is a drop.
+                primed = next == SongPart.BUILDUP || next == SongPart.BREAKDOWN ||
+                    next == SongPart.VOCAL || next == SongPart.ANTI_CLIMAX
+            }
+        }
+        if (part != next) { Log.d("RaveGenre", "del: ${part.label} → ${next.label} (rettet: $why)"); part = next; partSince = now }
+        // A build-up lasts until its drop (8–16 bars); breakdown/intro/drop hold 8 bars. After Espen
+        // said breakdown or intro, no «drop» may override him during the hold (log 2026-11-06,
+        // «A Million Dreams»: four BREAKDOWN taps in a row, each overridden by a drop 1 s later).
+        val bars = if (next == SongPart.BUILDUP) FORCE_HOLD_BUILDUP_BARS else FORCE_HOLD_BARS
+        forcedUntil = now + (bars * lastBarMs).toLong()
+        forcedDropOk = next == SongPart.BUILDUP
+        return fake
     }
 
     // Floor 2.5: 8-bit FFT values of 0/1 would otherwise flicker ±6 dB in quiet parts.
@@ -567,6 +640,14 @@ internal class HardstyleStructure {
             subFast = subDb; sub1 = subDb; sub8 = subDb; air1 = airDb; air8 = airDb; subRef = subDb; subMin = subDb
             noise1 = f.noise; noise8 = f.noise; started = true
         }
+        // Party switched on (or the app reopened) in the middle of a song: this is not its intro,
+        // and the next big sub hit may well be a drop (log 2026-11-06: joined at 1:41, the drop
+        // at 2:04 was missed because the analysis still thought it was the intro). Decided 1.5 s in,
+        // from where the song was when we started, so a stale position of the previous song can't fool it.
+        if (!joinChecked && now - trackStart >= 1_500L && positionMs >= 0L) {
+            joinChecked = true
+            if (positionMs - (now - trackStart) > MID_SONG_JOIN_MS) { introOver = true; primed = true }
+        }
         subFast = ema(subFast, subDb, .25f); sub1 = ema(sub1, subDb, 1f); sub8 = ema(sub8, subDb, 8f)
         subRef = max(sub1, subRef - dt * (6f / 25f))      // peak-hold, falls ~6 dB over 25 s
         subMin = minOf(sub1, subMin + dt * 1.5f)          // recent low point
@@ -580,10 +661,13 @@ internal class HardstyleStructure {
         snareRate = snareRate * exp(-dt / 2f) + (if (snareHit) 1f else 0f) / 2f
 
         val barMs = if (f.bpm in 100f..260f) 240_000f / f.bpm else 1600f
+        lastBarMs = barMs
+        val forced = manual || now < forcedUntil
         val subRel = sub1 - sub8          // dB vs the last ~8 s
         val subHitRel = subFast - sub8
         val airTrend = air1 - air8
         val songFraction = if (durationMs > 0L && positionMs >= 0L) positionMs.toFloat() / durationMs else -1f
+        lastSongFraction = songFraction
         val remainingMs = if (durationMs > 0L && positionMs >= 0L) durationMs - positionMs else -1L
         val kickGone = lastKickAt == 0L || now - lastKickAt > barMs     // no kick for a whole bar
         // Hardstyle intros are 16–32 bars; after 32 bars without anything else it is over.
@@ -605,8 +689,11 @@ internal class HardstyleStructure {
         when (part) {
             SongPart.DROP -> {
                 // Confirm after one bar: the sub must still be well above where it was before.
-                if (dropKind == DropKind.PENDING && now - dropHitAt >= barMs) {
-                    if (sub1 - dropBaseline >= 3f) {
+                if (!forced && dropKind == DropKind.PENDING && now - dropHitAt >= barMs) {
+                    // Real when the sub rose ≥ 3 dB over where it was, OR it sits at this song's own loud
+                    // level with the kick going (a short dip before the drop leaves little to rise from).
+                    val atLoudLevel = sub1 >= subRef - DROP_LOUD_MARGIN_DB && !kickGone && sub1 - dropBaseline >= 1.5f
+                    if (sub1 - dropBaseline >= 3f || atLoudLevel) {
                         realDrops++
                         lastRealDropAt = dropHitAt
                         primed = false
@@ -638,7 +725,7 @@ internal class HardstyleStructure {
                     }
                 }
                 // Leave the drop when the sub stays ≥ 6 dB under its drop level for a whole bar.
-                if (part == SongPart.DROP && dropKind != DropKind.PENDING) {
+                if (!forced && part == SongPart.DROP && dropKind != DropKind.PENDING) {
                     if (sub1 < dropSubAtHit - 6f || kickGone) { if (dropLowSince == 0L) dropLowSince = now } else dropLowSince = 0L
                     if (dropLowSince > 0L && now - dropLowSince >= barMs) {
                         dropKind = DropKind.NONE; dropBoost = 0f; dropLowSince = 0L
@@ -647,6 +734,12 @@ internal class HardstyleStructure {
                             buildSince > 0L -> SongPart.BUILDUP
                             else -> SongPart.GROOVE
                         }, now, "bassen borte i 1 takt")
+                    } else if (buildSince > 0L && now - buildSince >= 2_000L) {
+                        // A build-up started inside what we thought was the drop (bass filtered away,
+                        // treble/rolls rising for 2 s): the drop is over (log 2026-11-06, «Daylight»:
+                        // Espen pressed BUILD-UP twice while the analysis still said DROP).
+                        dropKind = DropKind.NONE; dropBoost = 0f; dropLowSince = 0L
+                        enter(SongPart.BUILDUP, now, "build-up inni dropet")
                     }
                 }
             }
@@ -658,14 +751,27 @@ internal class HardstyleStructure {
                 // 8 bars at most, so fast uptempo/frenchcore drops close together are still caught.
                 val lockedOut = lastRealDropAt > 0L && now - lastRealDropAt < minOf(DROP_LOCKOUT_MS, (8 * barMs).toLong())
                 val afterFake = lastFakeAt > 0L && now - lastFakeAt < (2 * barMs).toLong()
-                val mayDrop = !lockedOut && !afterFake && (primed || part == SongPart.BUILDUP || part == SongPart.BREAKDOWN ||
-                    part == SongPart.VOCAL || part == SongPart.ANTI_CLIMAX)
+                // From the intro too, once it has played ≥ 8 bars (the 8 s average is settled by then):
+                // a drop can come straight out of an intro whose build-up wasn't recognised
+                // (log 2026-11-06: sub +7..9 dB at Espen's «drop nå», never allowed because INTRO).
+                // Same in the groove between drops: a build-up we didn't recognise must not mean the
+                // drop after it is never allowed (log 2026-11-06, «Daylight»: drop at 0:45 in GROOVE).
+                // Unprepared (INTRO/GROOVE, no build-up seen): only ≥ 16 bars in, and only as a return
+                // from a real dip — not just the kick starting after a quiet intro (log 2026-11-06,
+                // «Darkness»: a «drop» at 0:15 got two «for mye»).
+                val unprepared = !primed && (part == SongPart.INTRO || part == SongPart.GROOVE)
+                val introDropOk = unprepared && now - trackStart > 16 * barMs
+                val blockedByCorrection = manual || (forced && !forcedDropOk)
+                val mayDrop = !lockedOut && !afterFake && !blockedByCorrection && (primed || introDropOk || part == SongPart.BUILDUP ||
+                    part == SongPart.BREAKDOWN || part == SongPart.VOCAL || part == SongPart.ANTI_CLIMAX)
                 // Also after a short build-up (where the 8 s average hasn't sunk much): the sub is back
                 // near its peak level after a clear dip of ≥ 6 dB.
                 val backFromDip = subFast - subMin >= 6f && subFast >= subRef - 3f
-                if (mayDrop && (subHitRel >= 6f || backFromDip) && f.subLevel > 8f && now - lastKickAt < 300L) {
+                val hit = if (unprepared) backFromDip else subHitRel >= 6f || backFromDip
+                if (mayDrop && hit && f.subLevel > 8f && now - lastKickAt < 300L) {
                     dropHitAt = now; dropBaseline = minOf(sub8, subMin + 3f); dropSubAtHit = subFast
                     dropKind = DropKind.PENDING; introOver = true
+                    forcedUntil = 0L   // a drop heard out of a corrected part takes over at once
                     voteBoundary(f.beat)
                     enter(SongPart.DROP, now, "sub +%.1f dB".format(subHitRel))
                 } else {
@@ -681,8 +787,8 @@ internal class HardstyleStructure {
                         !introOver -> SongPart.INTRO
                         else -> SongPart.GROOVE
                     }
-                    // Other changes need a bar of evidence (not one beat).
-                    if (next != part && now - partSince >= barMs.toLong()) {
+                    // Other changes need a bar of evidence (not one beat); none while a correction holds.
+                    if (!forced && next != part && now - partSince >= barMs.toLong()) {
                         enter(next, now, "takt-bevis")
                     }
                 }
@@ -714,8 +820,10 @@ internal class HardstyleStructure {
         val boost = dropBoost
         val target = when (part) {
             SongPart.INTRO -> .4f
-            SongPart.BREAKDOWN, SongPart.VOCAL -> .2f
-            SongPart.BUILDUP -> (.4f + build * .35f).coerceIn(.4f, .75f)
+            // Breakdown dances along with the music, just not like the drop (Espen 2026-11-06:
+            // «mer som EDM der det danser, men ikke like intens»). Build-up a bit more, never the drop.
+            SongPart.BREAKDOWN, SongPart.VOCAL -> .5f
+            SongPart.BUILDUP -> (.55f + build * .25f).coerceIn(.55f, .8f)
             SongPart.DROP -> when (dropKind) {
                 DropKind.PENDING -> .9f
                 DropKind.FIRST -> .9f + boost

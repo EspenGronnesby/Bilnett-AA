@@ -15,3 +15,5 @@ local.properties
 icon.png
 /test
 /tmp
+# Python cache (tools/)
+__pycache__/
