@@ -181,22 +181,29 @@ internal object SpotifyVideoLookup {
         return out
     }
 
-    private val VIBE_TERMS = mapOf(Genre.RAP to "hip hop", Genre.ROCK to "rock", Genre.EDM to "edm", Genre.STANDARD to "pop")
+    private val VIBE_TERMS = mapOf(Genre.RAP to "hip hop", Genre.ROCK to "rock", Genre.EDM to "edm", Genre.STANDARD to "pop", Genre.POP to "pop")
     private val HARDSTYLE_ARTISTS = listOf("Brennan Heart", "Wildstylez", "Sub Zero Project", "Headhunterz", "Da Tweekaz", "D-Block & S-te-Fan")
 
     /** Apple Music's genre for the song (e.g. "Hip-Hop/Rap", "Rock", "Dance"), or null. */
-    fun genreFor(title: String, artist: String): String? {
+    fun genreFor(title: String, artist: String): String? = appleGenre(title, artist).first
+
+    /**
+     * Apple's genre and whether it came from this exact song (true) or only from another song /
+     * the main genre of the same artist (false — a weaker hint).
+     */
+    fun appleGenre(title: String, artist: String): Pair<String?, Boolean> {
         // Spotify titles often carry extras ("- Remastered 2011", "(feat. X)") that Apple lacks.
         val clean = title.replace(Regex("\\s*[-–(\\[].*$"), "").trim().ifBlank { title }
         val mainArtist = artist.split(Regex("\\s*(?:,|&| feat\\.? | featuring )\\s*", RegexOption.IGNORE_CASE)).first()
         val hits = search("$mainArtist $clean", "no", "song") + search("$mainArtist $clean", "us", "song")
         val exact = hits.firstOrNull { norm(it.optString("trackName")).startsWith(norm(clean)) && sameArtist(it.optString("artistName"), artist) }
         val byArtist = hits.firstOrNull { sameArtist(it.optString("artistName"), artist) }
-        (exact ?: byArtist)?.optString("primaryGenreName")?.takeIf { it.isNotBlank() }?.let { return it }
+        exact?.optString("primaryGenreName")?.takeIf { it.isNotBlank() }?.let { return it to true }
+        byArtist?.optString("primaryGenreName")?.takeIf { it.isNotBlank() }?.let { return it to false }
         // Last resort: the artist's own main genre.
         val artistHits = search(mainArtist, "no", "musicArtist") + search(mainArtist, "us", "musicArtist")
         return artistHits.firstOrNull { sameArtist(it.optString("artistName"), artist) }
-            ?.optString("primaryGenreName")?.takeIf { it.isNotBlank() }
+            ?.optString("primaryGenreName")?.takeIf { it.isNotBlank() } to false
     }
 
     private fun sameArtist(candidate: String, artist: String): Boolean {

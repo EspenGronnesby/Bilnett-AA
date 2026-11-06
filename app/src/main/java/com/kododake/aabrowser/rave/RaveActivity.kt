@@ -203,11 +203,26 @@ class RaveActivity : ComponentActivity() {
     }
     /** Short name for a slider value, e.g. ROLIG, RAP, EDM, ROCK or the hardstyle sub-genre (RAW …). */
     private fun vibeLabel(v: Float): String = when {
+        // Auto found pop: the low part of the slider is «POP», not «ROLIG»/«RAP».
+        vibeAuto && genre == Genre.POP && v < .375f -> "POP"
         v < .125f -> "ROLIG"
         v < .375f -> "RAP"
         v < .75f -> "EDM"
         rockness >= .5f -> "ROCK"
         else -> hardSub.label
+    }
+    /** Writes the song that is ending into the genre list (only when Party analysed it ≥ 15 s). */
+    private fun recordGenre() {
+        val t = title; val a = artist
+        if (t.isBlank() || a.isBlank() || genreDetector.secondsAnalysed < 15f) return
+        val g = genreDetector.mainGenre() ?: return
+        // The reason belongs to the latest change; only use it when that is the genre the song mostly got.
+        val why = if (genreDetector.genre == g) genreDetector.reason.ifBlank { "lyd" } else "lyd"
+        try {
+            GenreBook.record(this, GenreBook.Entry(t, a, songGenre, songDeezerGenres.firstOrNull().orEmpty(),
+                g.label, why, System.currentTimeMillis()))
+            songListVersion++
+        } catch (_: Exception) { }
     }
     private fun autoVibeTarget(): Float =
         if (genreDetector.provenHardstyle) 1f else genreDetector.genre.vibeTarget()
@@ -269,6 +284,11 @@ class RaveActivity : ComponentActivity() {
     /** Song facts from Deezer (beat BPM, loudness, year) and the Apple genre — for the analysis panel. */
     private var songFacts by mutableStateOf<DeezerLookup.TrackFacts?>(null)
     private var songGenre by mutableStateOf("")
+    /** Deezer's album genres for the song (e.g. "Rap/Hip Hop") — second opinion, for the genre list. */
+    private var songDeezerGenres by mutableStateOf(emptyList<String>())
+    /** The genre list (songs → genre → why), opened from the analysis buttons. */
+    private var showSongList by mutableStateOf(false)
+    private var songListVersion by mutableIntStateOf(0)
     /** Song singing speed (syllables per second while singing), from the word timing. */
     private var vocalSylPerSec by mutableStateOf(0f)
     /** Lyrics sync for the car: + shows the words later, − earlier (ms). Separate from the beat «Synk». */
@@ -469,6 +489,8 @@ class RaveActivity : ComponentActivity() {
     private fun updateMeta(m: MediaMetadata?) {
         val identity = "${m?.getString(MediaMetadata.METADATA_KEY_MEDIA_ID)}|${m?.getString(MediaMetadata.METADATA_KEY_TITLE)}|${m?.getString(MediaMetadata.METADATA_KEY_ARTIST)}"
         if (identity != trackIdentity) {
+            // The song that just ended goes into the genre list with what it actually got.
+            recordGenre()
             trackIdentity = identity
             hardstyleAudio.reset()
             hardstyleFrame = HardstyleFrame()
@@ -483,14 +505,28 @@ class RaveActivity : ComponentActivity() {
             val a = m?.getString(MediaMetadata.METADATA_KEY_ARTIST).orEmpty()
             songVibe = null // new song: its own vibe arrives below
             songGenre = ""
+            songDeezerGenres = emptyList()
+            val durS = (m?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L) / 1000L
             if (t.isNotBlank() && a.isNotBlank()) Thread {
-                val appleGenre = SpotifyVideoLookup.genreFor(t, a)
+                // Apple and Deezer at the same time; Deezer gets at most 3 s so Apple isn't held up.
+                val deezer = java.util.concurrent.atomic.AtomicReference<DeezerLookup.TrackFacts?>(null)
+                val dz = Thread { deezer.set(try { DeezerLookup.track(a, t, durS) } catch (_: Exception) { null }) }.apply { start() }
+                val (appleGenre, exact) = try { SpotifyVideoLookup.appleGenre(t, a) } catch (_: Exception) { null to false }
+                dz.join(3_000L)
+                val deezerGenres = deezer.get()?.genres.orEmpty()
+                val chosen = try { GenreBook.overrideFor(this, t, a) } catch (_: Exception) { null }
                 runOnUiThread {
                     if (trackIdentity == identity) {
-                        songVibe = genreFromApple(appleGenre) // only for the song still playing
                         songGenre = appleGenre.orEmpty()
-                        genreDetector.setAppleGenre(appleGenre, SystemClock.uptimeMillis())
+                        songDeezerGenres = deezerGenres
+                        genreDetector.setMetadata(appleGenre, exact, deezerGenres, chosen, SystemClock.uptimeMillis())
+                        android.util.Log.d("RaveGenre", "sang: %s – %s | apple=%s (%s) deezer=%s du=%s → %s %s".format(t, a, appleGenre,
+                            if (exact) "sangen" else "artist", deezerGenres, chosen?.label, genreDetector.genre.label,
+                            genreDetector.songLock?.let { "LÅST" } ?: ""))
                         genre = genreDetector.genre
+                        songListVersion++   // the «Nå» line in the genre list shows the new reason/lock
+                        // Only for the song still playing.
+                        songVibe = genreDetector.songLock ?: genreFromApple(appleGenre) ?: deezerGenres.firstNotNullOfOrNull { genreFromApple(it) }
                     }
                 }
             }.start()
@@ -949,7 +985,14 @@ class RaveActivity : ComponentActivity() {
                         p.shake * pi * subMul(sub.shake) * lookShake,
                         p.strobe * (if (effectsOn && pi >= .9f) 1f else 0f) * subMul(sub.strobe),
                         p.density * (1f + .5f * buildRise), p.softness)
-                    val target = if (buildRise > 0f) shaped.copy(kick = max(shaped.kick, shaped.snare * .6f * buildRise)) else shaped
+                    // Pop: calm in the verse, a little more push in the chorus (Espen 2026-11-06) — small steps.
+                    val popLift = if (vibeAuto && genre == Genre.POP) genreDetector.chorus else 0f
+                    if (popLift > 0f) partyProfile = partyProfile.copy(
+                        spike = partyProfile.spike * (1f + .35f * popLift),
+                        particles = partyProfile.particles * (1f + .4f * popLift))
+                    val shapedPop = if (popLift > 0f) shaped.copy(kick = (shaped.kick * (1f + .6f * popLift)).coerceAtMost(1f),
+                        bass = (shaped.bass * (1f + .15f * popLift)).coerceAtMost(1f)) else shaped
+                    val target = if (buildRise > 0f) shapedPop.copy(kick = max(shapedPop.kick, shapedPop.snare * .6f * buildRise)) else shapedPop
                     val liveSpectrum = playing && fresh
                     for (i in 0 until SPECTRUM_BANDS) {
                         val goal = if (liveSpectrum) target.spectrum[i] else 0f
@@ -1307,7 +1350,10 @@ class RaveActivity : ComponentActivity() {
                 }
             }
 
-            if (hardstyleOn && showAnalysis && vibe >= .5f)
+            if (hardstyleOn && showSongList)
+                SongList(Modifier.align(Alignment.TopStart).padding(start = if (partyControls) 100.u else 12.u, end = 12.u, bottom = 12.u,
+                    top = if (transportVisible) 96.u else 12.u))
+            else if (hardstyleOn && showAnalysis && vibe >= .5f)
                 AnalysisHud(Modifier.align(Alignment.TopStart).padding(start = if (partyControls) 100.u else 12.u, end = 12.u, bottom = 12.u,
                     top = if (transportVisible) 96.u else 12.u))
             // Vibe slider: shown with the other buttons (one tap) while Party is on.
@@ -1495,6 +1541,17 @@ class RaveActivity : ComponentActivity() {
         ) {
             Text("Analyse", maxLines = 1, softWrap = false, fontSize = 15.us, fontWeight = FontWeight.SemiBold,
                 color = if (showAnalysis) Color(0xFF0A0A0A) else Color(0xFFF5F2EC))
+        }
+        // The genre list: which songs were played, what the app thinks they are and why.
+        Box(
+            Modifier.height(42.u).clip(RoundedCornerShape(50))
+                .background(if (showSongList) Color(0xFFF5F2EC) else Color(0x22FFFFFF))
+                .clickable { buttonInteraction(); showSongList = !showSongList }
+                .padding(horizontal = 18.u),
+            contentAlignment = Alignment.Center
+        ) {
+            Text("Sanger", maxLines = 1, softWrap = false, fontSize = 15.us, fontWeight = FontWeight.SemiBold,
+                color = if (showSongList) Color(0xFF0A0A0A) else Color(0xFFF5F2EC))
         }
         // Car sync (shown with the analysis): nudge the visuals earlier/later, or tap along to measure.
         if (showAnalysis) {
@@ -1727,6 +1784,56 @@ class RaveActivity : ComponentActivity() {
             f?.releaseDate?.take(4)?.takeIf { it.isNotBlank() && it != "0000" }
         )
         if (extra.isNotEmpty()) Text(extra.joinToString(" · "), color = dim, fontSize = 11.us, maxLines = 1)
+    }
+
+    /**
+     * The genre list: the song playing now and the last songs, each with its genre and why
+     * (Apple, Deezer, the sound, or «du»). Tap a song to set its genre by hand:
+     * AUTO → POP → RAP → ROCK → EDM → HARDSTYLE → ROLIG → AUTO. Used from the first second next time.
+     */
+    @Composable
+    private fun SongList(modifier: Modifier) {
+        val dim = Color(0xB3F5F2EC)
+        val light = Color(0xFFF5F2EC)
+        val entries = remember(songListVersion) { try { GenreBook.all(this@RaveActivity) } catch (_: Exception) { emptyList() } }
+        val cycle = listOf(null, Genre.POP, Genre.RAP, Genre.ROCK, Genre.EDM, Genre.HARDSTYLE, Genre.STANDARD)
+        Column(
+            modifier.widthIn(max = 340.u).heightIn(max = 420.u).clip(RoundedCornerShape(14.u))
+                .background(Color.Black.copy(alpha = .7f)).padding(horizontal = 12.u, vertical = 10.u)
+                .verticalScroll(rememberScrollState())
+        ) {
+            Text("Sanger", color = light, fontSize = 18.us, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            // Now playing: what the app thinks right now, and the sources.
+            if (title.isNotBlank()) {
+                val sources = listOfNotNull(songGenre.takeIf { it.isNotBlank() }?.let { "Apple: $it" },
+                    songDeezerGenres.firstOrNull()?.let { "Deezer: $it" }).joinToString(" · ").ifBlank { "ingen sjanger funnet" }
+                @Suppress("UNUSED_EXPRESSION") songListVersion   // redraw when reason/lock changes
+                Text("Nå: ${genre.label}${if (genreDetector.songLock != null) " (låst)" else ""} – ${genreDetector.reason.ifBlank { "venter" }}",
+                    color = light, fontSize = 13.us, maxLines = 1)
+                Text(sources, color = dim, fontSize = 11.us, maxLines = 1)
+            }
+            Spacer(Modifier.height(8.u))
+            if (entries.isEmpty()) Text("Ingen sanger ennå – spill med Party på i minst 15 s.", color = dim, fontSize = 12.us)
+            entries.forEach { e ->
+                Column(
+                    Modifier.fillMaxWidth().heightIn(min = 48.u).clip(RoundedCornerShape(10.u))
+                        .clickable {
+                            buttonInteraction()
+                            val next = cycle[(cycle.indexOf(e.override) + 1) % cycle.size]
+                            try { GenreBook.setOverride(this@RaveActivity, e.key, next) } catch (_: Exception) { }
+                            songListVersion++
+                        }
+                        .padding(horizontal = 6.u, vertical = 5.u)
+                ) {
+                    Text("${e.title} – ${e.artist}", color = light, fontSize = 13.us, maxLines = 1)
+                    val shown = e.override?.let { "${it.label} (du)" } ?: e.genre
+                    val src = listOfNotNull(e.reason.takeIf { e.override == null && it.isNotBlank() },
+                        e.apple.takeIf { it.isNotBlank() }?.let { "Apple $it" },
+                        e.deezer.takeIf { it.isNotBlank() }?.let { "Deezer $it" }).distinct().joinToString(" · ")
+                    Text(shown + (if (src.isNotBlank()) " · $src" else ""), color = dim, fontSize = 11.us, maxLines = 1)
+                }
+            }
+        }
     }
 
     /** Live analysis panel: section, phrase position and the meters behind the decisions. */

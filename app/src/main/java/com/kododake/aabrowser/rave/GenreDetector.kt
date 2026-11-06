@@ -7,7 +7,9 @@ import kotlin.math.max
 
 /** Party profiles. Hardstyle is the original tuning; the others reshape what the visuals react to. */
 internal enum class Genre(val label: String) {
-    HARDSTYLE("HARDSTYLE"), RAP("RAP"), ROCK("ROCK"), EDM("EDM"), STANDARD("ROLIG")
+    HARDSTYLE("HARDSTYLE"), RAP("RAP"), ROCK("ROCK"), EDM("EDM"), STANDARD("ROLIG"),
+    /** Pop: calm in the verses, a bit more push in the chorus (see [GenreDetector.chorus]). */
+    POP("POP")
 }
 
 /** How strong each effect is per genre (1 = original hardstyle strength). */
@@ -25,6 +27,8 @@ internal fun Genre.profile(): PartyProfile = when (this) {
     Genre.ROCK -> PartyProfile(spike = 1f, particles = 1f, shake = 1f, strobe = .8f)
     Genre.EDM -> PartyProfile(spike = 1f, particles = 1f, shake = .8f, strobe = .9f)
     Genre.STANDARD -> PartyProfile(spike = .6f, particles = .7f, shake = 0f, strobe = 0f)
+    // Pop: soft and calm — slightly bigger, softer lights, no shake or strobe (Espen 2026-11-06).
+    Genre.POP -> PartyProfile(spike = .65f, particles = .6f, shake = 0f, strobe = 0f, density = .6f, softness = 1.6f)
 }
 
 /**
@@ -59,6 +63,8 @@ internal fun Genre.shape(f: HardstyleFrame): HardstyleFrame = when (this) {
     )
     // Everything else: calm, no drop effects.
     Genre.STANDARD -> f.copy(heavy = 0f, grit = 0f, kick = f.kick * .5f)
+    // Pop: like calm, a little more pump on the beat; the chorus lift is added on top in RaveActivity.
+    Genre.POP -> f.copy(heavy = 0f, grit = 0f, kick = f.kick * .6f)
 }
 
 /** Mixes two shaped frames for a soft (~1 s) change between profiles. */
@@ -73,6 +79,8 @@ internal fun blendFrames(a: HardstyleFrame, b: HardstyleFrame, t: Float): Hardst
 /** Where the auto mode puts the slider for a detected genre. */
 internal fun Genre.vibeTarget(): Float = when (this) {
     Genre.STANDARD -> 0f
+    // Between calm and rap on the slider; drawn as «POP» while auto has found pop.
+    Genre.POP -> .1f
     Genre.RAP -> .25f
     Genre.EDM -> .5f
     Genre.HARDSTYLE, Genre.ROCK -> 1f
@@ -144,8 +152,11 @@ internal fun genreFromApple(name: String?): Genre? {
         "hardstyle" in g || "hardcore" in g || "hard dance" in g -> Genre.HARDSTYLE
         "hip-hop" in g || "hip hop" in g || "rap" in g || "trap" in g || "drill" in g -> Genre.RAP
         "metal" in g || "rock" in g || "punk" in g || "alternative" in g || "grunge" in g -> Genre.ROCK
-        "dance" in g || "electronic" in g || "house" in g || "techno" in g || "trance" in g ||
+        "dance" in g || "electro" in g || "house" in g || "techno" in g || "trance" in g ||
             "edm" in g || "dubstep" in g || "drum" in g -> Genre.EDM
+        "pop" in g || "r&b" in g || "soul" in g -> Genre.POP
+        "singer" in g || "country" in g || "folk" in g || "jazz" in g || "classical" in g ||
+            "klassisk" in g || "acoustic" in g || "soundtrack" in g -> Genre.STANDARD
         else -> null
     }
 }
@@ -167,7 +178,32 @@ internal class GenreDetector {
         private set
     private var announcedThisTrack = false
 
+    /** Genre from the song's metadata (Apple, Deezer as backup) — the sound can still refine it. */
     private var apple: Genre? = null
+    /**
+     * Set when the metadata is sure (Apple's exact song says rap and Deezer doesn't disagree, or
+     * Espen set it in the genre list): the song keeps this genre the whole way — rap stays rap,
+     * no hardstyle drops, no UPTEMPO.
+     */
+    var songLock: Genre? = null
+        private set
+    /** Apple/Deezer have answered for this song (the raw-drop rule waits for that, max 4 s). */
+    private var lookupDone = false
+    /** Why the current genre was chosen, e.g. "Apple: Hip-Hop/Rap", "lyd", "du" — for the genre list. */
+    var reason = ""
+        private set
+    /**
+     * 0..1: how much fuller/louder the song is right now than its own average — high in a pop
+     * chorus, low in the verse. Used for the pop profile's «a bit more push on the chorus».
+     */
+    var chorus = 0f
+        private set
+    private var energyFast = 0f
+    private var energySlow = 0f
+    /** Seconds of actual music heard this song (the chorus needs ~10 s of song to compare with). */
+    private var musicSeconds = 0f
+    /** Seconds spent in each genre this song (the one with most time goes in the genre list). */
+    private val timeIn = FloatArray(Genre.entries.size)
     /** Chosen by hand with the genre buttons; null = automatic. */
     var manual: Genre? = null
         private set
@@ -194,7 +230,7 @@ internal class GenreDetector {
     private var dropSince = 0L
     /** Once a song has proven to be hardstyle, it stays hardstyle (calm parts are handled by SongPhase). */
     private var hardstyleThisTrack = false
-    val provenHardstyle: Boolean get() = hardstyleThisTrack
+    val provenHardstyle: Boolean get() = hardstyleThisTrack && songLock == null
 
     /**
      * 0 = the HARD reaction is pure hardstyle, 1 = pure rock. Rises with live drums (snare hits
@@ -207,17 +243,63 @@ internal class GenreDetector {
 
     fun newTrack(now: Long) {
         apple = null; appleName = null; trackStart = now; announcedThisTrack = false; hardstyleThisTrack = false
+        songLock = null; lookupDone = false; dropSince = 0L; timeIn.fill(0f); reason = ""
+        chorus = 0f; energyFast = 0f; energySlow = 0f; musicSeconds = 0f
         rockness = .1f
         candidate = genre; candidateSince = now
     }
 
-    fun setAppleGenre(name: String?, now: Long) {
-        appleName = name
-        apple = genreFromApple(name)
-        val a = apple ?: return
-        // Apple's "Dance" may still be hardstyle; let the sound decide that part.
-        if (manual == null && a != Genre.EDM) { commit(a, now, "apple"); announce(now) }
+    /**
+     * The song's metadata: Apple's genre ([appleExact] = Apple found this very song, not just the
+     * artist's main genre), Deezer's album genres, and the genre Espen set in the list (if any).
+     */
+    fun setMetadata(appleGenre: String?, appleExact: Boolean, deezerGenres: List<String>, chosen: Genre?, now: Long) {
+        lookupDone = true
+        appleName = appleGenre
+        val a = genreFromApple(appleGenre)
+        val d = deezerGenres.firstNotNullOfOrNull { genreFromApple(it) }
+        val deezerName = deezerGenres.firstOrNull { genreFromApple(it) != null } ?: deezerGenres.firstOrNull()
+        apple = a ?: d
+        val danceGenres = setOf(Genre.EDM, Genre.HARDSTYLE)
+        val dance = a in danceGenres || deezerGenres.any { genreFromApple(it) in danceGenres }
+        // Apple once tagged a raw hardstyle track "Hip-Hop/Rap" (log 2026-11-03): only lock rap when
+        // it is Apple's exact song or Deezer's, and neither source calls it dance.
+        val (lock, why) = when {
+            chosen != null -> chosen to "du"
+            a == Genre.RAP && (appleExact || d == Genre.RAP) && !dance -> Genre.RAP to "Apple: $appleGenre"
+            a == null && d == Genre.RAP -> Genre.RAP to "Deezer: $deezerName"
+            // Pop and calm genres (log 2026-11-06: Train «Hey, Soul Sister», Pop on both, became
+            // HARDSTYLE from the sound — strummed guitar read as distortion and double tempo).
+            (a == Genre.POP || a == Genre.STANDARD) && (appleExact || d == a) && !dance -> a to "Apple: $appleGenre"
+            a == null && (d == Genre.POP || d == Genre.STANDARD) -> d to "Deezer: $deezerName"
+            else -> null to ""
+        }
+        if (lock != null) {
+            songLock = lock
+            // A hardstyle guess made before the answer arrived no longer counts.
+            if (lock != Genre.HARDSTYLE) { hardstyleThisTrack = false; dropSince = 0L }
+            if (lock == Genre.RAP || lock == Genre.STANDARD || lock == Genre.POP) rockness = 0f
+            if (manual == null) { commit(lock, now, why); announce(now) }
+            reason = why   // also when the genre was already the same (commit then does nothing)
+            return
+        }
+        val g = apple ?: return
+        val src = if (a != null) "Apple: $appleGenre" else "Deezer: $deezerName"
+        // "Dance" may still be hardstyle; let the sound decide that part.
+        if (manual == null && g != Genre.EDM) { commit(g, now, src); announce(now); reason = src }
     }
+
+    /** The genre this song spent most time in (calm parts only count when nothing else was found). */
+    fun mainGenre(): Genre? {
+        val best = Genre.entries.filter { it != Genre.STANDARD }.maxByOrNull { timeIn[it.ordinal] }
+        return when {
+            best != null && timeIn[best.ordinal] >= 5f -> best
+            timeIn[Genre.STANDARD.ordinal] >= 5f -> Genre.STANDARD
+            else -> null
+        }
+    }
+    /** Seconds analysed this song. */
+    val secondsAnalysed: Float get() = timeIn.sum()
 
     private fun announce(now: Long) { announcedAt = now; announcedThisTrack = true }
 
@@ -236,18 +318,33 @@ internal class GenreDetector {
         snareRate = snareRate * decay + snareHit / 8f
 
         updateRockness(f, dt)
+        timeIn[genre.ordinal] += dt
+        // Chorus: energy over ~1.5 s against the song's ~25 s average. For the first ~10 s of music
+        // the average just follows along (log 2026-11-06: starting from 0 made every song start as
+        // «chorus» for 20 s), and silence/pauses don't count.
+        if (f.energy > .05f) musicSeconds += dt
+        energyFast += (f.energy - energyFast) * (1f - exp(-dt / 1.5f))
+        energySlow += (f.energy - energySlow) * (1f - exp(-dt / if (musicSeconds < 10f) 1.5f else 40f))
+        // Pop is mixed evenly loud, so the chorus is only a little louder (log 2026-11-06, «Am I Wrong»:
+        // .04/.12 almost never fired) — more sensitive, and a 40 s average so a long chorus keeps it.
+        val lift = if (musicSeconds < 10f) 0f else ((energyFast - energySlow - .015f) / .07f).coerceIn(0f, 1f)
+        chorus += (lift - chorus) * (1f - exp(-dt / .8f))
 
         if (now - lastLog >= 5_000L) {
             lastLog = now
-            Log.d("RaveGenre", "nå=${genre.label} apple=$appleName bpm=%.0f grit=%.2f sub=%.2f kick/s=%.2f snare/s=%.2f rock=%.2f → lyd sier ${audioGuess(f.bpm).label}"
-                .format(f.bpm, grit, sub, kickRate, snareRate, rockness))
+            Log.d("RaveGenre", "nå=${genre.label} apple=$appleName bpm=%.0f grit=%.2f sub=%.2f kick/s=%.2f snare/s=%.2f rock=%.2f refreng=%.2f → lyd sier ${audioGuess(f.bpm).label}"
+                .format(f.bpm, grit, sub, kickRate, snareRate, rockness, chorus))
         }
         manual?.let { if (it != genre) commit(it, now, "valgt"); return genre }
+        // Metadata is sure (e.g. rap): that genre the whole song, the sound can't turn it into hardstyle.
+        songLock?.let { if (it != genre) commit(it, now, reason.ifBlank { "låst" }); return genre }
+        // Before Apple/Deezer have answered (max 4 s), a heavy 808 must not lock the song as hardstyle.
+        val metaKnown = lookupDone || now - trackStart >= 4_000L
         // Raw drop: heavy, distorted bass right now → hardstyle chaos within ~1 s, in any song,
         // without waiting for the slow averages.
         // Not for songs Apple calls rock/metal: metalcore breakdowns are heavy and distorted too.
         if (apple != Genre.ROCK && f.heavy > .45f && f.grit > .3f) { if (dropSince == 0L) dropSince = now } else if (f.heavy < .2f) dropSince = 0L
-        if (dropSince > 0L && now - dropSince >= 800L && genre != Genre.HARDSTYLE) commit(Genre.HARDSTYLE, now, "rått drop")
+        if (dropSince > 0L && now - dropSince >= 800L && genre != Genre.HARDSTYLE && metaKnown) commit(Genre.HARDSTYLE, now, "rått drop")
         if ((apple == null || apple == Genre.EDM) && now - trackStart < 8_000L) return genre
         // Show what we think once per song, even when the profile stays the same.
         if (!announcedThisTrack) announce(now)
@@ -275,7 +372,8 @@ internal class GenreDetector {
             apple != null -> apple!!
             else -> audio
         }
-        if (target == Genre.HARDSTYLE && genre == Genre.HARDSTYLE) hardstyleThisTrack = true
+        // Only lock when hardstyle was chosen during THIS song — not left over from the last one.
+        if (target == Genre.HARDSTYLE && genre == Genre.HARDSTYLE && changedAt >= trackStart) hardstyleThisTrack = true
         if (target != candidate) { candidate = target; candidateSince = now }
         val needed = when {
             genre == Genre.STANDARD && !calm -> 1_500L          // the drop after a breakdown hits fast
@@ -289,7 +387,8 @@ internal class GenreDetector {
 
     private fun updateRockness(f: HardstyleFrame, dt: Float) {
         val target = when {
-            hardstyleThisTrack || apple == Genre.HARDSTYLE -> 0f
+            hardstyleThisTrack || apple == Genre.HARDSTYLE || songLock == Genre.RAP || songLock == Genre.POP ||
+                songLock == Genre.STANDARD -> 0f
             // Steady fast four-on-the-floor kick = hardstyle/EDM, not live drums.
             f.bpm in 138f..250f && kickRate > 2.2f -> 0f
             else -> {
@@ -301,7 +400,8 @@ internal class GenreDetector {
             }
         }
         // Proven hardstyle drops straight away; otherwise learn slowly and only while it is loud.
-        if (hardstyleThisTrack || apple == Genre.HARDSTYLE) rockness = 0f
+        if (hardstyleThisTrack || apple == Genre.HARDSTYLE || songLock == Genre.RAP || songLock == Genre.POP ||
+            songLock == Genre.STANDARD) rockness = 0f
         else if (f.energy > .4f) rockness += (target - rockness) * (1f - exp(-dt / 4f))
     }
 
@@ -314,7 +414,7 @@ internal class GenreDetector {
         grit > .25f && kickRate >= 2.3f && bpm in 138f..250f -> Genre.HARDSTYLE
         grit > .2f && sub > .53f && kickRate > 2.3f && bpm in 138f..250f -> Genre.HARDSTYLE
         // Hysteresis: stay in hardstyle until the distortion has really gone.
-        genre == Genre.HARDSTYLE && grit > .12f && kickRate >= 2f -> Genre.HARDSTYLE
+        genre == Genre.HARDSTYLE && changedAt >= trackStart && grit > .12f && kickRate >= 2f -> Genre.HARDSTYLE
         grit > .2f && kickRate < 2.2f && sub < .5f && snareRate > 1.2f -> Genre.ROCK
         sub > .6f && grit < .15f && (bpm < 110f || kickRate < 2f) -> Genre.RAP
         bpm in 118f..136f && kickRate >= 1.8f && grit < .2f -> Genre.EDM
@@ -324,7 +424,7 @@ internal class GenreDetector {
     private fun commit(g: Genre, now: Long, why: String) {
         if (g == genre) return
         previous = genre; genre = g; changedAt = now; candidate = g; candidateSince = now
-        announcedAt = now
+        announcedAt = now; reason = why
         if (g == Genre.HARDSTYLE && why != "valgt") hardstyleThisTrack = true
         Log.d("RaveGenre", "→ ${g.label} ($why) apple=$appleName grit=%.2f sub=%.2f kick/s=%.2f snare/s=%.2f"
             .format(grit, sub, kickRate, snareRate))
