@@ -3,6 +3,8 @@ package com.kododake.aabrowser.rave
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -82,44 +84,77 @@ private val Dim = Color(0x66F5F2EC)
 private val Faint = Color(0x40F5F2EC)
 private val TextShadow = Shadow(Color(0xA6000000), Offset(0f, 2f), 12f)
 
-private fun lineText(lines: List<Pair<Long, String>>, i: Int): String? =
-    lines.getOrNull(i)?.second?.let { it.ifBlank { "♪" } }
+private fun lineText(lines: List<LyricLine>, i: Int): String? =
+    lines.getOrNull(i)?.text?.let { it.ifBlank { "♪" } }
 
 /**
  * Synced lyrics in the chosen style.
- * [progress] is how far into the current line we are (0..1). LRCLIB only has a time per line,
- * so word timing is guessed by spreading the line's time evenly over its words.
+ * [nowMs] is the song time as heard. Every line carries a time per word (real from NetEase,
+ * or guessed from syllables and the song's singing speed), so a held word fills slowly.
  */
 @Composable
 internal fun StyledLyrics(
     style: LyricsStyle,
-    lines: List<Pair<Long, String>>,
+    lines: List<LyricLine>,
     idx: Int,
-    progress: Float,
+    nowMs: Long,
     align: Alignment.Horizontal,
     accent: Color,
     pulse: () -> Float,
     /** Fill the lyrics panel (car layout) or a fixed height (portrait, under the title). */
-    sizeModifier: Modifier
+    sizeModifier: Modifier,
+    /** A known pause in the singing: show a music note instead of the old line. */
+    pause: Boolean = false,
+    /** The line that comes after the pause (shown faintly under the note). */
+    upcoming: String? = null
 ) {
     run {
         val h = sizeModifier
         val ta = if (align == Alignment.CenterHorizontally) TextAlign.Center else TextAlign.Start
         Box(h, contentAlignment = if (align == Alignment.CenterHorizontally) Alignment.Center else Alignment.CenterStart) {
-            when (style) {
-                LyricsStyle.SCROLL -> ScrollLyrics(lines, idx, align, ta)
-                LyricsStyle.WORDS -> WordLyrics(lines, idx, progress, align, ta, accent, pulse)
-                LyricsStyle.KARAOKE -> KaraokeLyrics(lines, idx, progress, align, ta, accent)
-                LyricsStyle.BIG -> BigLineLyrics(lines, idx, align, ta)
-                LyricsStyle.BASS -> BassLyrics(lines, idx, accent, pulse)
+            // The scrolling list keeps its own context, so it gets no pause note.
+            val showPause = pause && style != LyricsStyle.SCROLL
+            AnimatedContent(showPause, transitionSpec = { fadeIn(tween(400)) togetherWith fadeOut(tween(300)) }, label = "pause") { p ->
+                if (p) PauseNote(upcoming, align, ta, accent, pulse)
+                else when (style) {
+                    LyricsStyle.SCROLL -> ScrollLyrics(lines, idx, align, ta)
+                    LyricsStyle.WORDS -> WordLyrics(lines, idx, nowMs, align, ta, accent, pulse)
+                    LyricsStyle.KARAOKE -> KaraokeLyrics(lines, idx, nowMs, align, ta, accent)
+                    LyricsStyle.BIG -> BigLineLyrics(lines, idx, align, ta)
+                    LyricsStyle.BASS -> BassLyrics(lines, idx, accent, pulse)
+                }
             }
+        }
+    }
+}
+
+/** A pause in the singing: a music note that breathes and bounces gently with the beat. */
+@Composable
+private fun PauseNote(upcoming: String?, align: Alignment.Horizontal, ta: TextAlign, accent: Color, pulse: () -> Float) {
+    val breath = androidx.compose.animation.core.rememberInfiniteTransition(label = "breath")
+    val b by breath.animateFloat(.55f, 1f, androidx.compose.animation.core.infiniteRepeatable(tween(1400), androidx.compose.animation.core.RepeatMode.Reverse), label = "b")
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = align) {
+        androidx.compose.material3.Icon(
+            androidx.compose.material.icons.Icons.Rounded.MusicNote, null, tint = accent,
+            modifier = Modifier.height(72.u).width(72.u).graphicsLayer {
+                val k = pulse().coerceIn(0f, 1f)
+                val s = 1f + k * .12f
+                scaleX = s; scaleY = s
+                alpha = b
+                translationY = -k * 10f
+            }
+        )
+        if (!upcoming.isNullOrBlank()) {
+            Spacer(Modifier.height(30.u))
+            Text(upcoming, color = Faint, fontSize = 22.us, fontWeight = FontWeight.SemiBold, textAlign = ta,
+                maxLines = 2, overflow = TextOverflow.Ellipsis, fontFamily = FontFamily.Default)
         }
     }
 }
 
 /** Apple Music-like: the list glides up, lines far from the current one get faint and blurry. */
 @Composable
-private fun ScrollLyrics(lines: List<Pair<Long, String>>, idx: Int, align: Alignment.Horizontal, ta: TextAlign) {
+private fun ScrollLyrics(lines: List<LyricLine>, idx: Int, align: Alignment.Horizontal, ta: TextAlign) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val half = maxHeight / 2
         val state = rememberLazyListState(initialFirstVisibleItemIndex = idx)
@@ -178,8 +213,9 @@ private fun ScrollLyrics(lines: List<Pair<Long, String>>, idx: Int, align: Align
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun WordLyrics(lines: List<Pair<Long, String>>, idx: Int, progress: Float, align: Alignment.Horizontal, ta: TextAlign, accent: Color, pulse: () -> Float) {
-    val words = remember(idx, lines) { lineText(lines, idx).orEmpty().split(' ').filter { it.isNotBlank() } }
+private fun WordLyrics(lines: List<LyricLine>, idx: Int, nowMs: Long, align: Alignment.Horizontal, ta: TextAlign, accent: Color, pulse: () -> Float) {
+    val timed = remember(idx, lines) { lines.getOrNull(idx)?.words.orEmpty() }
+    val words = remember(timed) { timed.map { it.text }.ifEmpty { listOf("♪") } }
     val longest = words.maxOfOrNull { it.length } ?: 0
     // Loudness when each word appeared (-1 = not yet), and a slow average so «hard» is relative to the song.
     val hit = remember(idx, lines) { FloatArray(words.size) { -1f } }
@@ -188,7 +224,11 @@ private fun WordLyrics(lines: List<Pair<Long, String>>, idx: Int, progress: Floa
         key(idx) {
             FlowRow(horizontalArrangement = if (ta == TextAlign.Center) Arrangement.Center else Arrangement.Start) {
                 words.forEachIndexed { k, w ->
-                    val shown = progress * 1.15f >= k.toFloat() / words.size
+                    val w0 = timed.getOrNull(k)
+                    // A word pops in just as it is sung (40 ms early so the spring animation lands on it).
+                    val shown = w0 == null || nowMs >= w0.startMs - 40L
+                    // A held word (> 0.7 s) glows in the cover colour while it is being sung.
+                    val holding = w0 != null && w0.endMs - w0.startMs > 700L && nowMs in w0.startMs..w0.endMs
                     if (shown && hit[k] < 0f) {
                         val v = pulse().coerceIn(0f, 1f)
                         hit[k] = v
@@ -200,7 +240,7 @@ private fun WordLyrics(lines: List<Pair<Long, String>>, idx: Int, progress: Floa
                     val a by animateFloatAsState(if (shown) 1f else 0f, tween(120), label = "wa")
                     Text(
                         w, fontSize = 42.us, lineHeight = 48.us, fontWeight = FontWeight.Black, fontFamily = FontFamily.Default,
-                        color = if (w.length == longest && words.size > 1) accent else Bright,
+                        color = if (holding || (w.length == longest && words.size > 1)) accent else Bright,
                         style = TextStyle(shadow = TextShadow),
                         modifier = Modifier.padding(end = 10.u).graphicsLayer { scaleX = s; scaleY = s; alpha = a; translationY = (1f - s) * 20f }
                     )
@@ -212,17 +252,28 @@ private fun WordLyrics(lines: List<Pair<Long, String>>, idx: Int, progress: Floa
 }
 
 /**
- * Karaoke: the current line fills with colour from the left as it is sung, and a small ball
- * bounces from word to word, landing on each word as it starts (like karaoke videos).
+ * Karaoke: the current line fills with colour word by word, each word over exactly the time it is
+ * sung (a held word fills slowly). A small ball lands on each word as it starts and hops to the next
+ * one just before that word begins, like karaoke videos.
  */
 @Composable
-private fun KaraokeLyrics(lines: List<Pair<Long, String>>, idx: Int, progress: Float, align: Alignment.Horizontal, ta: TextAlign, accent: Color) {
+private fun KaraokeLyrics(lines: List<LyricLine>, idx: Int, nowMs: Long, align: Alignment.Horizontal, ta: TextAlign, accent: Color) {
+    val cur = lines.getOrNull(idx)
     val line = lineText(lines, idx).orEmpty()
-    val q = (progress * 1.08f).coerceIn(0f, 1f)
-    val done = (line.length * q).toInt()
-    // Where each word starts (character offset); the ball lands there when the fill reaches it.
-    val starts = remember(line) {
-        buildList { line.forEachIndexed { i, ch -> if (ch != ' ' && (i == 0 || line[i - 1] == ' ')) add(i) } }
+    val words = cur?.words.orEmpty()
+    // Character offset where each word starts (the line text is the words joined by single spaces).
+    val starts = remember(cur) {
+        var c = 0
+        words.map { w -> c.also { c += w.text.length + 1 } }
+    }
+    // Characters filled: whole finished words + the sung part of the current word.
+    val done = if (words.isEmpty()) 0 else {
+        val k = words.indexOfLast { it.startMs <= nowMs }
+        if (k < 0) 0 else {
+            val w = words[k]
+            val f = ((nowMs - w.startMs).toFloat() / (w.endMs - w.startMs).coerceAtLeast(1L)).coerceIn(0f, 1f)
+            (starts[k] + (w.text.length * f).toInt()).coerceAtMost(line.length)
+        }
     }
     var layout by remember(line) { mutableStateOf<TextLayoutResult?>(null) }
     val ballR = with(LocalDensity.current) { 7.u.toPx() }
@@ -239,21 +290,26 @@ private fun KaraokeLyrics(lines: List<Pair<Long, String>>, idx: Int, progress: F
             modifier = Modifier.padding(top = 30.u).drawWithContent {
                 drawContent()
                 val l = layout ?: return@drawWithContent
-                if (starts.isEmpty() || line == "♪") return@drawWithContent
+                if (words.isEmpty()) return@drawWithContent
+                val len = l.layoutInput.text.length
+                if (len == 0) return@drawWithContent
                 // Word centre (x) and top of its text line (y).
                 fun spot(k: Int): Offset {
-                    val a = starts[k]
-                    val b = line.indexOf(' ', a).let { if (it < 0) line.length else it }
-                    val first = l.getBoundingBox(a.coerceAtMost(l.layoutInput.text.length - 1))
-                    val last = l.getBoundingBox((b - 1).coerceAtMost(l.layoutInput.text.length - 1))
+                    val a = starts[k].coerceAtMost(len - 1)
+                    val b = (starts[k] + words[k].text.length - 1).coerceIn(a, len - 1)
+                    val first = l.getBoundingBox(a)
+                    val last = l.getBoundingBox(b)
                     return Offset((first.left + last.right) / 2f, l.getLineTop(l.getLineForOffset(a)))
                 }
-                val frac = starts.map { it.toFloat() / line.length }
-                val k = frac.indexOfLast { it <= q }.coerceAtLeast(0)
+                val k = words.indexOfLast { it.startMs <= nowMs }.coerceAtLeast(0)
                 val from = spot(k)
-                val to = if (k + 1 < starts.size) spot(k + 1) else from
-                val span = ((if (k + 1 < frac.size) frac[k + 1] else 1f) - frac[k]).coerceAtLeast(.001f)
-                val t = ((q - frac[k]) / span).coerceIn(0f, 1f)
+                val next = words.getOrNull(k + 1)
+                // The ball sits on the word while it is sung and hops during the last ≤ 300 ms before the next word.
+                val t = if (next == null || nowMs < words[0].startMs) 0f else {
+                    val hop = minOf(300L, next.startMs - words[k].startMs).coerceAtLeast(1L)
+                    ((nowMs - (next.startMs - hop)).toFloat() / hop).coerceIn(0f, 1f)
+                }
+                val to = if (next != null) spot(k + 1) else from
                 // Arc: lands on each word (t = 0), highest halfway to the next one.
                 val x = from.x + (to.x - from.x) * t
                 val base = from.y + (to.y - from.y) * t - ballR - 2f
@@ -262,7 +318,7 @@ private fun KaraokeLyrics(lines: List<Pair<Long, String>>, idx: Int, progress: F
                 drawCircle(accent, ballR, Offset(x, y))
             }
         )
-        Spacer(Modifier.height(10.u))
+        Spacer(Modifier.height(30.u))
         Text(lineText(lines, idx + 1).orEmpty(), color = Dim, fontSize = 22.us, fontWeight = FontWeight.SemiBold,
             textAlign = ta, maxLines = 2, overflow = TextOverflow.Ellipsis, fontFamily = FontFamily.Default)
     }
@@ -270,7 +326,7 @@ private fun KaraokeLyrics(lines: List<Pair<Long, String>>, idx: Int, progress: F
 
 /** Only the line being sung, big; it glides in from below. Easiest to read from the driver's seat. */
 @Composable
-private fun BigLineLyrics(lines: List<Pair<Long, String>>, idx: Int, align: Alignment.Horizontal, ta: TextAlign) {
+private fun BigLineLyrics(lines: List<LyricLine>, idx: Int, align: Alignment.Horizontal, ta: TextAlign) {
     Column(horizontalAlignment = align) {
         AnimatedContent(
             idx,
@@ -284,7 +340,7 @@ private fun BigLineLyrics(lines: List<Pair<Long, String>>, idx: Int, align: Alig
                 fontFamily = FontFamily.Default, textAlign = ta, maxLines = 3, overflow = TextOverflow.Ellipsis,
                 style = TextStyle(shadow = TextShadow), modifier = Modifier.fillMaxWidth())
         }
-        Spacer(Modifier.height(16.u))
+        Spacer(Modifier.height(30.u))
         Text(lineText(lines, idx + 1).orEmpty(), color = Faint, fontSize = 20.us, fontWeight = FontWeight.SemiBold,
             textAlign = ta, maxLines = 1, overflow = TextOverflow.Ellipsis, fontFamily = FontFamily.Default)
     }
@@ -292,10 +348,10 @@ private fun BigLineLyrics(lines: List<Pair<Long, String>>, idx: Int, align: Alig
 
 /** Trap Nation-like: big capitals in the middle that glow, grow and shake with the bass. */
 @Composable
-private fun BassLyrics(lines: List<Pair<Long, String>>, idx: Int, accent: Color, pulse: () -> Float) {
+private fun BassLyrics(lines: List<LyricLine>, idx: Int, accent: Color, pulse: () -> Float) {
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         BassLine(lineText(lines, idx).orEmpty().uppercase(), accent, pulse)
-        Spacer(Modifier.height(16.u))
+        Spacer(Modifier.height(30.u))
         Text(lineText(lines, idx + 1).orEmpty().uppercase(), color = Color(0x8CFFFFFF), fontSize = 15.us,
             fontWeight = FontWeight.Bold, letterSpacing = androidx.compose.ui.unit.TextUnit(4f, androidx.compose.ui.unit.TextUnitType.Sp),
             textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis, fontFamily = FontFamily.Default)

@@ -108,3 +108,13 @@ internal class FlashBudget {
 
     fun perSecond(now: Long): Int = times.count { it > 0L && now - it < 1_000L }
 }
+
+/** Lyrics: the next line appears this much before its first word, so it can be read in time. */
+internal const val LINE_LEAD_MS = 150L
+internal const val LYRICS_OFFSET_STEP_MS = 50
+internal const val LYRICS_OFFSET_LIMIT_MS = 1_500
+/** Music-note pause: shown this long after a line's last word ends (exact / guessed word timing)… */
+internal const val PAUSE_AFTER_MS = 700L
+internal const val PAUSE_AFTER_GUESSED_MS = 2_000L
+/** …and hidden again this long before the next line, so it can be read in time. */
+internal const val PAUSE_BEFORE_NEXT_MS = 1_500L

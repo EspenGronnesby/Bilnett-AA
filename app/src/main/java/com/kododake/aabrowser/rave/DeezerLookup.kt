@@ -53,6 +53,39 @@ internal object DeezerLookup {
             .maxByOrNull { it.optLong("nb_fan") }?.optLong("id")
     }
 
+    /** Song facts from Deezer: beat tempo (0 = Deezer does not know), loudness and release date. */
+    internal data class TrackFacts(val bpm: Float, val gainDb: Float?, val releaseDate: String)
+
+    private val trackCache = ConcurrentHashMap<String, TrackFacts>()
+
+    /**
+     * The track that matches both artist and length (±3 s), so a remix or live version's BPM is
+     * not used. Null when nothing matches.
+     */
+    fun track(artist: String, title: String, durS: Long): TrackFacts? {
+        val main = artist.split(Regex("\\s*(?:,|&| feat\\.? | featuring )\\s*", RegexOption.IGNORE_CASE)).first().trim()
+        val clean = LyricsSource.cleanTitle(title)
+        if (main.isBlank() || clean.isBlank()) return null
+        val key = "${norm(main)}|${norm(clean)}|$durS"
+        trackCache[key]?.let { return it }
+        val arr = get("https://api.deezer.com/search?limit=10&q=" + enc("$main $clean"))?.optJSONArray("data") ?: return null
+        val hit = (0 until arr.length()).map { arr.getJSONObject(it) }.firstOrNull { t ->
+            // «The Mamas & The Papas» is one artist, not «The Mamas» — accept the full name too.
+            norm(t.optJSONObject("artist")?.optString("name").orEmpty()).let { n -> n == norm(main) || n == norm(artist) || n.startsWith(norm(main) + " ") } &&
+                norm(t.optString("title")).startsWith(norm(clean)) &&
+                (durS <= 0 || kotlin.math.abs(t.optLong("duration") - durS) <= 3)
+        } ?: return null
+        val t = get("https://api.deezer.com/track/${hit.optLong("id")}") ?: return null
+        val facts = TrackFacts(
+            bpm = t.optDouble("bpm", 0.0).toFloat(),
+            gainDb = if (t.has("gain")) t.optDouble("gain").toFloat().takeIf { !it.isNaN() } else null,
+            releaseDate = t.optString("release_date")
+        )
+        Log.d("Rave", "Deezer: ${t.optString("title")} bpm=${facts.bpm} gain=${facts.gainDb}")
+        trackCache[key] = facts
+        return facts
+    }
+
     private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
 
     private fun get(url: String): JSONObject? = try {

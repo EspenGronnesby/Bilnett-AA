@@ -263,7 +263,21 @@ class RaveActivity : ComponentActivity() {
 
     // Sangtekst
     private var showLyrics by mutableStateOf(true)  // Tekst er på som standard
-    private var lyrics by mutableStateOf<List<Pair<Long, String>>>(emptyList())
+    private var lyrics by mutableStateOf<List<LyricLine>>(emptyList())
+    /** Where the word timing came from (shown in the analysis panel). */
+    private var lyricsTiming by mutableStateOf<LyricsTiming?>(null)
+    /** Song facts from Deezer (beat BPM, loudness, year) and the Apple genre — for the analysis panel. */
+    private var songFacts by mutableStateOf<DeezerLookup.TrackFacts?>(null)
+    private var songGenre by mutableStateOf("")
+    /** Song singing speed (syllables per second while singing), from the word timing. */
+    private var vocalSylPerSec by mutableStateOf(0f)
+    /** Lyrics sync for the car: + shows the words later, − earlier (ms). Separate from the beat «Synk». */
+    private var lyricsOffsetMs by mutableIntStateOf(0)
+    private fun stepLyricsOffset(dir: Int) {
+        lyricsOffsetMs = (lyricsOffsetMs + dir * LYRICS_OFFSET_STEP_MS).coerceIn(-LYRICS_OFFSET_LIMIT_MS, LYRICS_OFFSET_LIMIT_MS)
+        showLyricsToast("Tekst-synk ${if (lyricsOffsetMs > 0) "+" else ""}$lyricsOffsetMs ms")
+        try { getSharedPreferences("rave", MODE_PRIVATE).edit().putInt("lyricsOffsetMs", lyricsOffsetMs).apply() } catch (_: Exception) { }
+    }
     private var plainLyrics by mutableStateOf<String?>(null)
     private var lyricsState by mutableStateOf("")
     private var pos by mutableLongStateOf(0L)
@@ -355,6 +369,7 @@ class RaveActivity : ComponentActivity() {
             val prefs = getSharedPreferences("rave", MODE_PRIVATE)
             lyricsStyle = LyricsStyle.entries.firstOrNull { it.name == prefs.getString("lyricsStyle", null) } ?: LyricsStyle.SCROLL
             lyricsGlass = prefs.getBoolean("lyricsGlass", true)
+            lyricsOffsetMs = prefs.getInt("lyricsOffsetMs", 0).coerceIn(-LYRICS_OFFSET_LIMIT_MS, LYRICS_OFFSET_LIMIT_MS)
         } catch (_: Exception) { }
         try {
             val prefs = getSharedPreferences("rave", MODE_PRIVATE)
@@ -440,7 +455,8 @@ class RaveActivity : ComponentActivity() {
         if (next == null) {
             title = ""; artist = ""; art = null; colors = DEFAULT_COLORS; playing = false
             lastState = null
-            lyricsKey = ""; lyrics = emptyList(); plainLyrics = null; lyricsState = ""
+            lyricsKey = ""; lyrics = emptyList(); plainLyrics = null; lyricsState = ""; lyricsTiming = null
+            songFacts = null; songGenre = ""; vocalSylPerSec = 0f
             videoKey = ""; clearVideos(); videoPlaying = false
             return
         }
@@ -466,11 +482,13 @@ class RaveActivity : ComponentActivity() {
             val t = m?.getString(MediaMetadata.METADATA_KEY_TITLE).orEmpty()
             val a = m?.getString(MediaMetadata.METADATA_KEY_ARTIST).orEmpty()
             songVibe = null // new song: its own vibe arrives below
+            songGenre = ""
             if (t.isNotBlank() && a.isNotBlank()) Thread {
                 val appleGenre = SpotifyVideoLookup.genreFor(t, a)
                 runOnUiThread {
                     if (trackIdentity == identity) {
                         songVibe = genreFromApple(appleGenre) // only for the song still playing
+                        songGenre = appleGenre.orEmpty()
                         genreDetector.setAppleGenre(appleGenre, SystemClock.uptimeMillis())
                         genre = genreDetector.genre
                     }
@@ -639,108 +657,42 @@ class RaveActivity : ComponentActivity() {
         val t = m?.getString(MediaMetadata.METADATA_KEY_TITLE).orEmpty()
         val a = artist
         val album = m?.getString(MediaMetadata.METADATA_KEY_ALBUM).orEmpty()
-        val dur = (m?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L) / 1000L
+        val durMs = m?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L
         val key = "$a|$t"
         if (key == lyricsKey) return
         lyricsKey = key
         lyrics = emptyList()
         plainLyrics = null
+        lyricsTiming = null
+        songFacts = null
+        vocalSylPerSec = 0f
         if (t.isBlank()) { lyricsState = ""; return }
         lyricsState = "loading"
         Thread {
-            val res = try { queryLrclib(t, a, album, dur) } catch (e: Exception) { android.util.Log.d("Rave", "tekst feilet: $e"); null }
+            // Deezer (beat BPM) in parallel; the word guessing waits at most 3 s for it.
+            var facts: DeezerLookup.TrackFacts? = null
+            val deezer = Thread {
+                facts = try { DeezerLookup.track(a, t, durMs / 1000L) } catch (_: Exception) { null }
+                val f = facts
+                runOnUiThread { if (lyricsKey == key) songFacts = f }
+            }.apply { start() }
+            val res = try {
+                LyricsSource.load(t, a, album, durMs) { deezer.join(3_000L); facts?.bpm ?: 0f }
+            } catch (e: Exception) { android.util.Log.d("Rave", "tekst feilet: $e"); null }
+            val rate = res?.let { LyricsSource.sylPerSec(it.lines) } ?: 0f
             runOnUiThread {
                 if (lyricsKey != key) return@runOnUiThread
-                if (res == null || (res.first.isEmpty() && res.second.isNullOrBlank())) {
+                if (res == null || (res.lines.isEmpty() && res.plain.isNullOrBlank())) {
                     lyricsState = "none"
                 } else {
-                    lyrics = res.first
-                    plainLyrics = res.second
+                    lyrics = res.lines
+                    plainLyrics = res.plain
+                    lyricsTiming = res.timing
+                    vocalSylPerSec = rate
                     lyricsState = "ok"
                 }
             }
         }.start()
-    }
-
-    private fun httpGet(url: String): String? {
-        repeat(4) { attempt ->
-            val c = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-            c.connectTimeout = 7000
-            c.readTimeout = 7000
-            c.setRequestProperty("User-Agent", "Bilnett/1.0")
-            try {
-                val code = c.responseCode
-                if (code == 200) return c.inputStream.bufferedReader().readText()
-                if (code == 404) return null
-                android.util.Log.d("Rave", "lrclib $code, forsøk ${attempt + 1}")
-            } catch (e: Exception) {
-                android.util.Log.d("Rave", "lrclib feil: $e")
-            } finally {
-                c.disconnect()
-            }
-            Thread.sleep(700L * (attempt + 1))
-        }
-        return null
-    }
-
-    /** Velger treffet med synkronisert tekst og lengde nærmest sangen. */
-    private fun bestMatch(json: String?, dur: Long): org.json.JSONObject? {
-        if (json == null) return null
-        val arr = org.json.JSONArray(json)
-        var best: org.json.JSONObject? = null
-        var bestScore = Double.MAX_VALUE
-        for (i in 0 until arr.length()) {
-            val o = arr.getJSONObject(i)
-            val synced = !o.isNull("syncedLyrics")
-            val plain = !o.isNull("plainLyrics")
-            if (!synced && !plain) continue
-            val d = if (o.isNull("duration")) -1.0 else o.optDouble("duration", -1.0)
-            var score = if (dur > 0 && d > 0) kotlin.math.abs(d - dur) else 30.0
-            if (!synced) score += 1000.0
-            if (score < bestScore) { bestScore = score; best = o }
-        }
-        return best
-    }
-
-    private fun queryLrclib(t: String, a: String, album: String, dur: Long): Pair<List<Pair<Long, String>>, String?>? {
-        fun enc(x: String) = java.net.URLEncoder.encode(x, "UTF-8")
-        // Fjern "(feat. …)", "- Remastered" o.l. som ofte gir bom
-        val clean = t.replace(Regex("""\s*[\(\[].*?(feat|with|remaster|version|edit|live).*?[\)\]]""", RegexOption.IGNORE_CASE), "")
-            .replace(Regex("""\s+-\s+.*(remaster|version|edit|live).*$""", RegexOption.IGNORE_CASE), "").trim()
-        val firstArtist = a.split(",", "&", " feat").first().trim()
-        var obj: org.json.JSONObject? = null
-        var url = "https://lrclib.net/api/get?track_name=${enc(clean)}&artist_name=${enc(firstArtist)}"
-        if (dur > 0) url += "&duration=$dur"
-        httpGet(url)?.let { obj = org.json.JSONObject(it) }
-        if (obj == null || obj!!.isNull("syncedLyrics")) {
-            bestMatch(httpGet("https://lrclib.net/api/search?track_name=${enc(clean)}&artist_name=${enc(firstArtist)}"), dur)?.let { obj = it }
-        }
-        if (obj == null || obj!!.isNull("syncedLyrics")) {
-            bestMatch(httpGet("https://lrclib.net/api/search?q=${enc("$firstArtist $clean")}"), dur)?.let { if (obj == null || !it.isNull("syncedLyrics")) obj = it }
-        }
-        val o = obj ?: return null
-        val synced = if (o.isNull("syncedLyrics")) "" else o.optString("syncedLyrics", "")
-        val plain = if (o.isNull("plainLyrics")) null else o.optString("plainLyrics", "").takeIf { it.isNotBlank() }
-        android.util.Log.d("Rave", "tekst funnet: ${o.optString("trackName")} synced=${synced.isNotBlank()}")
-        return parseLrc(synced) to plain
-    }
-
-    private fun parseLrc(text: String): List<Pair<Long, String>> {
-        val re = Regex("""\[(\d+):(\d+)(?:[.:](\d+))?]""")
-        val out = mutableListOf<Pair<Long, String>>()
-        text.lineSequence().forEach { line ->
-            val ms = re.findAll(line).toList()
-            if (ms.isEmpty()) return@forEach
-            val words = line.substring(ms.last().range.last + 1).trim()
-            ms.forEach { m ->
-                val min = m.groupValues[1].toLong()
-                val sec = m.groupValues[2].toLong()
-                val fr = m.groupValues[3]
-                val frMs = if (fr.isEmpty()) 0L else fr.padEnd(3, '0').take(3).toLong()
-                out.add((min * 60000 + sec * 1000 + frMs) to words)
-            }
-        }
-        return out.sortedBy { it.first }
     }
 
     private val audioManager by lazy { getSystemService(AudioManager::class.java) }
@@ -1513,6 +1465,7 @@ class RaveActivity : ComponentActivity() {
         FlowRow(horizontalArrangement=Arrangement.spacedBy(10.u), verticalArrangement=Arrangement.spacedBy(8.u)) {
             if (mediaVisible) {
                 LyricsButton()
+                if (showLyrics && lyrics.isNotEmpty()) LyricsSyncButtons()
                 if (videoId != null) VideoButton()
                 if (videoOn && videoClips.size > 1) NextVideoButton()
             }
@@ -1683,6 +1636,26 @@ class RaveActivity : ComponentActivity() {
         }
     }
 
+    /** Tekst-synk: − shows the words earlier, + later (the car's speakers lag behind the phone). */
+    @Composable
+    private fun LyricsSyncButtons() {
+        Row(
+            Modifier.height(64.u).clip(RoundedCornerShape(50)).background(Color(0x22FFFFFF)),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            @Composable
+            fun step(label: String, dir: Int) = Box(
+                Modifier.fillMaxHeight().clip(RoundedCornerShape(50)).clickable { buttonInteraction(); stepLyricsOffset(dir) }
+                    .padding(horizontal = 20.u),
+                contentAlignment = Alignment.Center
+            ) { Text(label, color = Color(0xFFF5F2EC), fontSize = 24.us, fontWeight = FontWeight.SemiBold, maxLines = 1) }
+            step("−", -1)
+            Text("${if (lyricsOffsetMs > 0) "+" else ""}$lyricsOffsetMs ms", color = Color(0xFFF5F2EC), fontSize = 15.us,
+                maxLines = 1, softWrap = false, fontFamily = FontFamily.Default)
+            step("+", 1)
+        }
+    }
+
     @Composable
     private fun NextVideoButton() {
         val clip = videoClips.getOrNull(videoIndex) ?: return
@@ -1712,6 +1685,48 @@ class RaveActivity : ComponentActivity() {
             Text("Video", fontFamily = FontFamily.Default, maxLines = 1, softWrap = false,
                 color = if (on) Color(0xFF0A0A0A) else Color(0xFFF5F2EC), fontSize = 18.us, fontWeight = FontWeight.SemiBold)
         }
+    }
+
+    /**
+     * «Sang»: everything the app knows about the song — beat tempo (Deezer, else measured), how fast
+     * the vocals/rap go (syllables per second and per beat), where the lyrics timing came from.
+     */
+    @Composable
+    private fun SongInfoBlock(measuredBpm: Float, dim: Color) {
+        val f = songFacts
+        val deezerBpm = f?.bpm ?: 0f
+        val bpm = if (deezerBpm > 0f) deezerBpm else measuredBpm
+        Spacer(Modifier.height(6.u))
+        Text("Sang", color = Color(0xFFF5F2EC), fontSize = 14.us, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        Text(if (bpm > 0f) "Beat %.0f BPM (%s)".format(bpm, if (deezerBpm > 0f) "Deezer" else "målt") else "Beat: ukjent",
+            color = dim, fontSize = 11.us, maxLines = 1)
+        fun flow(perBeat: Float) = when {
+            perBeat < 1.5f -> "4-dels"
+            perBeat < 2.5f -> "8-dels"
+            perBeat < 3.5f -> "triol"
+            else -> "16-dels"
+        }
+        if (vocalSylPerSec > 0f) {
+            val perBeat = if (bpm > 0f) vocalSylPerSec * 60f / bpm else 0f
+            // With guessed word timing the speed is the app's own estimate, not measured — say so.
+            val est = if (lyricsTiming == LyricsTiming.GUESSED) " (gjettet)" else ""
+            Text("Vokal %.1f stav/s".format(vocalSylPerSec) + est + (if (perBeat > 0f) " · %.1f per slag (%s flow)".format(perBeat, flow(perBeat)) else ""),
+                color = dim, fontSize = 11.us, maxLines = 1)
+            // The line being sung right now (rap verses are much faster than a chorus).
+            val now = pos - lyricsOffsetMs
+            lyrics.lastOrNull { it.words.isNotEmpty() && it.startMs <= now && now <= it.endMs + 300L }?.let { line ->
+                val r = LyricsSource.sylPerSec(line)
+                if (r > 0f) Text("Linja nå %.1f stav/s".format(r) + (if (bpm > 0f) " · %.1f per slag".format(r * 60f / bpm) else ""),
+                    color = dim, fontSize = 11.us, maxLines = 1)
+            }
+        }
+        lyricsTiming?.let { Text("Tekst: ${it.label}", color = dim, fontSize = 11.us, maxLines = 1) }
+        val extra = listOfNotNull(
+            songGenre.takeIf { it.isNotBlank() },
+            f?.gainDb?.let { "%.1f dB".format(it) },
+            f?.releaseDate?.take(4)?.takeIf { it.isNotBlank() && it != "0000" }
+        )
+        if (extra.isNotEmpty()) Text(extra.joinToString(" · "), color = dim, fontSize = 11.us, maxLines = 1)
     }
 
     /** Live analysis panel: section, phrase position and the meters behind the decisions. */
@@ -1751,6 +1766,7 @@ class RaveActivity : ComponentActivity() {
             meter("Rock", rockness, "%.0f %%".format(rockness * 100f))
             Text("takt-klokke ${if (beatClock.active) "på" else "av"} · look ${dropLook + 1} · blink/s $flashesNow${if (dip > .05f) " · pust inn" else ""}",
                 color = dim, fontSize = 11.us, maxLines = 1)
+            SongInfoBlock(h.bpm, dim)
         }
     }
 
@@ -1833,16 +1849,24 @@ class RaveActivity : ComponentActivity() {
             when {
                 lyricsState == "loading" -> Text("Henter tekst …", color = dim, fontSize = 22.us, textAlign = ta, fontFamily = BodyFont)
                 lyrics.isNotEmpty() -> {
-                    val now = pos + 250
-                    val idx = lyrics.indexOfLast { it.first <= now }.coerceAtLeast(0)
-                    val start = lyrics[idx].first
-                    val end = lyrics.getOrNull(idx + 1)?.first ?: (start + 5_000L)
-                    // A long instrumental after a line must not slow the word timing down to a crawl.
-                    val dur = minOf(end - start, maxOf(1_500L, lyrics[idx].second.length * 90L)).coerceAtLeast(1L)
-                    val progress = ((now - start).toFloat() / dur).coerceIn(0f, 1f)
+                    // Song time as heard: + Tekst-synk shows the words later (car speakers lag behind).
+                    val now = pos - lyricsOffsetMs
+                    // The line switches a little early so it can be read; the words fill on their own time.
+                    val idx = lyrics.indexOfLast { it.startMs <= now + LINE_LEAD_MS }.coerceAtLeast(0)
+                    // A known pause: the line is sung out and the next one is still a while away (or the intro / outro).
+                    // With guessed word timing the end of a line is uncertain, so wait longer before showing it.
+                    val cur = lyrics[idx]
+                    val nextStart = lyrics.getOrNull(idx + 1)?.startMs
+                    val after = if (lyricsTiming == LyricsTiming.GUESSED) PAUSE_AFTER_GUESSED_MS else PAUSE_AFTER_MS
+                    val farFromNext = nextStart == null || nextStart - now > PAUSE_BEFORE_NEXT_MS
+                    val intro = now + LINE_LEAD_MS < lyrics[0].startMs
+                    val pause = if (intro) lyrics[0].startMs - now > PAUSE_BEFORE_NEXT_MS
+                        else farFromNext && (cur.words.isEmpty() || now > cur.endMs + after)
+                    val upcoming = if (intro) lyrics[0].text else lyrics.getOrNull(idx + 1)?.text
                     // Text colour from the cover, lifted so it reads on a dark background.
                     val accent = remember(colors) { colors.maxByOrNull { maxOf(it.red, it.green, it.blue) - minOf(it.red, it.green, it.blue) }?.let { brighten(it) } ?: Color(0xFFFF7A3D) }
-                    StyledLyrics(lyricsStyle, lyrics, idx, progress, align, accent, lyricsPulse, if (fill) Modifier.fillMaxSize() else Modifier.fillMaxWidth().height(260.u))
+                    StyledLyrics(lyricsStyle, lyrics, idx, now, align, accent, lyricsPulse, if (fill) Modifier.fillMaxSize() else Modifier.fillMaxWidth().height(260.u),
+                        pause = pause, upcoming = upcoming?.takeIf { it != "♪" })
                 }
                 plainLyrics != null -> Text(
                     plainLyrics.orEmpty(), color = Color(0xCCF5F2EC), fontSize = 20.us, fontFamily = FontFamily.Default, lineHeight = 28.us, textAlign = ta,
