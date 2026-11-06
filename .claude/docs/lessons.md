@@ -5,6 +5,81 @@
 
 ---
 
+### Sjanger fra lyd alene er upålitelig: metadata først
+**Dato:** 2026-11-06
+**Kategori:** Android / Kotlin
+**Berørte filer:** `rave/GenreDetector.kt`, `rave/RaveActivity.kt` (updateMeta), `rave/DeezerLookup.kt`, `rave/SpotifyVideoLookup.kt` (appleGenre), `rave/GenreBook.kt`
+
+**Problem:** Rap ble vist som «UPTEMPO», og pop («Hey, Soul Sister», Train) ble klassifisert som HARDSTYLE.
+
+**Årsak:** (a) Regelen «rått drop» (tung og forvrengt bass i 0,8 s) låste hele sangen som hardstyle før Apple-svaret kom 1–3 s senere. Låsen ble aldri nullstilt. (b) Takt måles ofte dobbelt (rap 95 → 190 BPM, pop 97 → 180). (c) Strummet gitar og ukulele leses som «grit». (d) Pop fantes ikke som sjanger, så lyden bestemte.
+
+**Løsning:** Apple (eksakt sangtreff, ikke artist-fallback) og Deezer albumsjanger (`/album/{id}`, `genres`) avgjør. Sikker rap-, pop- eller rolig-sjanger låses for hele sangen. Rått drop venter på metadata i maks 4 s. Lås ikke hvis en kilde sier Dance (Apple merker rå hardstyle som Hip-Hop/Rap).
+
+**Forebygging:** Lyd er et hjelpesignal, ikke fasit. Metadata først. Deezer-sjanger er ikke alltid riktig («Rock, Hard Rock» på en hardstyle-anthem), så Apple vektes høyest.
+
+---
+
+### Sjanger og lås arvet mellom sanger
+**Dato:** 2026-11-06
+**Kategori:** Android / Kotlin
+**Berørte filer:** `rave/GenreDetector.kt`, `rave/RaveActivity.kt` (newTrack)
+
+**Problem:** Ny sang startet som hardstyle fordi forrige sang var i hardstyle.
+
+**Årsak:** `GenreDetector.genre` ble ikke nullstilt i `newTrack`. Hysteresen «bli i hardstyle» og låsen (`target == HARDSTYLE && genre == HARDSTYLE`) gjaldt uansett når sangen startet.
+
+**Løsning:** Hver sang starter som STANDARD. Lås og hysterese krever `changedAt >= trackStart`.
+
+**Forebygging:** Tilstand som styrer klassifisering må nullstilles i samme funksjon som bytter sang. Gå gjennom alle felt som lever på objektet mellom sanger.
+
+---
+
+### Refreng-deteksjon: snittet må ikke starte på 0
+**Dato:** 2026-11-06
+**Kategori:** Android / Lyd
+**Berørte filer:** `rave/GenreDetector.kt` (refreng-deteksjon)
+
+**Problem:** De første ~20 s av en popsang ble klassifisert som «refreng».
+
+**Årsak:** Energi-snittet startet på 0, så alt over snittet ble refreng. Pop er jevnt mikset, og terskel .04/.12 slo nesten aldri ut.
+
+**Løsning:** Snittet følger med de første ~10 s med musikk. Terskler .015/.07 med 40 s snitt.
+
+**Forebygging:** Glidende snitt trenger oppvarming, ellers avgjør startverdien resultatet. Juster terskler med faktisk musikk, ikke gjetning.
+
+---
+
+### Fake drop-løkke: nytt «drop» hvert sekund etter fake drop
+**Dato:** 2026-11-06
+**Kategori:** Android / Lyd
+**Berørte filer:** `rave/GenreDetector.kt` (eller tilsvarende drop-logikk i `RaveActivity.kt`)
+
+**Problem:** Etter FAKE DROP kom nytt drop med en gang, og fake kom igjen hvert sekund under build-up.
+
+**Årsak:** `primed = true` ble satt, og `backFromDip` (subFast − subMin ≥ 6 dB) var fortsatt sann. Neste frame trigget drop.
+
+**Løsning:** 2 takters pause etter fake. `subMin = sub1` ved fake. Banneret vises maks én gang per 8 s.
+
+**Forebygging:** Når en hendelse utløser en tilstand, nullstill grunnlaget den ble målt mot. Ellers trigges den på nytt umiddelbart.
+
+---
+
+### Feilsøk sangklassifisering: logg én linje per sang
+**Dato:** 2026-11-06
+**Kategori:** Android / Logging
+**Berørte filer:** `rave/GenreDetector.kt`, `rave/RaveActivity.kt` (updateMeta)
+
+**Problem:** Det var vanskelig å se hvorfor en sang fikk feil sjanger ut fra støyende logg.
+
+**Årsak:** Ingen samlet logglinje per beslutning.
+
+**Løsning:** Logg én linje per sang med tittel, Apple- og Deezer-sjanger, eksakt/artist-treff og lås (tag `RaveGenre`). Kjør `adb logcat` i en løkke med `adb wait-for-device`, fordi USB-forbindelsen faller ut. Pakkenavnet på telefonen er `no.espen.bilnett.aa`. `pidof com.kododake.aabrowser` finner ingenting.
+
+**Forebygging:** Ett loggformat per beslutning gjør feilsøking i bil mulig. Sjekk pakkenavnet på enheten før du leter etter prosessen.
+
+---
+
 ### Krasj på hver build-up: `%` i format-streng («BUILD-UP 66%»)
 **Dato:** 2026-11-04
 **Kategori:** Android / Kotlin
