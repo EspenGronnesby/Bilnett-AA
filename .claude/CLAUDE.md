@@ -24,6 +24,10 @@ Ferdig og på `main`:
 
 Ikke testet i bil ennå: om bilens volumknapp påvirker telefonens medievolum.
 
+**2026-11-06: Party-analyse og trening.** Espen merker sangdelene i Party → Analyse, og appen
+logger fasit mot sin egen gjetning. Les `.claude/docs/party-analyse.md` før du rører
+sangstruktur, drop-deteksjon eller sjangerregler. Planen for sjangre: `~/.claude/plans/jeg-har-lagt-mere-happy-sunset.md`.
+
 ## Tech stack
 
 Kotlin · Jetpack Compose · Android View/WebView · Android Auto (`CAR_LAUNCHER`,
@@ -54,7 +58,9 @@ app/src/main/java/com/kododake/aabrowser/rave/
 ├── HardstyleVisuals.kt    # HardstyleOrb (ringen), HardstyleBackdrop (partikler, ripples), volumkurver
 ├── SilentClipView.kt      # Musikkvideo
 ├── SpotifyVideoLookup.kt  # Finner video via iTunes-søk
-└── NowPlayingListener.kt  # Varseltilgang for å lese hva som spilles
+├── NowPlayingListener.kt  # Varseltilgang for å lese hva som spilles
+└── party/                 # Analyselogg, FFT-opptak, rettelser per sang (se .claude/docs/party-analyse.md)
+tools/party-analyse/       # Mac: henter loggene fra telefonen + HTML-rapport (data i Bilnett-AA-assets, aldri i git)
 ```
 
 ### Party-modus — signaler og hvor tallene står
