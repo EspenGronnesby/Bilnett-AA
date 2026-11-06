@@ -28,6 +28,31 @@ Ikke testet i bil ennå: om bilens volumknapp påvirker telefonens medievolum.
 logger fasit mot sin egen gjetning. Les `.claude/docs/party-analyse.md` før du rører
 sangstruktur, drop-deteksjon eller sjangerregler. Planen for sjangre: `~/.claude/plans/jeg-har-lagt-mere-happy-sunset.md`.
 
+## Når Espen sier «analyser» (eller «tren appen», «se på rapporten»)
+
+Da mener han Party-analysen av sangene han har spilt. **Telefonen trenger ikke være koblet til.**
+Dataene ligger allerede på Mac-en, utenfor repoet:
+
+```
+~/Vibe-kode/Projects/Bilnett-AA-assets/party-analyse/
+├── raw/*.csv            # én fil per sang: hver takt, hva appen målte, Espens fasit (part_by=espen) og auto_part
+├── raw/feedback.csv     # alle trykk: rett_intro/buildup/drop/breakdown/outro, for_mye, for_lite, bra, fake_drop
+├── raw/sammendrag.txt   # én linje per sang
+├── raw/fft/*.fft.gz     # rå lydanalyse per sang (spilles av i PartyReplayTest)
+├── raw/song-marks.json  # rettelser per sang
+└── rapport.html, replay.txt, sweep.txt
+```
+
+Gjør dette, i rekkefølge:
+1. **Er telefonen koblet til** (`adb get-state` = `device`)? Hent nytt først: `python3 tools/party-analyse/sync.py`. Ikke koblet til: bruk det som ligger der.
+2. **Rapport:** `python3 tools/party-analyse/report.py` → les `rapport.html` (hvor ofte appen var enig med Espen, per del og per sang).
+3. **Avspilling mot fasit:** `./gradlew testDebugUnitTest --tests '*PartyReplayTest.replayAgainstEspensAnswers'` → les `replay.txt`.
+4. **Trening (søk etter beste terskler):** `touch …/party-analyse/SWEEP`, kjør `--tests '*PartyReplayTest.sweepTuning'`, les `sweep.txt`, slett `SWEEP` etterpå. Tersklene står i `PartyTuning` (`GenreDetector.kt`).
+5. Velg robuste verdier (ikke overtilpass få sanger), bygg, installer, og fortell Espen kort hva som ble bedre/verre (tabell før/nå) og hva han bør merke mer av.
+
+Status 2026-11-06 (9 sanger med fasit): 69 % enig; drop 86 %, breakdown 66 %, intro 86 %, **build-up 12 % (svakest)**.
+Detaljer om hvordan alt henger sammen: `.claude/docs/party-analyse.md`. Data havner **aldri** i git (repoet er offentlig).
+
 ## Tech stack
 
 Kotlin · Jetpack Compose · Android View/WebView · Android Auto (`CAR_LAUNCHER`,

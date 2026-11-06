@@ -59,7 +59,16 @@ Hva vi ser etter i rapporten:
 - **Drop funnet**: dine drop som appen fant selv innen 3 s (første måling 15/25).
 - **Effekter per del**: skal stige intro → breakdown → build-up → drop.
 
-## 4. Hvordan Claude trener (neste steg)
+## 4. Hvordan Claude trener
+
+Kommandoene står i CLAUDE.md under «Når Espen sier analyser». Kort:
+`report.py` (rapport) → `PartyReplayTest.replayAgainstEspensAnswers` (avspilling mot fasit, `replay.txt`)
+→ `PartyReplayTest.sweepTuning` med `SWEEP`-fil (søk etter terskler i `PartyTuning`, `sweep.txt`).
+
+Funn 2026-11-06: Espens breakdowns har ofte kick (2,4 kick/s, som drop). Det som skiller er «fylde»:
+diskant + presence ca. 1,5–2 dB under sangens topp i breakdown, mens build-up har lite sub (−6 dB) og full diskant.
+
+Gammel plan for trening:
 
 1. Hent loggene og lydopptakene (sync).
 2. Spill av lydopptakene gjennom `HardstyleAudio` + `HardstyleStructure` på Mac-en (JUnit) med

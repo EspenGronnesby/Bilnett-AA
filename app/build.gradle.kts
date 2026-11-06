@@ -14,6 +14,10 @@ android {
     namespace = "com.kododake.aabrowser"
     compileSdk = 37
 
+    // JVM unit tests: android.util.Log etc. return defaults instead of throwing (the Party replay
+    // test runs the real song-structure code, which logs).
+    testOptions { unitTests.isReturnDefaultValues = true }
+
     defaultConfig {
         applicationId = "no.espen.bilnett.aa"
         minSdk = 35

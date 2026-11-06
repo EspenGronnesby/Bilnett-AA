@@ -482,6 +482,31 @@ internal const val MID_SONG_JOIN_MS = 30_000L
 internal const val DROP_LOUD_MARGIN_DB = 3f
 /** A correction from Espen holds the song part this many bars. */
 internal const val FORCE_HOLD_BARS = 8
+// «Fullness» (see HardstyleStructure.brightRel), fitted to Espen's labels 2026-11-06.
+internal const val FULL_EMA_S = 2f
+internal const val FULL_REF_FALL_DB_PER_S = 3f / 60f
+internal const val FULL_WARMUP_MS = 20_000L
+/**
+ * Song-part thresholds fitted to Espen's answers (PartyReplayTest searches them). Chosen 2026-11-06 on
+ * 9 hardstyle songs he steered by hand: 48 % → 69 % agreement (drop 86 %, breakdown 2 → 65 %,
+ * intro 86 %; build-up still ~15 % — needs its own riser/roll signal and more songs). `var` only so the
+ * replay test can try other values; the app never changes them.
+ */
+internal object PartyTuning {
+    /** Leave a drop for BREAKDOWN when treble+presence stay this far under the song's peak … */
+    var dullBrightDb = -2.5f
+    /** … for this many bars. */
+    var dullBars = 2f
+    /** Leave a drop for BUILD-UP: sub this far down while treble stays near its peak. */
+    var buildSubDb = -3f
+    var buildBrightDb = -1.5f
+    /** A pending drop is only confirmed when treble+presence are at least this close to the song's peak. */
+    var confirmBrightDb = -4f
+    /** After leaving a drop, no new drop for this many bars (no drop–breakdown–drop flicker). */
+    var reentryBars = 2f
+    /** A pending drop also needs the sub this close to the song's peak (a build-up is bright, but thin). */
+    var confirmSubDb = -99f
+}
 /** DROP corrected back to BUILD-UP within this time = a fake drop. */
 internal const val FAKE_DROP_WINDOW_MS = 10_000L
 /** A corrected build-up holds this long at most (a real drop ends it earlier). */
@@ -531,6 +556,20 @@ internal class HardstyleStructure {
     var manual = false
     private var lastBarMs = 1600f
     private var lastSongFraction = -1f
+    // «Fullness» (trained on Espen's answers 2026-11-06): 2 s level of sub, treble (air) and
+    // presence (vocals/leads), each against a slowly falling peak of this song. A drop is full in
+    // all of them; his breakdowns still have the kick but less treble/presence; a build-up has
+    // little sub but full treble.
+    private var fullSub = 0f; private var fullAir = 0f; private var fullPres = 0f
+    private var refSub = 0f; private var refAir = 0f; private var refPres = 0f
+    private var dullSince = 0L
+    private var dropEndedAt = 0L
+    private var buildSigSince = 0L
+    /** Treble+presence vs this song's peak (dB, ≤ 0) and sub vs its peak — for the HUD/log too. */
+    var brightRel = 0f
+        private set
+    var subFullRel = 0f
+        private set
     // section state
     private var primed = false
     private var introOver = false
@@ -552,6 +591,7 @@ internal class HardstyleStructure {
     fun newTrack(now: Long) {
         part = SongPart.INTRO; dropKind = DropKind.NONE; label = ""; labelAt = 0L; hud = StructureHud()
         trackStart = now; partSince = now; started = false; joinChecked = false; forcedUntil = 0L
+        dullSince = 0L; buildSigSince = 0L; brightRel = 0f; subFullRel = 0f; dropEndedAt = 0L
         primed = false; introOver = false; buildSince = 0L; notBuildSince = 0L; dropHitAt = 0L; dropLowSince = 0L
         realDrops = 0; boostNext = false; dropBoost = 0f; intensity = .4f; lastBannerAt = 0L
         phaseVotes.fill(0); lastBarLogged = -1; lastKickAt = 0L; snareRate = 0f; grit1 = 0f
@@ -620,6 +660,9 @@ internal class HardstyleStructure {
     private fun enter(next: SongPart, now: Long, why: String) {
         if (next == part) return
         Log.d("RaveGenre", "del: ${part.label} → ${next.label} ($why)")
+        // Every way out of a drop starts the re-entry lockout; every new drop starts its exit timers fresh.
+        if (part == SongPart.DROP) dropEndedAt = now
+        if (next == SongPart.DROP) { dullSince = 0L; buildSigSince = 0L }
         part = next; partSince = now
         when (next) {
             SongPart.BUILDUP -> { primed = true; introOver = true; show("BUILD-UP", now) }
@@ -639,6 +682,8 @@ internal class HardstyleStructure {
         if (!started) {
             subFast = subDb; sub1 = subDb; sub8 = subDb; air1 = airDb; air8 = airDb; subRef = subDb; subMin = subDb
             noise1 = f.noise; noise8 = f.noise; started = true
+            fullSub = subDb; fullAir = airDb; fullPres = db(f.presence)
+            refSub = fullSub; refAir = fullAir; refPres = fullPres
         }
         // Party switched on (or the app reopened) in the middle of a song: this is not its intro,
         // and the next big sub hit may well be a drop (log 2026-11-06: joined at 1:41, the drop
@@ -653,6 +698,12 @@ internal class HardstyleStructure {
         subMin = minOf(sub1, subMin + dt * 1.5f)          // recent low point
         air1 = ema(air1, airDb, 1f); air8 = ema(air8, airDb, 8f)
         grit1 = ema(grit1, f.grit, 1f)
+        fullSub = ema(fullSub, subDb, FULL_EMA_S); fullAir = ema(fullAir, airDb, FULL_EMA_S); fullPres = ema(fullPres, db(f.presence), FULL_EMA_S)
+        val fall = dt * FULL_REF_FALL_DB_PER_S
+        refSub = max(fullSub, refSub - fall); refAir = max(fullAir, refAir - fall); refPres = max(fullPres, refPres - fall)
+        brightRel = ((fullAir - refAir) + (fullPres - refPres)) / 2f
+        subFullRel = fullSub - refSub
+        val warmedUp = now - trackStart > FULL_WARMUP_MS
         noise1 = ema(noise1, f.noise, 1f); noise8 = ema(noise8, f.noise, 8f)
         val kickHit = f.kick > .95f && lastKick <= .95f
         val snareHit = f.snare > .95f && lastSnare <= .95f
@@ -693,7 +744,14 @@ internal class HardstyleStructure {
                     // Real when the sub rose ≥ 3 dB over where it was, OR it sits at this song's own loud
                     // level with the kick going (a short dip before the drop leaves little to rise from).
                     val atLoudLevel = sub1 >= subRef - DROP_LOUD_MARGIN_DB && !kickGone && sub1 - dropBaseline >= 1.5f
-                    if (sub1 - dropBaseline >= 3f || atLoudLevel) {
+                    // A drop is full: treble/presence near the song's peak too (not a breakdown whose
+                    // kick and bass just got louder).
+                    val fullEnough = !warmedUp || (brightRel >= PartyTuning.confirmBrightDb && subFullRel >= PartyTuning.confirmSubDb)
+                    if (!fullEnough) {
+                        dropKind = DropKind.NONE; subMin = sub1
+                        Log.d("RaveGenre", "ikke drop: diskant/vokal %.1f dB under toppen".format(-brightRel))
+                        enter(SongPart.BREAKDOWN, now, "ikke fullt nok for drop")
+                    } else if (sub1 - dropBaseline >= 3f || atLoudLevel) {
                         realDrops++
                         lastRealDropAt = dropHitAt
                         primed = false
@@ -740,6 +798,21 @@ internal class HardstyleStructure {
                         // Espen pressed BUILD-UP twice while the analysis still said DROP).
                         dropKind = DropKind.NONE; dropBoost = 0f; dropLowSince = 0L
                         enter(SongPart.BUILDUP, now, "build-up inni dropet")
+                    } else if (warmedUp) {
+                        // Trained on Espen's answers: the analysis stayed in DROP through his breakdowns
+                        // (kick still going, but treble/presence clearly down) and build-ups (sub down,
+                        // treble full). Leave when that holds.
+                        val buildSig = subFullRel < PartyTuning.buildSubDb && brightRel > PartyTuning.buildBrightDb
+                        val dull = brightRel < PartyTuning.dullBrightDb
+                        buildSigSince = if (buildSig) (if (buildSigSince == 0L) now else buildSigSince) else 0L
+                        dullSince = if (dull) (if (dullSince == 0L) now else dullSince) else 0L
+                        if (buildSigSince > 0L && now - buildSigSince >= barMs) {
+                            dropKind = DropKind.NONE; dropBoost = 0f; buildSigSince = 0L; dullSince = 0L
+                            enter(SongPart.BUILDUP, now, "lite sub, full diskant")
+                        } else if (dullSince > 0L && now - dullSince >= PartyTuning.dullBars * barMs) {
+                            dropKind = DropKind.NONE; dropBoost = 0f; buildSigSince = 0L; dullSince = 0L
+                            enter(SongPart.BREAKDOWN, now, "diskant/vokal ned %.1f dB".format(brightRel))
+                        }
                     }
                 }
             }
@@ -759,9 +832,10 @@ internal class HardstyleStructure {
                 // Unprepared (INTRO/GROOVE, no build-up seen): only ≥ 16 bars in, and only as a return
                 // from a real dip — not just the kick starting after a quiet intro (log 2026-11-06,
                 // «Darkness»: a «drop» at 0:15 got two «for mye»).
-                val unprepared = !primed && (part == SongPart.INTRO || part == SongPart.GROOVE)
+                val unprepared = !primed && (part == SongPart.INTRO || part == SongPart.GROOVE || part == SongPart.BREAKDOWN)
                 val introDropOk = unprepared && now - trackStart > 16 * barMs
-                val blockedByCorrection = manual || (forced && !forcedDropOk)
+                val blockedByCorrection = manual || (forced && !forcedDropOk) ||
+                    (dropEndedAt > 0L && now - dropEndedAt < PartyTuning.reentryBars * barMs)
                 val mayDrop = !lockedOut && !afterFake && !blockedByCorrection && (primed || introDropOk || part == SongPart.BUILDUP ||
                     part == SongPart.BREAKDOWN || part == SongPart.VOCAL || part == SongPart.ANTI_CLIMAX)
                 // Also after a short build-up (where the 8 s average hasn't sunk much): the sub is back
@@ -785,11 +859,16 @@ internal class HardstyleStructure {
                         kickGone && part != SongPart.INTRO -> if (f.presence > 3f && f.highs > .08f) SongPart.VOCAL else SongPart.BREAKDOWN
                         kickGone && part == SongPart.INTRO && now - trackStart > 8_000L -> SongPart.BREAKDOWN
                         !introOver -> SongPart.INTRO
-                        else -> SongPart.GROOVE
+                        // Espen's parts (2026-11-06): after the intro, what isn't drop/build-up is
+                        // breakdown — also the parts between drops where the kick keeps going.
+                        else -> SongPart.BREAKDOWN
                     }
                     // Other changes need a bar of evidence (not one beat); none while a correction holds.
                     if (!forced && next != part && now - partSince >= barMs.toLong()) {
                         enter(next, now, "takt-bevis")
+                        // A breakdown where the kick keeps going (between drops) does not prime a drop by
+                        // itself: the next drop must come back from a real dip (or after a build-up).
+                        if (next == SongPart.BREAKDOWN && !kickGone) primed = false
                     }
                 }
             }
