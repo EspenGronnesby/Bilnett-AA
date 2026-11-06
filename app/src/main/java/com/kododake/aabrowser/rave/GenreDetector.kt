@@ -246,6 +246,9 @@ internal class GenreDetector {
         songLock = null; lookupDone = false; dropSince = 0L; timeIn.fill(0f); reason = ""
         chorus = 0f; energyFast = 0f; energySlow = 0f; musicSeconds = 0f
         rockness = .1f
+        // Start every song neutral (calm) instead of with the last song's genre (log 2026-11-06: a
+        // hardstyle track stayed RAP for ~20 s after a rap song). Soft 1 s change via [previous].
+        if (genre != Genre.STANDARD) { previous = genre; genre = Genre.STANDARD; changedAt = now }
         candidate = genre; candidateSince = now
     }
 
@@ -499,6 +502,8 @@ internal class HardstyleStructure {
     // Noise risers (flatness) and filter sweeps (centroid), fast vs slow (FastLED-style trend).
     private var noise1 = 0f; private var noise8 = 0f
     private var lastRealDropAt = 0L
+    /** Last fake drop: no new drop try for 2 bars after it (log 2026-11-06: fake → drop → fake every second). */
+    private var lastFakeAt = 0L
     private var subRef = 0f        // sub peak-hold (falls slowly, ~25 s)
     private var subMin = 0f        // recent sub minimum (rises 1.5 dB/s)
     private var snareRate = 0f; private var lastSnare = 0f
@@ -528,7 +533,7 @@ internal class HardstyleStructure {
         primed = false; introOver = false; buildSince = 0L; notBuildSince = 0L; dropHitAt = 0L; dropLowSince = 0L
         realDrops = 0; boostNext = false; dropBoost = 0f; intensity = .4f; lastBannerAt = 0L
         phaseVotes.fill(0); lastBarLogged = -1; lastKickAt = 0L; snareRate = 0f; grit1 = 0f
-        noise1 = 0f; noise8 = 0f; lastRealDropAt = 0L
+        noise1 = 0f; noise8 = 0f; lastRealDropAt = 0L; lastFakeAt = 0L
     }
 
     // Floor 2.5: 8-bit FFT values of 0/1 would otherwise flicker ±6 dB in quiet parts.
@@ -621,10 +626,14 @@ internal class HardstyleStructure {
                             Log.d("RaveGenre", "ANTI-CLIMAX (sub bare +%.1f dB, screech %.2f)".format(sub1 - dropBaseline, f.screech))
                             enter(SongPart.ANTI_CLIMAX, now, "anti-climax")
                         } else {
-                            show("FAKE DROP", now, always = true)
+                            // One banner per fake series, not one every second.
+                            show("FAKE DROP", now, always = now - lastFakeAt > 8_000L)
                             Log.d("RaveGenre", "FAKE DROP (sub bare +%.1f dB etter 1 takt)".format(sub1 - dropBaseline))
                             enter(if (kickGone) SongPart.BREAKDOWN else SongPart.BUILDUP, now, "fake drop")
                         }
+                        lastFakeAt = now
+                        // The «back from a dip» test must see a NEW dip before it can fire again.
+                        subMin = sub1
                         primed = true
                     }
                 }
@@ -648,7 +657,8 @@ internal class HardstyleStructure {
                 // re-entries inside it are not new drops — FastLED/Yadati use a similar lockout).
                 // 8 bars at most, so fast uptempo/frenchcore drops close together are still caught.
                 val lockedOut = lastRealDropAt > 0L && now - lastRealDropAt < minOf(DROP_LOCKOUT_MS, (8 * barMs).toLong())
-                val mayDrop = !lockedOut && (primed || part == SongPart.BUILDUP || part == SongPart.BREAKDOWN ||
+                val afterFake = lastFakeAt > 0L && now - lastFakeAt < (2 * barMs).toLong()
+                val mayDrop = !lockedOut && !afterFake && (primed || part == SongPart.BUILDUP || part == SongPart.BREAKDOWN ||
                     part == SongPart.VOCAL || part == SongPart.ANTI_CLIMAX)
                 // Also after a short build-up (where the 8 s average hasn't sunk much): the sub is back
                 // near its peak level after a clear dip of ≥ 6 dB.
