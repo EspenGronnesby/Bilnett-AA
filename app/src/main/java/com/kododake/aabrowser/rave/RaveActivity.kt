@@ -581,16 +581,32 @@ class RaveActivity : ComponentActivity() {
             stopTapTest()   // a new song has a new beat grid
             hardSubDetector.newTrack()
             val t = m?.getString(MediaMetadata.METADATA_KEY_TITLE).orEmpty()
-            val a = m?.getString(MediaMetadata.METADATA_KEY_ARTIST).orEmpty()
+            val a = cleanArtist(m?.getString(MediaMetadata.METADATA_KEY_ARTIST)).orEmpty()
             analysisLog.startSong(t, a)
             wrongGenres.clear(); handGenre = null; genrePickerOpen = false
             // The Mac's style teacher: genre/BPM only logged (phase B decides); the mood shapes the motion.
-            styleBook.lookup(GenreBook.key(t, a)).let { st ->
+            // Songs first listed with the player's badge («Artist • Lossless») are stored under that key.
+            val rawArtist = m?.getString(MediaMetadata.METADATA_KEY_ARTIST).orEmpty()
+            (styleBook.lookup(GenreBook.key(t, a)) ?: styleBook.lookup(GenreBook.key(t, rawArtist))).let { st ->
                 songMood = st?.mood
+                // Phase B: the teacher decides – genre locked for the song (Espen's own pick still wins via
+                // GenreBook), and its tempo guides the beat tracker (only when the tempo is trusted).
+                val now0 = SystemClock.uptimeMillis()
+                genreDetector.setTeacher(st?.genre?.first, now0)
+                hardstyleAudio.setTempoHint(st?.trustedBpm ?: 0f)
                 st?.mood?.let { m ->
-                    if (st.genre?.first == Genre.HARDSTYLE && (st.genre?.second ?: 0f) >= .4f)
-                        hardSubDetector.setMoodHint(if (m.raw >= com.kododake.aabrowser.rave.party.SongMood.RAW_SUB_FROM) HardSub.RAW else HardSub.EUPHORIC,
-                            SystemClock.uptimeMillis())
+                    if (st.genre?.first == Genre.HARDSTYLE && (st.genre?.second ?: 0f) >= .4f) {
+                        // Fast hard styles by the teacher's tempo (TempoCNN often reads 190 as 95: fold up),
+                        // otherwise raw vs euphoric by the mood.
+                        val bpm = st.trustedBpm?.let { if (it < 110f) it * 2f else it } ?: 0f
+                        hardSubDetector.setMoodHint(when {
+                            bpm >= 222f -> HardSub.FRENCHCORE
+                            bpm >= 188f -> HardSub.UPTEMPO
+                            bpm >= 165f -> HardSub.HARDCORE
+                            m.raw >= com.kododake.aabrowser.rave.party.SongMood.RAW_SUB_FROM -> HardSub.RAW
+                            else -> HardSub.EUPHORIC
+                        }, SystemClock.uptimeMillis())
+                    }
                     android.util.Log.d("RaveGenre", "stemning: rå %.2f · euforisk %.2f · rolig %.2f · fest %.2f · %s".format(java.util.Locale.US,
                         m.raw, m.euphoric, m.calm, m.partyLevel, m.themes.take(3).joinToString { it.first }))
                 }
@@ -633,7 +649,7 @@ class RaveActivity : ComponentActivity() {
         }
         title = m?.getString(MediaMetadata.METADATA_KEY_TITLE).orEmpty()
         songDurationMs = m?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L
-        artist = m?.getString(MediaMetadata.METADATA_KEY_ARTIST)
+        artist = cleanArtist(m?.getString(MediaMetadata.METADATA_KEY_ARTIST))
             ?: m?.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST).orEmpty()
         val bmp = m?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
             ?: m?.getBitmap(MediaMetadata.METADATA_KEY_ART)

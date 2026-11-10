@@ -18,6 +18,8 @@ internal const val GRIT_BASS_FROM = .45f
 internal const val GRIT_BASS_RANGE = .3f
 /** Bass this strong (norm) keeps the beat going through missed kicks (dense zaag drops). */
 internal const val FLYWHEEL_NORM = .55f
+/** The teacher's tempo wins when its spacing has at least this share of the strongest spacing's votes. */
+internal const val HINT_MIN_SHARE = .3f
 /** At most this many filled-in kicks in a row while the bass stays strong. */
 internal const val FLYWHEEL_BEATS = 8
 /** Kick value of a flywheel beat (under the .95 the song structure counts as a heard kick). */
@@ -86,6 +88,12 @@ internal class HardstyleAudio {
     private var fluxAvg = 0f
     private var lastCandidate = -1000L
     private var frame = HardstyleFrame()
+    /**
+     * Tempo from the Mac's style teacher (TempoCNN on the preview), or 0 = unknown. Kept across
+     * [reset] (mic ↔ visualizer switches); set again at every new song.
+     */
+    @Synchronized fun setTempoHint(bpm: Float) { beats.setHint(bpm) }
+
     @Synchronized fun reset() {
         spectrumAnalyzer.reset()
         peak = 8f; average = 0f; lastBass = 0f; lastAt = 0; lastKick = -1000; lastBurst = -5000
@@ -258,6 +266,14 @@ internal class BeatTracker {
     var confidence = 0
         private set
     private var predictedInRow = 0
+    /** The teacher's beat length in ms, folded into the tracker's 240–530 ms range (0 = none). */
+    private var hintPeriod = 0f
+
+    fun setHint(bpm: Float) {
+        var p = if (bpm in 40f..300f) 60_000f / bpm else 0f
+        if (p > 0f) { while (p < 240f) p *= 2f; while (p >= 530f) p /= 2f }
+        hintPeriod = p
+    }
     /** The last beat was predicted beyond the normal 2 (bass strong, kicks not heard). */
     val flywheeling: Boolean get() = predictedInRow > 2
     /** Number of beats so far (heard or filled in). */
@@ -285,16 +301,26 @@ internal class BeatTracker {
                 }
             }
         }
+        // Smooth over neighbouring bins (timing jitter of ±1 FFT frame).
+        fun score(b: Int) = bins[b] + .5f * (bins.getOrElse(b - 1) { 0f } + bins.getOrElse(b + 1) { 0f })
         var best = -1; var bestScore = 0f
         for (b in bins.indices) {
-            // Smooth over neighbouring bins (timing jitter of ±1 FFT frame).
-            val score = bins[b] + .5f * (bins.getOrElse(b - 1) { 0f } + bins.getOrElse(b + 1) { 0f })
+            val score = score(b)
             if (score > bestScore) { bestScore = score; best = b }
+        }
+        // The teacher's tempo: take the best spacing near it when the onsets support it at all
+        // (fixes double/half and 3:4 readings – live 117–235 BPM for a 155 BPM song, log 2026-11-06).
+        var hinted = false
+        if (hintPeriod > 0f && best >= 0) {
+            val hb = ((hintPeriod - 245f) / 10f).roundToInt().coerceIn(0, bins.size - 1)
+            var hBest = -1; var hScore = 0f
+            for (b in (hb - 2)..(hb + 2)) if (b in bins.indices && score(b) > hScore) { hScore = score(b); hBest = b }
+            if (hBest >= 0 && hScore >= 1.5f && hScore >= bestScore * HINT_MIN_SHARE) { best = hBest; bestScore = maxOf(bestScore, 3f); hinted = true }
         }
         if (best >= 0 && bestScore >= 3f) {
             // Very fast estimates (< 280 ms ≈ > 214 BPM) are often 8th notes of a ~120 BPM song:
             // prefer the double period when it has at least half the votes.
-            if (best < 4) {
+            if (best < 4 && !hinted) {
                 val double = best * 2 + 24
                 if (double < bins.size && bins[double] >= bins[best] * .5f) best = double
             }

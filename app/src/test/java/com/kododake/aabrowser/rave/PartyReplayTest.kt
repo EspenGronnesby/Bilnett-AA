@@ -84,6 +84,7 @@ class PartyReplayTest {
         fun db(x: Float) = 20.0 * kotlin.math.log10(maxOf(x.toDouble(), 2.5))
         for (fft in fftDir.listFiles { f -> f.name.endsWith(".fft.gz") }.orEmpty().sortedBy { it.name }) {
             val csv = csvFor(fft, csvs) ?: continue
+            if (!structured(csv, fft.name)) continue
             val key = truth(csv); if (key.size < 8) continue
             val fs = frames(fft); if (fs.size < 200) continue
             val audio = HardstyleAudio()
@@ -131,6 +132,7 @@ class PartyReplayTest {
         fun db(x: Float) = 20.0 * kotlin.math.log10(maxOf(x.toDouble(), 2.5))
         for (fft in fftDir.listFiles { f -> f.name.endsWith(".fft.gz") }.orEmpty().sortedBy { it.name }) {
             val csv = csvFor(fft, csvs) ?: continue
+            if (!structured(csv, fft.name)) continue
             val key = truth(csv); if (key.size < 8) continue
             val fs = frames(fft); if (fs.size < 200) continue
             val audio = HardstyleAudio()
@@ -170,15 +172,34 @@ class PartyReplayTest {
     private class Song(val name: String, val key: List<Pair<Long, String>>, val now: LongArray, val pos: LongArray,
                        val frames: List<HardstyleFrame>)
 
+    /** The teacher's answer for a song (style-book.json, looked up like the app does), or null. */
+    private fun teacher(csv: File): com.kododake.aabrowser.rave.party.StyleBook.Style? {
+        val head = csv.useLines { it.firstOrNull() }.orEmpty()
+        if (!head.startsWith("# ") || " – " !in head) return null
+        val (artist, title) = head.drop(2).split(" – ", limit = 2)
+        val book = File(raw.parentFile, "style-book.json").takeIf { it.exists() } ?: return null
+        return com.kododake.aabrowser.rave.party.StyleBook.parse(book.readText())[GenreBook.key(title, artist)]
+    }
+
+    /** Song parts (drop/build-up) only steer the visuals for hardstyle/EDM, so only those are scored. */
+    private fun structured(csv: File, fftName: String): Boolean {
+        val g = teacher(csv)?.genre?.first
+        return if (g != null) g == Genre.HARDSTYLE || g == Genre.EDM else "hardstyle" in fftName
+    }
+
+    /** Set to true to replay with the teacher's tempo hint (compare both). */
+    private var useTeacherTempo = false
+
     /** Decodes every song with an answer key once (the audio analysis doesn't depend on PartyTuning). */
     private fun songs(): List<Song> {
         val fftDir = File(raw, "fft")
         val csvs = raw.listFiles { f -> f.name.endsWith(".csv") && f.name != "feedback.csv" }?.toList().orEmpty()
         return fftDir.listFiles { f -> f.name.endsWith(".fft.gz") }.orEmpty().sortedBy { it.name }.mapNotNull { fft ->
             val csv = csvFor(fft, csvs) ?: return@mapNotNull null
-            val key = truth(csv); if (key.size < 8) return@mapNotNull null
+            val key = truth(csv); if (key.size < 8 || !structured(csv, fft.name)) return@mapNotNull null
             val fs = frames(fft); if (fs.size < 200) return@mapNotNull null
             val audio = HardstyleAudio()
+            if (useTeacherTempo) audio.setTempoHint(teacher(csv)?.trustedBpm ?: 0f)
             Song(fft.name.drop(16), key, LongArray(fs.size) { fs[it].now }, LongArray(fs.size) { fs[it].pos },
                 fs.map { audio.accept(it.fft, it.rate, it.now) })
         }
@@ -238,6 +259,20 @@ class PartyReplayTest {
         File(raw.parentFile, "sweep.txt").writeText(sb.toString())
     }
 
+    /** Phase B check: the same replay with and without the teacher's tempo hint. */
+    @Test fun teacherTempoDoesNotHurt() {
+        assumeTrue(File(raw, "fft").isDirectory)
+        useTeacherTempo = false
+        val without = evaluate(songs())
+        useTeacherTempo = true
+        val with = evaluate(songs())
+        val sb = "\nUten lærer-takt: enig %.0f %%, drop %d/%d, ekstra %d\nMed lærer-takt:  enig %.0f %%, drop %d/%d, ekstra %d\n".format(
+            Locale.US, 100 * without.agree, without.found, without.trueDrops, without.extra,
+            100 * with.agree, with.found, with.trueDrops, with.extra)
+        println(sb)
+        File(raw.parentFile, "teacher-tempo.txt").writeText(sb)
+    }
+
     @Test fun replayAgainstEspensAnswers() {
         val fftDir = File(raw, "fft")
         assumeTrue("ingen opptak på denne maskinen", fftDir.isDirectory)
@@ -247,6 +282,7 @@ class PartyReplayTest {
         var dropsTrue = 0; var dropsFound = 0; var dropsExtra = 0
         for (fft in fftDir.listFiles { f -> f.name.endsWith(".fft.gz") }.orEmpty().sortedBy { it.name }) {
             val csv = csvFor(fft, csvs) ?: continue
+            if (!structured(csv, fft.name)) continue
             val key = truth(csv)
             if (key.size < 8) continue
             val fs = frames(fft)

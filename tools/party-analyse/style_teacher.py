@@ -67,7 +67,10 @@ def version_ok(phone_title, cand_title):
 
 
 def main_artist(artist):
-    return re.split(r",|&| feat\.? | ft\.? | x ", artist or "", flags=re.I)[0].strip()
+    # The player adds badges like «Pop Smoke • Lossless» (2026-11-10): not part of the name.
+    artist = re.sub(r"\s*[•·]\s*(hi-?res\s+)?(lossless|dolby atmos|atmos|spatial audio|hi-?res|explicit|e)\s*$", "",
+                    artist or "", flags=re.I)
+    return re.split(r",|&| feat\.? | ft\.? | x ", artist)[0].strip()
 
 
 def candidates(title, artist):
@@ -145,14 +148,15 @@ def models():
                                            input=meta["schema"]["inputs"][0]["name"], output=out.rsplit(":", 1)[0])
             idx = meta["classes"].index(positive) if positive else None
             moods.append((key, model, idx, meta["classes"]))
-        _models = (emb, head, classes, moods)
+        tempo = es.TempoCNN(graphFilename=os.path.join(MODELS, "deeptemp-k16-3.pb"))
+        _models = (emb, head, classes, moods, tempo)
     return _models
 
 
 def analyse(path):
     import essentia.standard as es
     import numpy as np
-    emb, head, classes, mood_models = models()
+    emb, head, classes, mood_models, tempo_cnn = models()
     audio16 = es.MonoLoader(filename=path, sampleRate=16000, resampleQuality=4)()
     embeddings = emb(audio16)
     preds = head(embeddings).mean(axis=0)
@@ -165,14 +169,15 @@ def analyse(path):
             mood[key] = round(float(p[idx]), 3)
     top = np.argsort(preds)[::-1][:5]
     styles = [[classes[i], round(float(preds[i]), 3)] for i in top]
+    # Tempo: TempoCNN is the main answer (2026-11-10: right where RhythmExtractor was off – 107 vs 152,
+    # 75 vs 150, 172 vs 87 – and equal elsewhere). RhythmExtractor is the cross-check: agreeing (also at
+    # ×2/×½) = very sure; disagreeing = still trust the CNN, but less.
+    cnn_bpm = float(tempo_cnn(es.MonoLoader(filename=path, sampleRate=11025)())[0])
     audio44 = es.MonoLoader(filename=path, sampleRate=44100)()
-    bpm, _, conf, _, _ = es.RhythmExtractor2013(method="multifeature")(audio44)
-    bpm = float(bpm)
-    # Half-time reading of a hard dance track (log 2026-11-06: 75 BPM for a 150 BPM hardstyle song).
-    hard = sum(sc for name, sc in styles if name.startswith("Electronic---") and name.split("---", 1)[1] in HARD_STYLES)
-    if hard >= .2 and bpm < 100:
-        bpm *= 2
-    return styles, round(bpm, 1), round(float(conf), 2), mood
+    re_bpm, _, re_conf, _, _ = es.RhythmExtractor2013(method="multifeature")(audio44)
+    agree = any(abs(float(re_bpm) - cnn_bpm * f) <= .03 * cnn_bpm * f for f in (1, 2, .5))
+    conf = max(float(re_conf), 2.0) if agree else 1.5
+    return styles, round(cnn_bpm, 1), round(conf, 2), mood
 
 
 def download(url, key):

@@ -220,6 +220,21 @@ internal class GenreDetector {
         private set
 
     /** Espen's «feil sjanger» guess for this song: locked until the next song (or the next guess). */
+    /** Genre from the Mac's style teacher for this song (set at song start; null = no answer). */
+    var teacher: Genre? = null
+        private set
+
+    /** The teacher knows this song: lock its genre at once (before Apple/Deezer answer). */
+    fun setTeacher(g: Genre?, now: Long) {
+        teacher = g
+        if (g == null || manual != null) return
+        songLock = g
+        hardstyleThisTrack = false
+        if (g != Genre.ROCK) rockness = 0f
+        reason = "stil-lærer"
+        commit(g, now, "stil-lærer")
+    }
+
     fun lockByHand(g: Genre, now: Long) {
         songLock = g
         hardstyleThisTrack = false
@@ -262,7 +277,7 @@ internal class GenreDetector {
 
     fun newTrack(now: Long) {
         apple = null; appleName = null; trackStart = now; announcedThisTrack = false; hardstyleThisTrack = false
-        songLock = null; lookupDone = false; dropSince = 0L; timeIn.fill(0f); reason = ""
+        songLock = null; lookupDone = false; dropSince = 0L; timeIn.fill(0f); reason = ""; teacher = null
         chorus = 0f; energyFast = 0f; energySlow = 0f; musicSeconds = 0f
         rockness = .1f
         // Start every song neutral (calm) instead of with the last song's genre (log 2026-11-06: a
@@ -288,6 +303,9 @@ internal class GenreDetector {
         // it is Apple's exact song or Deezer's, and neither source calls it dance.
         val (lock, why) = when {
             chosen != null -> chosen to "du"
+            // The Mac's style teacher heard the song itself (Essentia on the preview): it beats Apple's
+            // artist-level guesses and the sound (log 2026-11-06: rap → HARDSTYLE, pop → HARDSTYLE).
+            teacher != null -> teacher!! to "stil-lærer"
             a == Genre.RAP && (appleExact || d == Genre.RAP) && !dance -> Genre.RAP to "Apple: $appleGenre"
             a == null && d == Genre.RAP -> Genre.RAP to "Deezer: $deezerName"
             // Pop and calm genres (log 2026-11-06: Train «Hey, Soul Sister», Pop on both, became

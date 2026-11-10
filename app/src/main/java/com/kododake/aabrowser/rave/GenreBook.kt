@@ -13,6 +13,14 @@ import java.util.concurrent.Executors
  * why (Apple, Deezer, the sound, or Espen). Shown in the analysis panel; tapping a song there sets
  * its genre by hand, which then applies from the first second the next time it plays.
  */
+/**
+ * The artist without player badges: the music app writes e.g. «Pop Smoke • Lossless» (log 2026-11-10),
+ * which made Apple/Deezer/lyrics/style-teacher lookups miss and rap songs fall back to the sound
+ * (→ HARDSTYLE). Removes « • Lossless», « • Hi-Res Lossless», « • Dolby Atmos», « • Spatial Audio» etc.
+ */
+internal fun cleanArtist(a: String?): String? =
+    a?.replace(Regex("""\s*[•·]\s*(hi-?res\s+)?(lossless|dolby atmos|atmos|spatial audio|hi-?res|explicit|e)\s*$""", RegexOption.IGNORE_CASE), "")?.trim()
+
 internal object GenreBook {
     internal data class Entry(
         val title: String, val artist: String,
