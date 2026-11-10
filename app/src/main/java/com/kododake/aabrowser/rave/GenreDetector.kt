@@ -9,7 +9,10 @@ import kotlin.math.max
 internal enum class Genre(val label: String) {
     HARDSTYLE("HARDSTYLE"), RAP("RAP"), ROCK("ROCK"), EDM("EDM"), STANDARD("ROLIG"),
     /** Pop: calm in the verses, a bit more push in the chorus (see [GenreDetector.chorus]). */
-    POP("POP")
+    POP("POP"),
+    // Added last (ordinals unchanged). Until they get their own rules they look like pop:
+    // warm, no strobe or shake. Found by the Mac's style teacher or Apple/Deezer's genre.
+    REGGAE("REGGAE"), REGGAETON("REGGAETON")
 }
 
 /** How strong each effect is per genre (1 = original hardstyle strength). */
@@ -28,7 +31,8 @@ internal fun Genre.profile(): PartyProfile = when (this) {
     Genre.EDM -> PartyProfile(spike = 1f, particles = 1f, shake = .8f, strobe = .9f)
     Genre.STANDARD -> PartyProfile(spike = .6f, particles = .7f, shake = 0f, strobe = 0f)
     // Pop: soft and calm — slightly bigger, softer lights, no shake or strobe (Espen 2026-11-06).
-    Genre.POP -> PartyProfile(spike = .65f, particles = .6f, shake = 0f, strobe = 0f, density = .6f, softness = 1.6f)
+    Genre.POP, Genre.REGGAE, Genre.REGGAETON ->
+        PartyProfile(spike = .65f, particles = .6f, shake = 0f, strobe = 0f, density = .6f, softness = 1.6f)
 }
 
 /**
@@ -64,7 +68,7 @@ internal fun Genre.shape(f: HardstyleFrame): HardstyleFrame = when (this) {
     // Everything else: calm, no drop effects.
     Genre.STANDARD -> f.copy(heavy = 0f, grit = 0f, kick = f.kick * .5f)
     // Pop: like calm, a little more pump on the beat; the chorus lift is added on top in RaveActivity.
-    Genre.POP -> f.copy(heavy = 0f, grit = 0f, kick = f.kick * .6f)
+    Genre.POP, Genre.REGGAE, Genre.REGGAETON -> f.copy(heavy = 0f, grit = 0f, kick = f.kick * .6f)
 }
 
 /** Mixes two shaped frames for a soft (~1 s) change between profiles. */
@@ -80,7 +84,7 @@ internal fun blendFrames(a: HardstyleFrame, b: HardstyleFrame, t: Float): Hardst
 internal fun Genre.vibeTarget(): Float = when (this) {
     Genre.STANDARD -> 0f
     // Between calm and rap on the slider; drawn as «POP» while auto has found pop.
-    Genre.POP -> .1f
+    Genre.POP, Genre.REGGAE, Genre.REGGAETON -> .1f
     Genre.RAP -> .25f
     Genre.EDM -> .5f
     Genre.HARDSTYLE, Genre.ROCK -> 1f
@@ -145,11 +149,18 @@ internal fun vibeProfile(v: Float, rockness: Float): PartyProfile {
     }
 }
 
+/** Genres a sure metadata answer locks for the whole song (calm/no-drop genres). */
+internal val CALM_LOCK = setOf(Genre.POP, Genre.STANDARD, Genre.REGGAE, Genre.REGGAETON)
+/** Below this distortion (8 s average) a rap/pop song can't turn into hardstyle by its tempo alone. */
+internal const val GRITLESS_MAX = .12f
+
 /** Apple Music's genre name → profile, or null when it does not say enough. */
 internal fun genreFromApple(name: String?): Genre? {
     val g = name?.lowercase() ?: return null
     return when {
         "hardstyle" in g || "hardcore" in g || "hard dance" in g -> Genre.HARDSTYLE
+        "reggaeton" in g || "urbano" in g || "latin urban" in g || "dembow" in g -> Genre.REGGAETON
+        "reggae" in g || "dancehall" in g || g == "ska" || g == "dub" -> Genre.REGGAE
         "hip-hop" in g || "hip hop" in g || "rap" in g || "trap" in g || "drill" in g -> Genre.RAP
         "metal" in g || "rock" in g || "punk" in g || "alternative" in g || "grunge" in g -> Genre.ROCK
         "dance" in g || "electro" in g || "house" in g || "techno" in g || "trance" in g ||
@@ -207,6 +218,14 @@ internal class GenreDetector {
     /** Chosen by hand with the genre buttons; null = automatic. */
     var manual: Genre? = null
         private set
+
+    /** Espen's «feil sjanger» guess for this song: locked until the next song (or the next guess). */
+    fun lockByHand(g: Genre, now: Long) {
+        songLock = g
+        hardstyleThisTrack = false
+        if (g != Genre.ROCK) rockness = 0f
+        commit(g, now, "du")
+    }
 
     fun setManual(g: Genre?, now: Long) {
         manual = g
@@ -273,15 +292,15 @@ internal class GenreDetector {
             a == null && d == Genre.RAP -> Genre.RAP to "Deezer: $deezerName"
             // Pop and calm genres (log 2026-11-06: Train «Hey, Soul Sister», Pop on both, became
             // HARDSTYLE from the sound — strummed guitar read as distortion and double tempo).
-            (a == Genre.POP || a == Genre.STANDARD) && (appleExact || d == a) && !dance -> a to "Apple: $appleGenre"
-            a == null && (d == Genre.POP || d == Genre.STANDARD) -> d to "Deezer: $deezerName"
+            a in CALM_LOCK && (appleExact || d == a) && !dance -> a!! to "Apple: $appleGenre"
+            a == null && d in CALM_LOCK -> d!! to "Deezer: $deezerName"
             else -> null to ""
         }
         if (lock != null) {
             songLock = lock
             // A hardstyle guess made before the answer arrived no longer counts.
             if (lock != Genre.HARDSTYLE) { hardstyleThisTrack = false; dropSince = 0L }
-            if (lock == Genre.RAP || lock == Genre.STANDARD || lock == Genre.POP) rockness = 0f
+            if (lock == Genre.RAP || lock in CALM_LOCK) rockness = 0f
             if (manual == null) { commit(lock, now, why); announce(now) }
             reason = why   // also when the genre was already the same (commit then does nothing)
             return
@@ -365,7 +384,10 @@ internal class GenreDetector {
         val obviousHardstyle = hardstyleTempo && kickRate > 2.2f
         val target = when {
             hardstyleThisTrack -> Genre.HARDSTYLE
-            obviousHardstyle && apple != Genre.ROCK -> Genre.HARDSTYLE
+            // Not when Apple says rap/pop/calm and there is no distortion at all: steady kicks at a
+            // doubled tempo is not hardstyle (log 2026-11-06: Cypress Hill «Reefer Man» → HARDSTYLE/UPTEMPO, grit 0.00).
+            obviousHardstyle && apple != Genre.ROCK && !(apple in CALM_LOCK || apple == Genre.RAP) -> Genre.HARDSTYLE
+            obviousHardstyle && grit > GRITLESS_MAX -> Genre.HARDSTYLE
             apple == Genre.EDM && hardstyleTempo -> Genre.HARDSTYLE
             // Apple's "Dance" with strong distortion is raw hardstyle, even when kicks dip.
             apple == Genre.EDM && grit > .25f -> Genre.HARDSTYLE
@@ -390,7 +412,7 @@ internal class GenreDetector {
 
     private fun updateRockness(f: HardstyleFrame, dt: Float) {
         val target = when {
-            hardstyleThisTrack || apple == Genre.HARDSTYLE || songLock == Genre.RAP || songLock == Genre.POP ||
+            hardstyleThisTrack || apple == Genre.HARDSTYLE || songLock == Genre.RAP || songLock in CALM_LOCK ||
                 songLock == Genre.STANDARD -> 0f
             // Steady fast four-on-the-floor kick = hardstyle/EDM, not live drums.
             f.bpm in 138f..250f && kickRate > 2.2f -> 0f
@@ -403,7 +425,7 @@ internal class GenreDetector {
             }
         }
         // Proven hardstyle drops straight away; otherwise learn slowly and only while it is loud.
-        if (hardstyleThisTrack || apple == Genre.HARDSTYLE || songLock == Genre.RAP || songLock == Genre.POP ||
+        if (hardstyleThisTrack || apple == Genre.HARDSTYLE || songLock == Genre.RAP || songLock in CALM_LOCK ||
             songLock == Genre.STANDARD) rockness = 0f
         else if (f.energy > .4f) rockness += (target - rockness) * (1f - exp(-dt / 4f))
     }
@@ -554,6 +576,9 @@ internal class HardstyleStructure {
      * automatic guess runs in a separate shadow instance and is only logged.
      */
     var manual = false
+    /** Auto mode, but Espen's last correction still holds (for the log). */
+    var correctionHolding = false
+        private set
     private var lastBarMs = 1600f
     private var lastSongFraction = -1f
     // «Fullness» (trained on Espen's answers 2026-11-06): 2 s level of sub, treble (air) and
@@ -714,6 +739,7 @@ internal class HardstyleStructure {
         val barMs = if (f.bpm in 100f..260f) 240_000f / f.bpm else 1600f
         lastBarMs = barMs
         val forced = manual || now < forcedUntil
+        correctionHolding = !manual && now < forcedUntil
         val subRel = sub1 - sub8          // dB vs the last ~8 s
         val subHitRel = subFast - sub8
         val airTrend = air1 - air8

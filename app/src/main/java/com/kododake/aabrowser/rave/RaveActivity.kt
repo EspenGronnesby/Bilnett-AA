@@ -133,6 +133,8 @@ class RaveActivity : ComponentActivity() {
     private val hardSubDetector = HardSubDetector()
     private var hardSub by mutableStateOf(HardSub.RAW)
     /** Espen's corrections of the song part, remembered per song (replayed on the next play). */
+    /** Style + BPM per song from the Mac's style teacher (files/style-book.json). */
+    private val styleBook by lazy { com.kododake.aabrowser.rave.party.StyleBook(java.io.File(filesDir, "style-book.json")) }
     private val songMarks by lazy { com.kododake.aabrowser.rave.party.SongMarks(java.io.File(filesDir, "song-marks.json")) }
     private var songKey = ""
     private var marksForSong: List<com.kododake.aabrowser.rave.party.SongMarks.Mark> = emptyList()
@@ -154,6 +156,40 @@ class RaveActivity : ComponentActivity() {
         try { getSharedPreferences("rave", MODE_PRIVATE).edit().putFloat(k, v).apply() } catch (_: Exception) { }
         return v
     }
+    /** Genres Espen rejected with «FEIL SJANGER» for this song (the next guess skips them). */
+    private val wrongGenres = mutableSetOf<Genre>()
+    /** The genre Espen landed on with «FEIL SJANGER» (saved for the song when it ends). */
+    private var handGenre: Genre? = null
+
+    /**
+     * «FEIL SJANGER»: guess again until it's right. Order: what the Mac's style teacher heard (strongest
+     * family first), Apple, Deezer, then the rest. The current genre and earlier wrong ones are skipped.
+     */
+    /** Every genre, most likely first: the style teacher (strongest family), Apple, Deezer, then the rest. */
+    private fun genreOrder(): List<Genre> {
+        val teacher = styleBook.lookup(GenreBook.key(title, artist))?.styles.orEmpty()
+            .groupBy({ com.kododake.aabrowser.rave.party.StyleBook.family(it.first) }, { it.second })
+            .filterKeys { it != null }.mapValues { it.value.sum() }.entries.sortedByDescending { it.value }.map { it.key!! }
+        return (teacher + listOfNotNull(genreFromApple(songGenre)) + songDeezerGenres.mapNotNull { genreFromApple(it) } +
+            listOf(Genre.RAP, Genre.POP, Genre.EDM, Genre.HARDSTYLE, Genre.ROCK, Genre.REGGAETON, Genre.REGGAE, Genre.STANDARD)).distinct()
+    }
+
+    /** Espen picked the genre for this song: switch now, remember it for the song. */
+    private fun pickGenre(g: Genre) {
+        wrongGenres += genre
+        genreDetector.lockByHand(g, SystemClock.uptimeMillis())
+        genre = g
+        handGenre = g
+        // Remember it for the song right away if it is already in the list (otherwise when it ends).
+        try { GenreBook.setOverride(this, GenreBook.key(title, artist), g); songListVersion++ } catch (_: Exception) { }
+    }
+
+    /** Analysis panel: AUTO = the app picks song parts itself (to watch it), off = only Espen decides. */
+    private var autoParts by mutableStateOf(false)
+
+    /** «FEIL SJANGER» opens a row with every genre (most likely first, rejected ones last). */
+    private var genrePickerOpen by mutableStateOf(false)
+
     /** The song part right now (for highlighting the correction buttons). */
     private var shownPart by mutableStateOf(SongPart.INTRO)
     private var partLabelAt by mutableLongStateOf(0L)
@@ -237,7 +273,7 @@ class RaveActivity : ComponentActivity() {
     /** Short name for a slider value, e.g. ROLIG, RAP, EDM, ROCK or the hardstyle sub-genre (RAW …). */
     private fun vibeLabel(v: Float): String = when {
         // Auto found pop: the low part of the slider is «POP», not «ROLIG»/«RAP».
-        vibeAuto && genre == Genre.POP && v < .375f -> "POP"
+        vibeAuto && (genre == Genre.POP || genre == Genre.REGGAE || genre == Genre.REGGAETON) && v < .375f -> genre.label
         v < .125f -> "ROLIG"
         v < .375f -> "RAP"
         v < .75f -> "EDM"
@@ -253,7 +289,7 @@ class RaveActivity : ComponentActivity() {
         val why = if (genreDetector.genre == g) genreDetector.reason.ifBlank { "lyd" } else "lyd"
         try {
             GenreBook.record(this, GenreBook.Entry(t, a, songGenre, songDeezerGenres.firstOrNull().orEmpty(),
-                g.label, why, System.currentTimeMillis()))
+                g.label, why, System.currentTimeMillis(), override = handGenre, durMs = songDurationMs))
             songListVersion++
         } catch (_: Exception) { }
     }
@@ -417,6 +453,7 @@ class RaveActivity : ComponentActivity() {
         // Skjermen skal aldri slukke mens Rave vises (gjelder bare mens vinduet er synlig).
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         showAnalysis = try { getSharedPreferences("rave", MODE_PRIVATE).getBoolean("analysis", true) } catch (_: Exception) { true }
+        autoParts = try { getSharedPreferences("rave", MODE_PRIVATE).getBoolean("autoParts", false) } catch (_: Exception) { false }
         syncMs = try { getSharedPreferences("rave", MODE_PRIVATE).getInt("syncMs", 0) } catch (_: Exception) { 0 }
             .coerceIn(-SYNC_LIMIT_MS, SYNC_LIMIT_MS)
         try {
@@ -541,6 +578,14 @@ class RaveActivity : ComponentActivity() {
             val t = m?.getString(MediaMetadata.METADATA_KEY_TITLE).orEmpty()
             val a = m?.getString(MediaMetadata.METADATA_KEY_ARTIST).orEmpty()
             analysisLog.startSong(t, a)
+            wrongGenres.clear(); handGenre = null; genrePickerOpen = false
+            // The Mac's style teacher (step 1: only logged, it doesn't decide anything yet).
+            styleBook.lookup(GenreBook.key(t, a)).let { st ->
+                android.util.Log.d("RaveGenre", if (st == null) "stil-lærer: ingen svar for «$a – $t» ennå" else
+                    "stil-lærer: %s · %.0f BPM (sikkerhet %.1f) → %s".format(java.util.Locale.US,
+                        st.styles.take(3).joinToString { "%s %.2f".format(java.util.Locale.US, it.first.substringAfter("---"), it.second) },
+                        st.bpm, st.bpmConf, st.genre?.let { "${it.first.label} %.2f".format(java.util.Locale.US, it.second) } ?: "usikker"))
+            }
             songKey = songMarks.key(a, t)
             marksForSong = songMarks.marks(songKey)
             lastMarkCheckPos = -1L
@@ -937,7 +982,9 @@ class RaveActivity : ComponentActivity() {
                         songPhase.update(rawTarget, nowMs, positionMs(), if (songDurationMs > 0L) songDurationMs else -1L) else 1f
                     // Manual mode while «Analyse» is on: Espen decides the song part; the automatic guess
                     // keeps running in the shadow instance only for the log.
-                    val manualParts = showAnalysis
+                    // AUTO on in the analysis panel: the app picks the parts itself (Espen's taps still
+                    // correct it for a while); AUTO off: only Espen decides.
+                    val manualParts = showAnalysis && !autoParts
                     if (songPhase.manual != manualParts) {
                         songPhase.manual = manualParts
                         // Switching manual on mid-song: start from what the automatic analysis says now.
@@ -1132,7 +1179,11 @@ class RaveActivity : ComponentActivity() {
                         dropKind = songPhase.dropKind.name
                         autoPart = autoPhase.part.name
                         autoDrop = autoPhase.dropKind.name
-                        manual = songPhase.manual
+                        partBy = when {
+                            songPhase.manual -> "espen"
+                            songPhase.correctionHolding -> "espen_hold"
+                            else -> "auto"
+                        }
                         this.genre = this@RaveActivity.genre.name
                         this.sub = sub.name
                         vibe = v; this.sw = sw; this.effectsOn = effectsOn; this.pi = pi; this.buildRise = buildRise
@@ -1462,14 +1513,16 @@ class RaveActivity : ComponentActivity() {
             if (hardstyleOn && showSongList)
                 SongList(Modifier.align(Alignment.TopStart).padding(start = if (partyControls) 100.u else 12.u, end = 12.u, bottom = 12.u,
                     top = if (transportVisible) 96.u else 12.u))
-            else if (hardstyleOn && showAnalysis)
+            // Hidden while the controls show: they sit in the same corner (Analyse/Sanger/Synk).
+            else if (hardstyleOn && showAnalysis && !partyControls)
                 // Analysis panel on the right, feedback buttons on the left (Espen 2026-11-06: swapped).
                 AnalysisHud(Modifier.align(Alignment.TopEnd).padding(start = 12.u, end = 12.u, bottom = 12.u,
                     top = if (transportVisible) 96.u else 12.u))
             // Feedback buttons (with the analysis): Espen's answer key for training the genre rules.
             // Left side, clear of the vibe slider while the Party controls show.
             if (hardstyleOn && showAnalysis)
-                FeedbackPanel(Modifier.align(Alignment.BottomStart).padding(start = if (partyControls) 100.u else 16.u, bottom = 16.u))
+                FeedbackPanel(Modifier.align(Alignment.BottomStart).padding(start = if (partyControls) 100.u else 16.u, bottom = 16.u),
+                    compact = transportVisible)
             // Vibe slider: shown with the other buttons (one tap) while Party is on.
             if (partyControls) BoxWithConstraints(
                 Modifier.align(Alignment.CenterStart).fillMaxHeight()
@@ -1903,14 +1956,15 @@ class RaveActivity : ComponentActivity() {
     /**
      * The genre list: the song playing now and the last songs, each with its genre and why
      * (Apple, Deezer, the sound, or «du»). Tap a song to set its genre by hand:
-     * AUTO → POP → RAP → ROCK → EDM → HARDSTYLE → ROLIG → AUTO. Used from the first second next time.
+     * AUTO → POP → RAP → ROCK → EDM → HARDSTYLE → ROLIG → REGGAE → REGGAETON → AUTO. Used from the first second next time.
      */
     @Composable
     private fun SongList(modifier: Modifier) {
         val dim = Color(0xB3F5F2EC)
         val light = Color(0xFFF5F2EC)
         val entries = remember(songListVersion) { try { GenreBook.all(this@RaveActivity) } catch (_: Exception) { emptyList() } }
-        val cycle = listOf(null, Genre.POP, Genre.RAP, Genre.ROCK, Genre.EDM, Genre.HARDSTYLE, Genre.STANDARD)
+        val cycle = listOf(null, Genre.POP, Genre.RAP, Genre.ROCK, Genre.EDM, Genre.HARDSTYLE, Genre.STANDARD,
+            Genre.REGGAE, Genre.REGGAETON)
         Column(
             modifier.widthIn(max = 340.u).heightIn(max = 420.u).clip(RoundedCornerShape(14.u))
                 .background(Color.Black.copy(alpha = .7f)).padding(horizontal = 12.u, vertical = 10.u)
@@ -1969,7 +2023,7 @@ class RaveActivity : ComponentActivity() {
      * the song). Bottom: how it felt. Every tap is saved with the song position — see AnalysisLog.mark.
      */
     @Composable
-    private fun FeedbackPanel(modifier: Modifier) {
+    private fun FeedbackPanel(modifier: Modifier, compact: Boolean = false) {
         // In the last part of the song the INTRO button is OUTRO (Espen 2026-11-06).
         val late = songDurationMs > 0L && positionMs() >= songDurationMs * OUTRO_FROM_SHARE
         val parts = listOf((if (late) "OUTRO" to SongPart.OUTRO else "INTRO" to SongPart.INTRO), "BUILD-UP" to SongPart.BUILDUP,
@@ -1982,7 +2036,7 @@ class RaveActivity : ComponentActivity() {
         fun button(label: String, on: Boolean, onClick: () -> String?) = Box(
             Modifier.height(46.u).widthIn(min = 112.u).clip(RoundedCornerShape(50))
                 .background(if (on) Color(0xFFF5F2EC) else Color(0x33FFFFFF))
-                .clickable { feedbackShown = onClick() ?: label; feedbackAt = SystemClock.uptimeMillis() }
+                .clickable { feedbackShown = onClick() ?: "Lagret: $label"; feedbackAt = SystemClock.uptimeMillis() }
                 .padding(horizontal = 14.u),
             contentAlignment = Alignment.Center
         ) {
@@ -1992,9 +2046,26 @@ class RaveActivity : ComponentActivity() {
         val dim = Color(0xB3F5F2EC)
         Column(modifier, horizontalAlignment = Alignment.Start, verticalArrangement = Arrangement.spacedBy(6.u)) {
             feedbackShown?.let {
-                Text("Lagret: $it", color = Color(0xFF0A0A0A), fontSize = 14.us, fontWeight = FontWeight.SemiBold,
+                Text(it, color = Color(0xFF0A0A0A), fontSize = 14.us, fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.clip(RoundedCornerShape(50)).background(Color(0xFFF5F2EC))
                         .padding(horizontal = 14.u, vertical = 6.u))
+            }
+            // The genre picker replaces the panel while open (all rows at once don't fit the car screen).
+            if (genrePickerOpen) {
+                Text("Riktig sjanger er …  (nå: ${genre.label})", color = dim, fontSize = 12.us)
+                val order = genreOrder().let { o -> o.filterNot { it in wrongGenres } + o.filter { it in wrongGenres } }
+                (order.map { it.label to it } + ("AVBRYT" to null)).chunked(3).forEach { row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.u)) {
+                        row.forEach { (label, g) -> button(label, g != null && genre == g) {
+                            genrePickerOpen = false
+                            if (g == null) return@button "Avbrutt"
+                            analysisLog.mark("sjanger_${g.name.lowercase()}")
+                            pickGenre(g)
+                            "Sjanger: ${g.label}"
+                        } }
+                    }
+                }
+                return@Column
             }
             Text("Nå er det …  (appen tror: ${autoShownPart.label})", color = dim, fontSize = 12.us)
             parts.chunked(2).forEach { row ->
@@ -2005,11 +2076,21 @@ class RaveActivity : ComponentActivity() {
                     }
                 }
             }
+            button(if (autoParts) "AUTO: PÅ" else "AUTO: AV", autoParts) {
+                autoParts = !autoParts
+                try { getSharedPreferences("rave", MODE_PRIVATE).edit().putBoolean("autoParts", autoParts).apply() } catch (_: Exception) { }
+                analysisLog.mark(if (autoParts) "auto_paa" else "auto_av")
+                if (autoParts) "Appen velger selv – trykk for å rette" else "Bare du bestemmer"
+            }
+            // While the play buttons show at the bottom, the feelings rows would cover them.
+            if (compact) return@Column
             Text("Følelse", color = dim, fontSize = 12.us)
             feelings.chunked(2).forEach { row ->
                 Row(horizontalArrangement = Arrangement.spacedBy(6.u)) {
                     row.forEach { (label, kind) -> button(label, false) {
                         analysisLog.mark(kind)
+                        // Feil sjanger: guess again (teacher → Apple → Deezer → the rest) until it's right.
+                        if (kind == "feil_sjanger") { genrePickerOpen = !genrePickerOpen; return@button "Velg riktig sjanger" }
                         // For mye / for lite change the effects right away for this genre + part (saved).
                         if (kind == "for_mye" || kind == "for_lite") {
                             val v = adjustTune(more = kind == "for_lite")

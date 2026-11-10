@@ -23,7 +23,9 @@ internal object GenreBook {
         val reason: String,
         val at: Long,
         /** Set by hand in the list; null = automatic. */
-        val override: Genre? = null
+        val override: Genre? = null,
+        /** Song length (ms, 0 = unknown): the Mac's style teacher uses it to pick the same version. */
+        val durMs: Long = 0L
     ) {
         val key: String get() = key(title, artist)
     }
@@ -51,7 +53,7 @@ internal object GenreBook {
     fun record(ctx: Context, e: Entry) = synchronized(this) {
         val list = all(ctx)
         val old = list.firstOrNull { it.key == e.key }
-        val merged = e.copy(override = old?.override,
+        val merged = e.copy(override = e.override ?: old?.override, durMs = if (e.durMs > 0L) e.durMs else old?.durMs ?: 0L,
             apple = e.apple.ifBlank { old?.apple.orEmpty() }, deezer = e.deezer.ifBlank { old?.deezer.orEmpty() })
         entries = (listOf(merged) + list.filterNot { it.key == e.key }).take(MAX)
         save(ctx)
@@ -73,7 +75,8 @@ internal object GenreBook {
                 val o = arr.getJSONObject(i)
                 Entry(o.optString("title"), o.optString("artist"), o.optString("apple"), o.optString("deezer"),
                     o.optString("genre"), o.optString("reason"), o.optLong("at"),
-                    o.optString("override").takeIf { it.isNotBlank() }?.let { n -> Genre.entries.firstOrNull { it.name == n } })
+                    o.optString("override").takeIf { it.isNotBlank() }?.let { n -> Genre.entries.firstOrNull { it.name == n } },
+                    o.optLong("durMs"))
             }
         }
     } catch (e: Exception) { Log.d("RaveGenre", "sjangerliste kunne ikke leses: $e"); emptyList() }
@@ -88,7 +91,9 @@ internal object GenreBook {
                 snapshot.forEach { e ->
                     arr.put(JSONObject().put("title", e.title).put("artist", e.artist).put("apple", e.apple)
                         .put("deezer", e.deezer).put("genre", e.genre).put("reason", e.reason).put("at", e.at)
-                        .put("override", e.override?.name ?: ""))
+                        .put("override", e.override?.name ?: "")
+                        // For the Mac's style teacher: the exact lookup key and the length of this version.
+                        .put("key", e.key).put("durMs", e.durMs))
                 }
                 val tmp = File(f.parentFile, "$FILE.tmp")
                 tmp.writeText(arr.toString())

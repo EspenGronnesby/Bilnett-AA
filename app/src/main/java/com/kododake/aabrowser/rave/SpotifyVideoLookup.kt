@@ -145,10 +145,14 @@ internal object SpotifyVideoLookup {
 
     /** Apple music videos in a genre (hardstyle: known hardstyle artists, since Apple files it under "Dance"). */
     private fun genreVideos(wanted: Genre?, appleGenre: String?): List<JSONObject> = when {
-        wanted == Genre.HARDSTYLE -> HARDSTYLE_ARTISTS.shuffled().take(2).flatMap { name ->
+        // Genres Apple files vaguely (hardstyle under «Dance», reggaeton under «Latin»): known artists' videos.
+        wanted != null && wanted in GENRE_ARTISTS -> GENRE_ARTISTS.getValue(wanted).shuffled().take(2).flatMap { name ->
             search(name, "us").filter { norm(it.optString("artistName")).contains(norm(name)) }
         }
-        wanted != null -> search(VIBE_TERMS.getValue(wanted), "us").filter { genreFromApple(it.optString("primaryGenreName")) == wanted }
+        // A genre without a search term (new ones) just gets no vibe videos instead of crashing.
+        wanted != null -> VIBE_TERMS[wanted]?.let { term ->
+            search(term, "us").filter { genreFromApple(it.optString("primaryGenreName")) == wanted }
+        }.orEmpty()
         appleGenre != null -> search(appleGenre, "us").filter { it.optString("primaryGenreName").equals(appleGenre, ignoreCase = true) }
         else -> emptyList()
     }
@@ -181,8 +185,18 @@ internal object SpotifyVideoLookup {
         return out
     }
 
-    private val VIBE_TERMS = mapOf(Genre.RAP to "hip hop", Genre.ROCK to "rock", Genre.EDM to "edm", Genre.STANDARD to "pop", Genre.POP to "pop")
-    private val HARDSTYLE_ARTISTS = listOf("Brennan Heart", "Wildstylez", "Sub Zero Project", "Headhunterz", "Da Tweekaz", "D-Block & S-te-Fan")
+    private val VIBE_TERMS = mapOf(Genre.RAP to "hip hop", Genre.ROCK to "rock", Genre.EDM to "edm", Genre.STANDARD to "pop", Genre.POP to "pop",
+        Genre.REGGAE to "reggae", Genre.REGGAETON to "reggaeton")
+    /** Vibe videos per genre from artists who clearly are that genre (checked: `wanted in GENRE_ARTISTS` first). */
+    private val GENRE_ARTISTS = mapOf(
+        Genre.HARDSTYLE to listOf("Brennan Heart", "Wildstylez", "Sub Zero Project", "Headhunterz", "Da Tweekaz", "D-Block & S-te-Fan"),
+        // Roots/modern reggae and dancehall: warm, laid-back videos.
+        Genre.REGGAE to listOf("Bob Marley & The Wailers", "Damian Marley", "Chronixx", "Protoje", "Koffee", "Sean Paul",
+            "Shaggy", "UB40", "Stephen Marley", "Popcaan"),
+        // Reggaeton / urbano latino: bouncy, colourful party videos.
+        Genre.REGGAETON to listOf("Bad Bunny", "Daddy Yankee", "J Balvin", "Karol G", "Ozuna", "Rauw Alejandro",
+            "Feid", "Don Omar", "Myke Towers", "Nicky Jam")
+    )
 
     /** Apple Music's genre for the song (e.g. "Hip-Hop/Rap", "Rock", "Dance"), or null. */
     fun genreFor(title: String, artist: String): String? = appleGenre(title, artist).first

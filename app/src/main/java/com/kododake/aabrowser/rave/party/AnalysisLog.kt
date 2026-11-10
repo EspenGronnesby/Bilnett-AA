@@ -28,7 +28,9 @@ internal class AnalysisLog(private val dir: File) {
         /** What the automatic analysis would have said (in manual mode `part` is Espen's answer). */
         var autoPart = ""
         var autoDrop = ""
-        var manual = false
+        /** Who decided the song part: "espen" (manual mode), "espen_hold" (his correction holding in
+         *  auto mode) or "auto". Only "espen" is a full answer key for training. */
+        var partBy = "auto"
         var dropKind = ""
         var genre = ""
         var sub = ""
@@ -64,7 +66,7 @@ internal class AnalysisLog(private val dir: File) {
     private var barStartMs = 0L
     private var n = 0
     private var barPart = ""; private var barDrop = ""; private var barGenre = ""; private var barSub = ""
-    private var barAutoPart = ""; private var barAutoDrop = ""; private var barManual = false
+    private var barAutoPart = ""; private var barAutoDrop = ""; private var barPartBy = "auto"
     private var barPos = -1L
     private var effectsFrames = 0
     private val sum = FloatArray(MEAN_FIELDS)
@@ -123,7 +125,7 @@ internal class AnalysisLog(private val dir: File) {
         }
         if (n == 0) {
             barPart = x.part; barDrop = x.dropKind; barGenre = x.genre; barSub = x.sub; barPos = x.positionMs
-            barAutoPart = x.autoPart; barAutoDrop = x.autoDrop; barManual = x.manual
+            barAutoPart = x.autoPart; barAutoDrop = x.autoDrop; barPartBy = x.partBy
         }
         n++
         if (x.effectsOn) effectsFrames++
@@ -146,7 +148,7 @@ internal class AnalysisLog(private val dir: File) {
             append(',').append(barPart).append(',').append(barDrop).append(',').append(barGenre).append(',').append(barSub)
             append(',').append("%.0f".format(Locale.US, fps))
             append(',').append("%.2f".format(Locale.US, effectsFrames.toFloat() / n))
-            append(',').append(barAutoPart).append(',').append(barAutoDrop).append(',').append(if (barManual) "espen" else "auto")
+            append(',').append(barAutoPart).append(',').append(barAutoDrop).append(',').append(barPartBy)
             for (v in a) append(',').append("%.3f".format(Locale.US, v))
             for (v in peak) append(',').append("%.3f".format(Locale.US, v))
             append('\n')

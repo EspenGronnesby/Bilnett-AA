@@ -27,7 +27,13 @@ Styrke per del (hardstyle): intro .40 · breakdown .50 · build-up .55–.80 · 
 | `tools/party-analyse/report.py` | Lager `rapport.html`: hvor ofte appen er enig med Espen, hvilke deler den blander, drop funnet ±3 s, fake drops, følelse per del og effekter per del. |
 | `tools/party-analyse/install.sh` | (Valgfritt) macOS kjører `sync.py` hvert minutt. Må kjøres av Espen selv. `--remove` fjerner den. |
 
+| `tools/party-analyse/style_teacher.py` | **Stil-lærer**: Essentia Discogs-EffNet (400 stiler) + BPM på 30 s smakebit (iTunes/Deezer, samme versjon ±15 % lengde) → `style-book.json`. Kjører med venv (Python 3.12). Modellen er CC BY-NC-SA og kjøres bare på Mac-en. |
+
 Data og rapport: `~/Vibe-kode/Projects/Bilnett-AA-assets/party-analyse/` (**aldri i git**, repoet er offentlig).
+
+**Stil-læreren, første test (2026-11-06):** 14/16 hardstyle-låter fikk Hardstyle som toppstil; resten ble
+hardstyle-familien (Hands Up/Hard Trance, Hardcore/Speedcore). BPM 150–162 (appens live-takt hoppet 117–235).
+Steg 1 = bare logging i appen; steg 2 (læreren bestemmer sjanger/BPM) etter sjekk med Espen.
 
 ## 2. Slik tester vi (Espen i bilen)
 

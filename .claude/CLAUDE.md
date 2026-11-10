@@ -40,15 +40,21 @@ Dataene ligger allerede på Mac-en, utenfor repoet:
 ├── raw/sammendrag.txt   # én linje per sang
 ├── raw/fft/*.fft.gz     # rå lydanalyse per sang (spilles av i PartyReplayTest)
 ├── raw/song-marks.json  # rettelser per sang
+├── raw/genre-book.json  # telefonens sangliste (key + durMs) → input til stil-læreren
+├── style-book.json      # stil-læreren: Discogs-stiler + BPM per sang (pushes til telefonen)
+├── models/, previews/, venv/   # Essentia-modeller (CC BY-NC-SA, aldri i git), smakebiter, Python 3.12
 └── rapport.html, replay.txt, sweep.txt
 ```
 
 Gjør dette, i rekkefølge:
 1. **Er telefonen koblet til** (`adb get-state` = `device`)? Hent nytt først: `python3 tools/party-analyse/sync.py`. Ikke koblet til: bruk det som ligger der.
-2. **Rapport:** `python3 tools/party-analyse/report.py` → les `rapport.html` (hvor ofte appen var enig med Espen, per del og per sang).
-3. **Avspilling mot fasit:** `./gradlew testDebugUnitTest --tests '*PartyReplayTest.replayAgainstEspensAnswers'` → les `replay.txt`.
-4. **Trening (søk etter beste terskler):** `touch …/party-analyse/SWEEP`, kjør `--tests '*PartyReplayTest.sweepTuning'`, les `sweep.txt`, slett `SWEEP` etterpå. Tersklene står i `PartyTuning` (`GenreDetector.kt`).
-5. Velg robuste verdier (ikke overtilpass få sanger), bygg, installer, og fortell Espen kort hva som ble bedre/verre (tabell før/nå) og hva han bør merke mer av.
+2. **Stil-lærer** (nye sanger): `…/party-analyse/venv/bin/python tools/party-analyse/style_teacher.py`
+   (`--csv` = sjekk på sanger fra loggene, `--all` = analyser alt på nytt). `sync.py` gjør dette selv og pusher svaret.
+   Appen leser `files/style-book.json` (`rave/party/StyleBook.kt`) – foreløpig bare logget (`RaveGenre: stil-lærer: …`).
+3. **Rapport:** `python3 tools/party-analyse/report.py` → les `rapport.html` (hvor ofte appen var enig med Espen, per del og per sang).
+4. **Avspilling mot fasit:** `./gradlew testDebugUnitTest --tests '*PartyReplayTest.replayAgainstEspensAnswers'` → les `replay.txt`.
+5. **Trening (søk etter beste terskler):** `touch …/party-analyse/SWEEP`, kjør `--tests '*PartyReplayTest.sweepTuning'`, les `sweep.txt`, slett `SWEEP` etterpå. Tersklene står i `PartyTuning` (`GenreDetector.kt`).
+6. Velg robuste verdier (ikke overtilpass få sanger), bygg, installer, og fortell Espen kort hva som ble bedre/verre (tabell før/nå) og hva han bør merke mer av.
 
 Status 2026-11-06 (9 sanger med fasit): 69 % enig; drop 86 %, breakdown 66 %, intro 86 %, **build-up 12 % (svakest)**.
 Detaljer om hvordan alt henger sammen: `.claude/docs/party-analyse.md`. Data havner **aldri** i git (repoet er offentlig).

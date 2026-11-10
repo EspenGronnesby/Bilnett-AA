@@ -5,6 +5,24 @@
 
 ---
 
+### Rave krasjet ved ny sjanger: `getValue` på map nøklet på enum
+**Dato:** 2026-11-06
+**Kategori:** Android / Kotlin
+**Berørte filer:** `rave/SpotifyVideoLookup.kt` (`genreVideos`, `VIBE_TERMS`), `rave/GenreDetector.kt` (`enum Genre`)
+
+**Problem:** Rave krasjet og kastet Espen ut om og om igjen rett etter at en sang startet. Logcat: `java.util.NoSuchElementException: Key REGGAE is missing in the map`, i `SpotifyVideoLookup.genreVideos`, på bakgrunnstråd fra `fetchSpotifyVideo`.
+
+**Årsak:** Nye verdier `REGGAE` og `REGGAETON` ble lagt til i `enum Genre`. Kompilatoren tvang fram nye grener i `when`, men `VIBE_TERMS = mapOf(Genre.RAP to …)` ble slått opp med `.getValue(wanted)`, som kaster når nøkkelen mangler. Kompilatoren sjekker ikke map-oppslag. En reggae-sang (gjenkjent via Apple-sjanger) traff den manglende nøkkelen.
+
+**Løsning:** La til `REGGAE` og `REGGAETON` i `VIBE_TERMS`, og byttet `getValue(x)` med `VIBE_TERMS[x]?.let { … }.orEmpty()`. En ukjent sjanger gir da bare ingen videoer, og appen krasjer ikke. Feilen ble funnet med `adb logcat -d -b crash`.
+
+**Forebygging:**
+- Når en enum får nye verdier: søk etter alle steder som slår opp enumen i map eller lister (`grep -rn "getValue(\|mapOf(Genre" app/src`), ikke bare der kompilatoren klager.
+- Bruk aldri `getValue` på et map nøklet på en enum som kan vokse. Bruk `map[x] ?: reserve`.
+- Ved «appen kaster meg ut»: sjekk `adb logcat -d -b crash` først.
+
+---
+
 ### Sjanger fra lyd alene er upålitelig: metadata først
 **Dato:** 2026-11-06
 **Kategori:** Android / Kotlin

@@ -115,6 +115,8 @@ internal object YouTubeLookup {
             Genre.EDM -> listOf("Tomorrowland mainstage live", "Ultra Music Festival mainstage live", "EDC live mainstage").random()
             Genre.RAP -> listOf("Rolling Loud live performance", "hip hop festival live performance").random()
             Genre.ROCK -> listOf("Wacken live", "Download Festival live", "rock festival live concert").random()
+            Genre.REGGAE -> listOf("Reggae Sumfest live", "Rototom Sunsplash live", "reggae festival live concert").random()
+            Genre.REGGAETON -> listOf("Bad Bunny live concert", "Daddy Yankee live concert", "reggaeton festival live").random()
             else -> appleGenre?.takeIf { it.isNotBlank() }?.let { "$it live concert" } ?: "live concert festival"
         }
         return search(query).shuffled()

@@ -146,6 +146,8 @@ dependencies {
     implementation("com.github.woheller69:FreeDroidWarn:V1.+")
 
     testImplementation(libs.junit)
+    // Real org.json for JVM unit tests (Android's stub returns null; StyleBookTest parses JSON).
+    testImplementation("org.json:json:20240303")
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
 }

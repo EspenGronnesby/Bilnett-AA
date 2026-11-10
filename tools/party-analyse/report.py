@@ -218,6 +218,38 @@ td.num,th.num{{text-align:right}} .wrap{{overflow-x:auto}} .ok{{color:var(--ok)}
                  f"<td class='num {cls}'>{found}</td><td class='num'>{'' if s['false_drops'] is None else s['false_drops']}</td><td class='num'>{s['fakes'] or ''}</td>"
                  f"<td class='num'>{deltas}</td><td class='num'>{f['for_mye']}/{f['for_lite']}/{f['bra']}</td></tr>")
     h.append("</table></div>")
+    # --- Style teacher (Mac) vs what the app decided vs Espen's own choice ---
+    data_dir = os.path.dirname(raw_dir)
+    try:
+        import json
+        teacher = json.load(open(os.path.join(data_dir, "style-book.json"), encoding="utf-8"))
+    except Exception:
+        teacher = {}
+    try:
+        gbook = json.load(open(os.path.join(raw_dir, "genre-book.json"), encoding="utf-8"))
+    except Exception:
+        gbook = []
+    rows = []
+    for e in gbook:
+        t = teacher.get(e.get("key", ""))
+        if t is None:
+            continue
+        rows.append((f"{e.get('artist','')} – {e.get('title','')}", t, e.get("genre", ""), e.get("override", "")))
+    if not rows:  # check mode: songs from the analysis logs
+        rows = [(k[4:], v, "", "") for k, v in teacher.items() if k.startswith("csv:")]
+    if rows:
+        h.append("<h2>Stil-læreren (AI på Mac-en)</h2><p class='dim'>Hva AI-en hørte i 30 s smakebiten, mot hva appen valgte og hva du valgte.</p>"
+                 "<div class='wrap'><table><tr><th>Sang</th><th>Lærer: stil</th><th class='num'>BPM</th><th>Appen</th><th>Du</th></tr>")
+        for name, t, app_g, mine in rows:
+            if t.get("styles"):
+                st = ", ".join(f"{x[0].split('---')[-1]} {x[1]:.2f}" for x in t["styles"][:3])
+                bpm = f"{t.get('bpm', 0):.0f}" + ("" if t.get("bpmConf", 0) >= 1 else " ?")
+            else:
+                st, bpm = f"<span class='dim'>{html.escape(t.get('why', 'ingen smakebit'))}</span>", ""
+            h.append(f"<tr><td>{html.escape(name[:60])}</td><td>{st}</td><td class='num'>{bpm}</td>"
+                     f"<td>{html.escape(app_g)}</td><td>{html.escape(mine)}</td></tr>")
+        h.append("</table></div>")
+
     h.append("<h2>🟢 Enkelt forklart</h2><p>Øverst ser du hvor ofte appen ville valgt det samme som deg. Tabellen «Hva appen trodde» viser hvilke deler den blander sammen, for eksempel om den kaller build-up for drop. «Drop funnet» er hvor mange av dine drop den fant selv innen 3 sekunder.</p>")
     h.append("</main></body></html>")
     os.makedirs(os.path.dirname(out_path), exist_ok=True)

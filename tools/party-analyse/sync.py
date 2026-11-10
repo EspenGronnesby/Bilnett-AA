@@ -23,7 +23,9 @@ DATA = os.path.expanduser("~/Vibe-kode/Projects/Bilnett-AA-assets/party-analyse"
 RAW = os.path.join(DATA, "raw")
 STATE = os.path.join(DATA, "state.json")
 REMOTE_DIRS = ["files/rave-analyse", "files/rave-analyse/fft"]
-REMOTE_FILES = ["files/song-marks.json"]
+REMOTE_FILES = ["files/song-marks.json", "files/genre-book.json"]
+VENV_PY = os.path.join(DATA, "venv", "bin", "python")
+STYLE_BOOK = os.path.join(DATA, "style-book.json")
 NOTIFY_EVERY_S = 10 * 60
 
 
@@ -87,6 +89,36 @@ def notify(text):
                    capture_output=True)
 
 
+def teach_and_push(state, genre_book_changed):
+    """Runs the teacher when the phone's song list changed, and pushes style-book.json when it is
+    newer than the last successful push (a failed push is tried again next run)."""
+    if not os.path.exists(VENV_PY):
+        return
+    here = os.path.dirname(os.path.abspath(__file__))
+    if genre_book_changed:
+        try:
+            subprocess.run([VENV_PY, os.path.join(here, "style_teacher.py")], capture_output=True, timeout=1800)
+        except Exception as e:
+            log(f"stil-lærer feilet: {e!r}")
+    if not os.path.exists(STYLE_BOOK) or os.path.getmtime(STYLE_BOOK) <= state.get("styleBookPushed", 0):
+        return
+    # Binary-safe and atomic: write a .tmp in the app's files, then rename (the app may read any time).
+    with open(STYLE_BOOK, "rb") as f:
+        # `adb shell` with stdin (no terminal) passes bytes unchanged (checked with shasum, incl. æøå);
+        # `adb exec-in` did not run the run-as shell. Write a .tmp first, then rename (atomic).
+        r = subprocess.run([ADB, "shell", f"run-as {PKG} sh -c 'cat > files/style-book.json.tmp && "
+                                          "mv files/style-book.json.tmp files/style-book.json'"],
+                           stdin=f, capture_output=True, timeout=60)
+    # Trust the file on the phone, not the exit code: same size as ours?
+    on_phone = listing("files").get("style-book.json")
+    if r.returncode != 0 or on_phone != os.path.getsize(STYLE_BOOK):
+        log(f"push av style-book feilet (rc {r.returncode}, {on_phone} byte på telefonen): "
+            f"{r.stderr.decode('utf-8', 'replace').strip()[:200]}")
+        return
+    state["styleBookPushed"] = os.path.getmtime(STYLE_BOOK)
+    log("style-book sendt til telefonen")
+
+
 def main():
     os.makedirs(RAW, exist_ok=True)
     lock = open(os.path.join(DATA, ".lock"), "w")
@@ -119,9 +151,14 @@ def main():
             if pull(remote, local):
                 pulled += 1
     state["sizes"] = sizes
+    gb_path = os.path.join(RAW, "genre-book.json")
+    gb_before = open(gb_path, "rb").read() if os.path.exists(gb_path) else b""
     for remote in REMOTE_FILES:
-        if pull(remote, os.path.join(RAW, os.path.basename(remote))):
-            pass
+        pull(remote, os.path.join(RAW, os.path.basename(remote)))
+    gb_changed = os.path.exists(gb_path) and open(gb_path, "rb").read() != gb_before
+
+    # Style teacher (Mac only): new songs in the phone's genre list → style + BPM → push to the phone.
+    teach_and_push(state, gb_changed)
     if pulled == 0 and "--open" not in sys.argv:
         json.dump(state, open(STATE, "w"))
         return
