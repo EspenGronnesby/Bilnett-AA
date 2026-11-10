@@ -54,7 +54,12 @@ Gjør dette, i rekkefølge:
 3. **Rapport:** `python3 tools/party-analyse/report.py` → les `rapport.html` (hvor ofte appen var enig med Espen, per del og per sang).
 4. **Avspilling mot fasit:** `./gradlew testDebugUnitTest --tests '*PartyReplayTest.replayAgainstEspensAnswers'` → les `replay.txt`.
 5. **Trening (søk etter beste terskler):** `touch …/party-analyse/SWEEP`, kjør `--tests '*PartyReplayTest.sweepTuning'`, les `sweep.txt`, slett `SWEEP` etterpå. Tersklene står i `PartyTuning` (`GenreDetector.kt`).
-6. Velg robuste verdier (ikke overtilpass få sanger), bygg, installer, og fortell Espen kort hva som ble bedre/verre (tabell før/nå) og hva han bør merke mer av.
+6. **Egen del-modell (fase C):** `--tests '*PartyReplayTest.exportPartFeatures'` → `parts-features.csv`, så
+   `…/venv/bin/python tools/party-analyse/train_parts.py` (leave-one-song-out mot reglene, lagrer `parts-model.json`).
+   Tas i bruk i appen **bare** når den slår reglene uten at drop blir dårligere. 2026-11-10 (9 sanger): modell 59 %,
+   regler 69 %; men build-up 47 % mot 13 %. Hybrid (regler + modell for build-up ved ≥ 0,6) 68 %, build-up 31 %, drop 83 %.
+   Trenger ~30 sanger merket med AUTO: AV, særlig build-ups.
+7. Velg robuste verdier (ikke overtilpass få sanger), bygg, installer, og fortell Espen kort hva som ble bedre/verre (tabell før/nå) og hva han bør merke mer av.
 
 Status 2026-11-06 (9 sanger med fasit): 69 % enig; drop 86 %, breakdown 66 %, intro 86 %, **build-up 12 % (svakest)**.
 Detaljer om hvordan alt henger sammen: `.claude/docs/party-analyse.md`. Data havner **aldri** i git (repoet er offentlig).
