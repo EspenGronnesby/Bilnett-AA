@@ -870,6 +870,20 @@ class RaveActivity : ComponentActivity() {
     }
 
     private val audioManager by lazy { getSystemService(AudioManager::class.java) }
+    private var heatReadAt = 0L
+    private var heatTemp = 0f
+    private var heatStatus = 0
+    private var heatHeadroom = 0f
+    private fun readHeat() {
+        try {
+            val b = registerReceiver(null, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED))
+            heatTemp = (b?.getIntExtra(android.os.BatteryManager.EXTRA_TEMPERATURE, 0) ?: 0) / 10f
+            val pm = getSystemService(android.os.PowerManager::class.java)
+            heatStatus = pm?.currentThermalStatus ?: 0
+            heatHeadroom = pm?.getThermalHeadroom(10)?.takeIf { !it.isNaN() } ?: 0f
+        } catch (_: Exception) { }
+    }
+
     private fun readVolume(): Float = try {
         val am = audioManager
         val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
@@ -1279,6 +1293,9 @@ class RaveActivity : ComponentActivity() {
                         outHeavy = target.heavy; outGrit = target.grit; outKick = target.kick
                         strobe = partyProfile.strobe; particles = partyProfile.particles
                         spike = partyProfile.spike; this.density = partyProfile.density
+                        // Phone heat every 5 s (cheap sticky broadcast + thermal service): is Party too heavy in the car?
+                        if (nowMs - heatReadAt > 5_000L) { heatReadAt = nowMs; readHeat() }
+                        tempC = heatTemp; thermal = heatStatus; headroom = heatHeadroom
                         analysisLog.frame(this, nowMs)
                     }
                 }

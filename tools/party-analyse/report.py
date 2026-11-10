@@ -254,6 +254,24 @@ td.num,th.num{{text-align:right}} .wrap{{overflow-x:auto}} .ok{{color:var(--ok)}
                      f"<td>{html.escape(app_g)}</td><td>{html.escape(mine)}</td></tr>")
         h.append("</table></div>")
 
+    # --- Phone heat and smoothness per song (temp_c/thermal/fps in the CSV, from 2026-11-10) ---
+    heat = []
+    for fname, title, rows in songs:
+        temps = [fnum(r, "temp_c") for r in rows if fnum(r, "temp_c") > 0]
+        if not temps:
+            continue
+        fps = [fnum(r, "fps") for r in rows if fnum(r, "fps") > 0]
+        heat.append((fname[:15], title, min(temps), max(temps), max(int(fnum(r, "thermal")) for r in rows),
+                     sum(fps) / len(fps) if fps else 0, min(fps) if fps else 0, Counter(r.get("genre", "") for r in rows).most_common(1)[0][0]))
+    if heat:
+        h.append("<h2>Varme og flyt</h2><p class='dim'>Batteritemperatur, Androids varmestatus (0 = normal, 2 = moderat, 3+ = alvorlig) og bilder per sekund.</p>"
+                 "<div class='wrap'><table><tr><th>Sang</th><th>Sjanger</th><th class='num'>°C start–maks</th><th class='num'>Status</th><th class='num'>fps snitt / lavest</th></tr>")
+        for stamp, title, t0, t1, th, fps_avg, fps_min, g in reversed(heat):
+            cls = "bad" if th >= 2 or t1 >= 42 else ""
+            h.append(f"<tr><td>{html.escape(title[:55])}<br><span class='dim'>{stamp}</span></td><td>{html.escape(g)}</td>"
+                     f"<td class='num {cls}'>{t0:.1f}–{t1:.1f}</td><td class='num {cls}'>{th}</td><td class='num'>{fps_avg:.0f} / {fps_min:.0f}</td></tr>")
+        h.append("</table></div>")
+
     h.append("<h2>🟢 Enkelt forklart</h2><p>Øverst ser du hvor ofte appen ville valgt det samme som deg. Tabellen «Hva appen trodde» viser hvilke deler den blander sammen, for eksempel om den kaller build-up for drop. «Drop funnet» er hvor mange av dine drop den fant selv innen 3 sekunder.</p>")
     h.append("</main></body></html>")
     os.makedirs(os.path.dirname(out_path), exist_ok=True)

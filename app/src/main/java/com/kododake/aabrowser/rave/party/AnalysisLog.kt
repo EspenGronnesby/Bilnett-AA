@@ -47,6 +47,8 @@ internal class AnalysisLog(private val dir: File) {
         var outHeavy = 0f; var outGrit = 0f; var outKick = 0f
         // Effects
         var shakePx = 0f; var strobe = 0f; var particles = 0f; var spike = 0f; var density = 0f
+        /** Phone heat (sampled every few seconds): battery °C, Android thermal status 0–6, headroom (1 = throttling). */
+        var tempC = 0f; var thermal = 0; var headroom = 0f
     }
 
     private val io = Executors.newSingleThreadExecutor { r -> Thread(r, "rave-analyse").apply { isDaemon = true } }
@@ -59,6 +61,8 @@ internal class AnalysisLog(private val dir: File) {
     private var lastPos = -1L
     private var lastPart = ""; private var lastDrop = ""; private var lastGenre = ""; private var lastSub = ""
     private var lastAutoPart = ""
+    private var lastTemp = 0f; private var lastThermal = 0; private var lastHeadroom = 0f
+    private var minTemp = 0f; private var maxTemp = 0f; private var maxThermal = 0
     private var openArtist = ""
 
     // ---- current bar ----
@@ -114,6 +118,10 @@ internal class AnalysisLog(private val dir: File) {
             openFile(nowMs)
         }
         lastFrameMs = nowMs
+        lastTemp = x.tempC; lastThermal = x.thermal; lastHeadroom = x.headroom
+        if (x.tempC > maxTemp) maxTemp = x.tempC
+        if (x.tempC > 0f && (minTemp == 0f || x.tempC < minTemp)) minTemp = x.tempC
+        if (x.thermal > maxThermal) maxThermal = x.thermal
         lastPos = x.positionMs; lastPart = x.part; lastDrop = x.dropKind; lastGenre = x.genre; lastSub = x.sub
         lastAutoPart = x.autoPart
         // A new bar every 4 beats; without a beat grid (calm music) a "bar" is 2 s.
@@ -151,6 +159,8 @@ internal class AnalysisLog(private val dir: File) {
             append(',').append(barAutoPart).append(',').append(barAutoDrop).append(',').append(barPartBy)
             for (v in a) append(',').append("%.3f".format(Locale.US, v))
             for (v in peak) append(',').append("%.3f".format(Locale.US, v))
+            append(',').append("%.1f".format(Locale.US, lastTemp)).append(',').append(lastThermal)
+            append(',').append("%.2f".format(Locale.US, lastHeadroom))
             append('\n')
         }
         val stats = parts.getOrPut(barPart) { PartStats() }
@@ -179,6 +189,7 @@ internal class AnalysisLog(private val dir: File) {
         val summary = buildString {
             append(SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date())).append(" | ").append(songName)
             append(" | fps %.0f".format(Locale.US, if (fpsBars > 0) fpsSum / fpsBars else 0f))
+            if (maxTemp > 0f) append(" | varme %.1f–%.1f °C, status %d".format(Locale.US, minTemp, maxTemp, maxThermal))
             for ((part, s) in parts) {
                 val b = s.bars.toFloat()
                 append(" | %s: %d takter shake %.1f px partikler %.2f spike %.2f heavy %.2f grit %.2f kick %.2f strobe %d"
@@ -190,7 +201,7 @@ internal class AnalysisLog(private val dir: File) {
         io.execute {
             try { File(dir, "sammendrag.txt").appendText(summary + "\n" + "#   fil: ${f.name}\n") } catch (_: Exception) { }
         }
-        parts.clear(); fpsSum = 0f; fpsBars = 0
+        parts.clear(); fpsSum = 0f; fpsBars = 0; minTemp = 0f; maxTemp = 0f; maxThermal = 0
         barKey = Int.MIN_VALUE
     }
 
@@ -240,6 +251,6 @@ internal class AnalysisLog(private val dir: File) {
         const val HEADER = "pos_s,part,drop,genre,sub,fps,effects_on,auto_part,auto_drop,part_by," +
             "vibe,sw,pi,build_rise,volume,bass,heavy,grit,screech,sub_bass,energy,high_motion," +
             "out_heavy,out_grit,shake_px,particles,spike,density,bpm," +
-            "max_kick,max_out_kick,max_snare,max_shake_px,max_strobe,max_heavy,max_grit,max_screech"
+            "max_kick,max_out_kick,max_snare,max_shake_px,max_strobe,max_heavy,max_grit,max_screech,temp_c,thermal,headroom"
     }
 }
