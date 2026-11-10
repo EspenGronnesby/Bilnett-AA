@@ -74,7 +74,9 @@ class HardstyleSpectrumTest {
             val amplitude = if (index % 12 < 3) 100 else 10
             val first = a.accept(fft(3 to amplitude, 20 to 60),44100,1000L+index*16)
             val second = b.accept(fft(3 to amplitude, 60 to 60),44100,1000L+index*16)
-            assertEquals(first.copy(spectrum=SILENT_SPECTRUM),second.copy(spectrum=SILENT_SPECTRUM))
+            // highMotion, presence and centroid measure the spectral shape on purpose; the rest must not change.
+            fun HardstyleFrame.legacy() = copy(spectrum = SILENT_SPECTRUM, highMotion = 0f, presence = 0f, centroid = 0f)
+            assertEquals(first.legacy(), second.legacy())
         }
     }
 }
