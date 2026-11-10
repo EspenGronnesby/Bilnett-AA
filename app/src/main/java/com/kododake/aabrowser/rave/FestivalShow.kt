@@ -150,3 +150,5 @@ internal const val GENRE_SWAY_DEG = .8f
 internal const val GENRE_BOUNCE_DP = 10f
 /** How far reggae/reggaeton pull the palette's hues toward warm red/gold/green (0..1). */
 internal const val WARMTH_PULL = .45f
+/** The Mac teacher's genre family must sum to at least this (top-5 Discogs scores) to lock the genre. */
+internal const val TEACHER_LOCK_MIN = .4f

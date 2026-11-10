@@ -614,7 +614,9 @@ class RaveActivity : ComponentActivity() {
                 // Phase B: the teacher decides – genre locked for the song (Espen's own pick still wins via
                 // GenreBook), and its tempo guides the beat tracker (only when the tempo is trusted).
                 val now0 = SystemClock.uptimeMillis()
-                genreDetector.setTeacher(st?.genre?.first, now0)
+                // Only a sure teacher locks the genre: a 30 s preview can be a calm part of a hard song
+                // (2026-11-10: DEEZL «Rebirth» preview → House .18 / Tropical House .14 for a hardstyle track).
+                genreDetector.setTeacher(st?.genre?.takeIf { it.second >= TEACHER_LOCK_MIN }?.first, now0)
                 hardstyleAudio.setTempoHint(st?.trustedBpm ?: 0f)
                 st?.mood?.let { m ->
                     if (st.genre?.first == Genre.HARDSTYLE && (st.genre?.second ?: 0f) >= .4f) {
