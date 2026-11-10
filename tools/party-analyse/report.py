@@ -243,6 +243,10 @@ td.num,th.num{{text-align:right}} .wrap{{overflow-x:auto}} .ok{{color:var(--ok)}
         for name, t, app_g, mine in rows:
             if t.get("styles"):
                 st = ", ".join(f"{x[0].split('---')[-1]} {x[1]:.2f}" for x in t["styles"][:3])
+                m = t.get("mood") or {}
+                if m:
+                    st += f"<br><span class='dim'>aggressiv {m.get('aggressive', 0):.2f} · glad {m.get('happy', 0):.2f} · " \
+                          f"{', '.join(x[0] for x in (m.get('themes') or [])[:3])}</span>"
                 bpm = f"{t.get('bpm', 0):.0f}" + ("" if t.get("bpmConf", 0) >= 1 else " ?")
             else:
                 st, bpm = f"<span class='dim'>{html.escape(t.get('why', 'ingen smakebit'))}</span>", ""

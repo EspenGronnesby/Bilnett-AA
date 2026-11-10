@@ -190,6 +190,11 @@ class RaveActivity : ComponentActivity() {
     /** «FEIL SJANGER» opens a row with every genre (most likely first, rejected ones last). */
     private var genrePickerOpen by mutableStateOf(false)
 
+    /** The song's mood from the Mac's style teacher (null = unknown → neutral motion). */
+    private var songMood: com.kododake.aabrowser.rave.party.SongMood? = null
+    /** Scene speed from the mood (same genre rules as the effects; set each frame). */
+    private var moodSpeed = 1f
+
     /** The song part right now (for highlighting the correction buttons). */
     private var shownPart by mutableStateOf(SongPart.INTRO)
     private var partLabelAt by mutableLongStateOf(0L)
@@ -579,8 +584,16 @@ class RaveActivity : ComponentActivity() {
             val a = m?.getString(MediaMetadata.METADATA_KEY_ARTIST).orEmpty()
             analysisLog.startSong(t, a)
             wrongGenres.clear(); handGenre = null; genrePickerOpen = false
-            // The Mac's style teacher (step 1: only logged, it doesn't decide anything yet).
+            // The Mac's style teacher: genre/BPM only logged (phase B decides); the mood shapes the motion.
             styleBook.lookup(GenreBook.key(t, a)).let { st ->
+                songMood = st?.mood
+                st?.mood?.let { m ->
+                    if (st.genre?.first == Genre.HARDSTYLE && (st.genre?.second ?: 0f) >= .4f)
+                        hardSubDetector.setMoodHint(if (m.raw >= com.kododake.aabrowser.rave.party.SongMood.RAW_SUB_FROM) HardSub.RAW else HardSub.EUPHORIC,
+                            SystemClock.uptimeMillis())
+                    android.util.Log.d("RaveGenre", "stemning: rå %.2f · euforisk %.2f · rolig %.2f · fest %.2f · %s".format(java.util.Locale.US,
+                        m.raw, m.euphoric, m.calm, m.partyLevel, m.themes.take(3).joinToString { it.first }))
+                }
                 android.util.Log.d("RaveGenre", if (st == null) "stil-lærer: ingen svar for «$a – $t» ennå" else
                     "stil-lærer: %s · %.0f BPM (sikkerhet %.1f) → %s".format(java.util.Locale.US,
                         st.styles.take(3).joinToString { "%s %.2f".format(java.util.Locale.US, it.first.substringAfter("---"), it.second) },
@@ -949,7 +962,8 @@ class RaveActivity : ComponentActivity() {
                     val activity = maxOf(rawTarget.bass, rawTarget.kick, rawTarget.highs, rawTarget.highMotion,
                         rawTarget.spectrum.maxOrNull() ?: 0f)
                     if (playing && ((!reactive && !fresh) || activity > .025f)) {
-                        visualTime += dt * if (!reactive && !fresh) .3f else (.35f + activity)
+                        // Euphoric songs float: the whole scene moves a bit slower (song mood).
+                        visualTime += dt * moodSpeed * if (!reactive && !fresh) .3f else (.35f + activity)
                     }
                     audioIntensity = if (playing && ((!reactive && !fresh) || activity > .025f)) activity.coerceIn(0f, 1f) else 0f
                     val mix = 1f-kotlin.math.exp(-dt/(if (playing) .025f else .12f))
@@ -1107,14 +1121,27 @@ class RaveActivity : ComponentActivity() {
                     flashesNow = flashBudget.perSecond(nowMs)
                     // Espen's saved «for mye / for lite» for this genre and song part.
                     val tune = tuneOf(genre, part)
+                    // The song's mood (Mac style teacher): euphoric floats, raw hits harder – full for EDM, half for
+                    // hardstyle (its RAW/EUPHORIC sub-genre already does part of it), only calm/party for the rest.
+                    val moodMotion = songMood?.let { m ->
+                        when (genre) {
+                            Genre.EDM -> m.motion
+                            Genre.HARDSTYLE -> with(m) { motion.scaled(.5f) }
+                            else -> m.calmPartyMotion
+                        }
+                    }
+                    moodSpeed = moodMotion?.speed ?: 1f
                     val p = vibeProfile(v, r)
                     // Strobe only in the drop; shake/particles/spikes follow the song part.
                     partyProfile = PartyProfile(
-                        p.spike * (.75f + .25f * pi) * subMul(sub.spike) * lookSpike * tune,
-                        p.particles * (.6f + .4f * pi) * subMul(sub.particles) * (1f + BUILD_PARTICLE_RISE * buildRise) * lookParticles * tune,
-                        p.shake * pi * subMul(sub.shake) * lookShake * tune,
+                        p.spike * (.75f + .25f * pi) * subMul(sub.spike) * lookSpike * tune * (moodMotion?.spike ?: 1f),
+                        p.particles * (.6f + .4f * pi) * subMul(sub.particles) * (1f + BUILD_PARTICLE_RISE * buildRise) * lookParticles * tune *
+                            (moodMotion?.particles ?: 1f),
+                        p.shake * pi * subMul(sub.shake) * lookShake * tune * (moodMotion?.shake ?: 1f),
                         p.strobe * (if (effectsOn && pi >= .9f) 1f else 0f) * subMul(sub.strobe),
-                        p.density * (1f + BUILD_DENSITY_RISE * buildRise), p.softness)
+                        p.density * (1f + BUILD_DENSITY_RISE * buildRise),
+                        // Sharp-spark genres stay sharp (> 1.2 switches to the soft bokeh look meant for rap/pop).
+                        (p.softness * (moodMotion?.softness ?: 1f)).let { if (p.softness <= 1.2f) it.coerceAtMost(1.15f) else it })
                     // Pop: calm in the verse, a little more push in the chorus (Espen 2026-11-06) — small steps.
                     val popLift = if (vibeAuto && genre == Genre.POP) genreDetector.chorus else 0f
                     if (popLift > 0f) partyProfile = partyProfile.copy(

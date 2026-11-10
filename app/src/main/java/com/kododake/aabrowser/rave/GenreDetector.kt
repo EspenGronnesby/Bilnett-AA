@@ -981,7 +981,15 @@ internal class HardSubDetector {
     private var candidateSince = 0L
 
     private var decidedThisTrack = false
-    fun newTrack() { n = 0; idx = 0; grit = 0f; screech = 0f; decidedThisTrack = false }
+    /** RAW/EUPHORIC from the Mac's style teacher (song mood); null = decide from the sound. */
+    private var moodHint: HardSub? = null
+    fun newTrack() { n = 0; idx = 0; grit = 0f; screech = 0f; decidedThisTrack = false; moodHint = null }
+
+    /** The teacher heard this song's mood: use it at once (live tempo jumps 117–235 BPM, mood doesn't). */
+    fun setMoodHint(h: HardSub, now: Long) {
+        moodHint = h; decidedThisTrack = true
+        if (sub != h) { sub = h; changedAt = now; Log.d("RaveGenre", "undersjanger → ${h.label} (stemning fra stil-lærer)") }
+    }
 
     fun update(f: HardstyleFrame, now: Long): HardSub {
         val dt = if (lastUpdate == 0L) 0f else ((now - lastUpdate) / 1000f).coerceIn(0f, .2f)
@@ -993,6 +1001,7 @@ internal class HardSubDetector {
         if (f.bpm > 0f && now - lastSample >= 1_000L) {
             lastSample = now; bpms[idx] = f.bpm; idx = (idx + 1) % bpms.size; n = minOf(n + 1, bpms.size)
         }
+        if (moodHint != null) return sub
         if (n < 5) return sub
         val bpm = bpms.copyOf(n).sorted()[n / 2]
         val guess = when {

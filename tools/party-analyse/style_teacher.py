@@ -26,6 +26,11 @@ BOOK = os.path.join(DATA, "style-book.json")
 RETRY_AFTER_S = 30 * 24 * 3600
 VERSION_WORDS = ["slowed", "sped up", "speed up", "nightcore", "remix", "reverb", "live", "acoustic", "instrumental"]
 UA = {"User-Agent": "bilnett-style-teacher/1.0"}
+# Mood heads (Essentia, same Discogs-EffNet embedding): our key, model name, the «yes» class.
+MOOD_HEADS = [("aggressive", "mood_aggressive", "aggressive"), ("happy", "mood_happy", "happy"),
+              ("party", "mood_party", "party"), ("relaxed", "mood_relaxed", "relaxed"), ("sad", "mood_sad", "sad"),
+              ("dance", "danceability", "danceable"), ("voice", "voice_instrumental", "voice"),
+              ("bright", "timbre", "bright"), ("themes", "mtg_jamendo_moodtheme", None)]
 HARD_STYLES = ["Hardstyle", "Hardcore", "Gabber", "Jumpstyle", "Speedcore", "Hard Trance", "Hands Up"]
 
 
@@ -131,16 +136,33 @@ def models():
         head = es.TensorflowPredict2D(graphFilename=os.path.join(MODELS, "genre_discogs400-discogs-effnet-1.pb"),
                                       input="serving_default_model_Placeholder", output="PartitionedCall:0")
         classes = json.load(open(os.path.join(MODELS, "genre_discogs400-discogs-effnet-1.json")))["classes"]
-        _models = (emb, head, classes)
+        # Mood heads on the same embedding: (our name, model, index of the «yes» class or None = all classes)
+        moods = []
+        for key, name, positive in MOOD_HEADS:
+            meta = json.load(open(os.path.join(MODELS, f"{name}-discogs-effnet-1.json")))
+            out = next(o["name"] for o in meta["schema"]["outputs"] if o.get("output_purpose") == "predictions")
+            model = es.TensorflowPredict2D(graphFilename=os.path.join(MODELS, f"{name}-discogs-effnet-1.pb"),
+                                           input=meta["schema"]["inputs"][0]["name"], output=out.rsplit(":", 1)[0])
+            idx = meta["classes"].index(positive) if positive else None
+            moods.append((key, model, idx, meta["classes"]))
+        _models = (emb, head, classes, moods)
     return _models
 
 
 def analyse(path):
     import essentia.standard as es
     import numpy as np
-    emb, head, classes = models()
+    emb, head, classes, mood_models = models()
     audio16 = es.MonoLoader(filename=path, sampleRate=16000, resampleQuality=4)()
-    preds = head(emb(audio16)).mean(axis=0)
+    embeddings = emb(audio16)
+    preds = head(embeddings).mean(axis=0)
+    mood = {}
+    for key, model, idx, mclasses in mood_models:
+        p = model(embeddings).mean(axis=0)
+        if idx is None:   # the 56 Jamendo themes: keep the 5 strongest
+            mood[key] = [[mclasses[i], round(float(p[i]), 3)] for i in np.argsort(p)[::-1][:5]]
+        else:
+            mood[key] = round(float(p[idx]), 3)
     top = np.argsort(preds)[::-1][:5]
     styles = [[classes[i], round(float(preds[i]), 3)] for i in top]
     audio44 = es.MonoLoader(filename=path, sampleRate=44100)()
@@ -150,7 +172,7 @@ def analyse(path):
     hard = sum(sc for name, sc in styles if name.startswith("Electronic---") and name.split("---", 1)[1] in HARD_STYLES)
     if hard >= .2 and bpm < 100:
         bpm *= 2
-    return styles, round(bpm, 1), round(float(conf), 2)
+    return styles, round(bpm, 1), round(float(conf), 2), mood
 
 
 def download(url, key):
@@ -206,7 +228,8 @@ def run(redo_all=False, use_csv=False):
     changed = 0
     for key, title, artist, dur in (csv_songs() if use_csv else songs()):
         old = out.get(key)
-        if old and not redo_all and (old.get("styles") or now - old.get("tried", 0) < old.get("retryS", RETRY_AFTER_S)):
+        if old and not redo_all and ((old.get("styles") and "mood" in old) or
+                                     (not old.get("styles") and now - old.get("tried", 0) < old.get("retryS", RETRY_AFTER_S))):
             continue
         log(f"{artist} – {title}")
         cands = candidates(title, artist)
@@ -220,10 +243,11 @@ def run(redo_all=False, use_csv=False):
         else:
             src, ct, ca, cd, url = best
             try:
-                styles, bpm, conf = analyse(download(url, key))
-                out[key] = {"styles": styles, "bpm": bpm, "bpmConf": conf,
+                styles, bpm, conf, mood = analyse(download(url, key))
+                out[key] = {"styles": styles, "bpm": bpm, "bpmConf": conf, "mood": mood,
                             "match": {"src": src, "title": ct, "artist": ca, "durMs": cd, "score": round(score, 2)}, "at": now}
-                log(f"  {styles[0][0]} {styles[0][1]:.2f} · {bpm} BPM ({src}: {ct})")
+                log(f"  {styles[0][0]} {styles[0][1]:.2f} · {bpm} BPM · aggr {mood['aggressive']:.2f} glad {mood['happy']:.2f} "
+                    f"tema {', '.join(t[0] for t in mood['themes'][:3])} ({src}: {ct})")
             except Exception as e:
                 out[key] = {"styles": None, "tried": now, "retryS": 24 * 3600, "why": f"analyse feilet: {e}"}
                 log(f"  analyse feilet: {e}")

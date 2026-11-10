@@ -11,7 +11,7 @@ import java.io.File
  * The model itself never runs on the phone (licence + needs real audio).
  */
 internal class StyleBook(private val file: File) {
-    data class Style(val styles: List<Pair<String, Float>>, val bpm: Float, val bpmConf: Float) {
+    data class Style(val styles: List<Pair<String, Float>>, val bpm: Float, val bpmConf: Float, val mood: SongMood? = null) {
         /** The teacher's genre and how sure it is (sum of the top styles in that genre family). */
         val genre: Pair<Genre, Float>? get() = styleToGenre(styles)
         /** BPM worth trusting (Essentia's confidence: < 1 is poor, > 3.5 excellent). */
@@ -45,7 +45,15 @@ internal class StyleBook(private val file: File) {
                 val list = (0 until arr.length()).mapNotNull { i ->
                     arr.optJSONArray(i)?.let { it.optString(0) to it.optDouble(1).toFloat() }
                 }
-                out[k] = Style(list, o.optDouble("bpm", 0.0).toFloat(), o.optDouble("bpmConf", 0.0).toFloat())
+                val m = o.optJSONObject("mood")
+                val mood = m?.let {
+                    fun f(name: String) = it.optDouble(name, 0.0).toFloat()
+                    val th = it.optJSONArray("themes")
+                    SongMood(f("aggressive"), f("happy"), f("party"), f("relaxed"), f("sad"), f("dance"), f("voice"), f("bright"),
+                        if (th == null) emptyList() else (0 until th.length()).mapNotNull { i ->
+                            th.optJSONArray(i)?.let { t -> t.optString(0) to t.optDouble(1).toFloat() } })
+                }
+                out[k] = Style(list, o.optDouble("bpm", 0.0).toFloat(), o.optDouble("bpmConf", 0.0).toFloat(), mood)
             }
             return out
         }
@@ -56,6 +64,8 @@ internal class StyleBook(private val file: File) {
             val s = style.substringAfter("---")
             return when {
                 parent == "Electronic" && s in HARD -> Genre.HARDSTYLE
+                // RnB/Swing is filed under Hip Hop by Discogs, but sounds like pop (Bruno Mars).
+                parent == "Hip Hop" && s == "RnB/Swing" -> Genre.POP
                 parent == "Hip Hop" -> Genre.RAP
                 s == "Reggaeton" || s == "Dembow" -> Genre.REGGAETON
                 parent == "Reggae" -> Genre.REGGAE
