@@ -214,12 +214,12 @@ class RaveActivity : ComponentActivity() {
 
     private fun Modifier.sceneShake(overscan: Boolean = false): Modifier = graphicsLayer {
         if (!hardstyleOn) return@graphicsLayer
-        translationX = shakeX
-        translationY = shakeY
-        rotationZ = shakeRotation
-        if (overscan && (shakeX != 0f || shakeY != 0f)) {
+        translationX = shakeX + swayX
+        translationY = shakeY + bounceY
+        rotationZ = shakeRotation + swayRot
+        if (overscan && (translationX != 0f || translationY != 0f)) {
             val minSide = min(size.width, size.height).coerceAtLeast(1f)
-            val zoom = 1f + 2f * hypot(shakeX, shakeY) / minSide + .02f * abs(shakeRotation)
+            val zoom = 1f + 2f * hypot(translationX, translationY) / minSide + .02f * abs(rotationZ)
             scaleX = zoom; scaleY = zoom
         }
     }
@@ -233,6 +233,18 @@ class RaveActivity : ComponentActivity() {
     private var loudNoDropS = 0f
     // ---- Festival show (FestivalShow.kt) ----
     private val beatClock = BeatClock()
+    /** Beat clock at half tempo (felt tempo: rap 808s, dubstep/future bass). */
+    private val halfClock = BeatClock()
+    /** The teacher's top styles for this song (EDM sub-style, labels). */
+    private var teacherStyles: List<Pair<String, Float>> = emptyList()
+    private var edmSub by mutableStateOf<com.kododake.aabrowser.rave.party.EdmSub?>(null)
+    /** Genre motion of the whole scene in px (reggae sway, reggaeton bounce) and colour warmth 0..1. */
+    private var swayX by mutableFloatStateOf(0f)
+    private var swayRot by mutableFloatStateOf(0f)
+    private var bounceY by mutableFloatStateOf(0f)
+    private var warmth by mutableFloatStateOf(0f)
+    /** The genre whose bar strength is loaded in [vibeAuto]/[vibeManual]. */
+    private var strengthGenre: Genre? = null
     private val flashBudget = FlashBudget()
     /** 0..1: the "breath in" before a drop darkens the scene (festival trick: dark, then hit). */
     private var dip by mutableFloatStateOf(0f)
@@ -267,23 +279,36 @@ class RaveActivity : ComponentActivity() {
      * Display only — the effects already follow the song part on their own.
      */
     private var vibeLive by mutableFloatStateOf(1f)
+    /** The bar = strength within the genre playing (null = Auto); remembered per genre. */
     private fun setVibe(v: Float?) {
         vibeAuto = v == null
-        if (v != null) vibeManual = v.coerceIn(0f, 1f)
+        vibeManual = v?.coerceIn(0f, 1f) ?: .5f
         try {
-            getSharedPreferences("rave", MODE_PRIVATE).edit()
-                .putBoolean("vibeAuto", vibeAuto).putFloat("vibe", vibeManual).apply()
+            val e = getSharedPreferences("rave", MODE_PRIVATE).edit()
+            if (v == null) e.remove("styrke_${genre.name}") else e.putFloat("styrke_${genre.name}", vibeManual)
+            e.apply()
         } catch (_: Exception) { }
     }
-    /** Short name for a slider value, e.g. ROLIG, RAP, EDM, ROCK or the hardstyle sub-genre (RAW …). */
-    private fun vibeLabel(v: Float): String = when {
-        // Auto found pop: the low part of the slider is «POP», not «ROLIG»/«RAP».
-        vibeAuto && (genre == Genre.POP || genre == Genre.REGGAE || genre == Genre.REGGAETON) && v < .375f -> genre.label
-        v < .125f -> "ROLIG"
-        v < .375f -> "RAP"
-        v < .75f -> "EDM"
-        rockness >= .5f -> "ROCK"
-        else -> hardSub.label
+
+    /** Loads the bar strength saved for [g] (Auto = none saved). */
+    private fun loadStrength(g: Genre) {
+        strengthGenre = g
+        val saved = try { getSharedPreferences("rave", MODE_PRIVATE).let { if (it.contains("styrke_${g.name}")) it.getFloat("styrke_${g.name}", .5f) else null } }
+            catch (_: Exception) { null }
+        vibeAuto = saved == null; vibeManual = saved ?: .5f
+    }
+
+    /** The bar right now: Auto = as designed (0.5), otherwise what Espen set for this genre. */
+    private val strength: Float get() = if (vibeAuto) .5f else vibeManual
+
+    /** Genre + sub-genre for labels, e.g. «HARDSTYLE · RAW», «EDM · DUBSTEP», «RAP · TRAP». */
+    private fun genreLabel(): String = when (genre) {
+        Genre.HARDSTYLE -> if (rockness >= .5f) "ROCK" else "HARDSTYLE · ${hardSub.label}"
+        Genre.EDM -> edmSub?.let { "EDM · ${it.label}" } ?: "EDM"
+        else -> {
+            val fam = teacherStyles.firstOrNull { com.kododake.aabrowser.rave.party.StyleBook.family(it.first) == genre }
+            fam?.let { "${genre.label} · ${it.first.substringAfter("---").uppercase()}" } ?: genre.label
+        }
     }
     /** Writes the song that is ending into the genre list (only when Party analysed it ≥ 15 s). */
     private fun recordGenre() {
@@ -469,18 +494,12 @@ class RaveActivity : ComponentActivity() {
         } catch (_: Exception) { }
         try {
             val prefs = getSharedPreferences("rave", MODE_PRIVATE)
-            if (prefs.contains("vibeAuto")) {
-                vibeAuto = prefs.getBoolean("vibeAuto", true)
-                vibeManual = prefs.getFloat("vibe", 1f).coerceIn(0f, 1f)
-            } else {
-                // One-time move from the old genre buttons to the slider.
-                val old = Genre.entries.firstOrNull { it.name == prefs.getString("genre", "AUTO") }
-                vibeAuto = old == null
-                if (old != null) vibeManual = old.vibeTarget()
-                prefs.edit().putBoolean("vibeAuto", vibeAuto).putFloat("vibe", vibeManual).remove("genre").apply()
-            }
+            // The bar used to pick a genre (vibe/vibeAuto/genre); now it is strength per genre (styrke_<GENRE>).
+            if (prefs.contains("vibe") || prefs.contains("vibeAuto") || prefs.contains("genre"))
+                prefs.edit().remove("vibe").remove("vibeAuto").remove("genre").apply()
         } catch (_: Exception) { }
-        vibe = if (vibeAuto) 1f else vibeManual
+        vibeAuto = true; vibeManual = .5f
+        vibe = 1f
         setContent {
             val cfg = androidx.compose.ui.platform.LocalConfiguration.current
             androidx.compose.runtime.CompositionLocalProvider(
@@ -577,7 +596,7 @@ class RaveActivity : ComponentActivity() {
             songPhase.newTrack(SystemClock.uptimeMillis())
             autoPhase.newTrack(SystemClock.uptimeMillis())
             loudNoDropS = 0f
-            beatClock.reset(); dip = 0f; dropHit = 0f; lastPart = SongPart.INTRO; dropLook = 0
+            beatClock.reset(); halfClock.reset(); dip = 0f; dropHit = 0f; lastPart = SongPart.INTRO; dropLook = 0
             dipStartedAt = 0L; dipSpent = false
             stopTapTest()   // a new song has a new beat grid
             hardSubDetector.newTrack()
@@ -590,6 +609,8 @@ class RaveActivity : ComponentActivity() {
             val rawArtist = m?.getString(MediaMetadata.METADATA_KEY_ARTIST).orEmpty()
             (styleBook.lookup(GenreBook.key(t, a)) ?: styleBook.lookup(GenreBook.key(t, rawArtist))).let { st ->
                 songMood = st?.mood
+                teacherStyles = st?.styles.orEmpty()
+                edmSub = com.kododake.aabrowser.rave.party.EdmSub.from(teacherStyles)
                 // Phase B: the teacher decides – genre locked for the song (Espen's own pick still wins via
                 // GenreBook), and its tempo guides the beat tracker (only when the tempo is trusted).
                 val now0 = SystemClock.uptimeMillis()
@@ -919,7 +940,7 @@ class RaveActivity : ComponentActivity() {
         var genreBanner by remember { mutableStateOf<String?>(null) }
         // Shown once per song (what the app thinks it is) and whenever the profile changes.
         var bannerShownFor by remember { mutableLongStateOf(genreAnnouncedAt) }
-        fun genreName() = vibeLabel(if (vibeAuto) autoVibeTarget() else vibeManual)
+        fun genreName() = genreLabel()
         // One banner at a time: a newer text is never cleared early by an older one's timer.
         var bannerToken by remember { mutableIntStateOf(0) }
         suspend fun banner(text: String, ms: Long) {
@@ -930,8 +951,8 @@ class RaveActivity : ComponentActivity() {
         LaunchedEffect(genreAnnouncedAt) {
             if (genreAnnouncedAt > 0L && genreAnnouncedAt != bannerShownFor) {
                 bannerShownFor = genreAnnouncedAt
-                // Only auto mode announces what it found; a hand-picked vibe stays quiet.
-                if (vibeAuto) banner(genreName(), 1600)
+                // Announce what the app found (the bar is strength now, so it never hides the genre).
+                banner(genreName(), 1600)
             }
         }
         // Hardstyle sub-genre found (e.g. "RAW", "UPTEMPO") and song parts ("BUILD-UP",
@@ -992,17 +1013,27 @@ class RaveActivity : ComponentActivity() {
                     // Rounded so the UI isn't recomposed every frame for invisible changes.
                     rockness = kotlin.math.round(genreDetector.rockness * 100f) / 100f
                     // Auto glides visibly to where the music belongs; a dragged value follows the finger.
-                    val vibeGoal = if (vibeAuto) autoVibeTarget() else vibeManual
-                    val glided = vibe + (vibeGoal - vibe) * (1f - kotlin.math.exp(-dt / if (vibeAuto) .6f else .12f))
+                    // The genre decides the internal position (shaping/structure); the bar is strength (below).
+                    // Not while Espen's finger is on the bar (his drag would be overwritten / saved under the new genre).
+                    if (strengthGenre != genre && !draggingBar) loadStrength(genre)
+                    val vibeGoal = autoVibeTarget()
+                    val glided = vibe + (vibeGoal - vibe) * (1f - kotlin.math.exp(-dt / .6f))
                     vibe = if (abs(vibeGoal - glided) < .002f) vibeGoal else glided
                     val v = vibe
                     val r = rockness
                     val hardW = hardWeight(v)
                     // Beat clock: pump on the PREDICTED beat (slightly early) instead of after the kick
                     // is heard. The analysis (genre, song parts) still uses the detected kick.
-                    if (!playing || !fresh) beatClock.reset()
+                    if (!playing || !fresh) { beatClock.reset(); halfClock.reset() }
                     val clockOn = v >= BEAT_CLOCK_FROM_VIBE
-                    val clockKick = if (playing && fresh && clockOn) beatClock.pulse(rawTarget, nowMs, BEAT_LEAD_MS + syncMs) else null
+                    // The clock runs for every genre (reggaeton bounce, rap/dubstep felt tempo); only hardstyle/EDM/rock
+                    // let it replace the kick directly.
+                    val clockPulse = if (playing && fresh) beatClock.pulse(rawTarget, nowMs, BEAT_LEAD_MS + syncMs) else null
+                    val clockKick = if (clockOn) clockPulse else null
+                    val halfPulse = if (playing && fresh) halfClock.pulse(rawTarget, nowMs, BEAT_LEAD_MS + syncMs, halfTime = true,
+                        decayMs = PULSE_808_DECAY_MS) else null
+                    val look = com.kododake.aabrowser.rave.party.GenreRules.look(genre, edmSub, rawTarget, halfPulse, clockPulse, nowMs)
+                    val strengthMul = com.kododake.aabrowser.rave.party.GenreRules.strengthMul(strength)
                     val clocked = if (clockKick != null) rawTarget.copy(kick = clockKick) else rawTarget
                     // In a build-up the snare roll must not become kicks, bass and grit through the rock
                     // half of the slider's top (that made the build-up wilder than the drop, log 2026-11-06).
@@ -1077,7 +1108,8 @@ class RaveActivity : ComponentActivity() {
                     // the rest follow how full the music sounds right now.
                     val live = if (!playing) 0f else
                         (sw * pi.coerceAtMost(1f) + (1f - sw) * rawTarget.energy.coerceIn(0f, 1f)).coerceIn(0f, 1f)
-                    val liveGoal = v * (.35f + .65f * live)
+                    // Display: the bar's strength riding the song part (Auto shows the song, not a genre).
+                    val liveGoal = (strength * (.35f + .65f * live)).coerceIn(0f, 1f)
                     val liveNext = vibeLive + (liveGoal - vibeLive) * (1f - kotlin.math.exp(-dt / .35f))
                     // Rounded so the slider redraws only when it visibly moves.
                     vibeLive = kotlin.math.round(liveNext * 200f) / 200f
@@ -1151,16 +1183,18 @@ class RaveActivity : ComponentActivity() {
                     val p = vibeProfile(v, r)
                     // Strobe only in the drop; shake/particles/spikes follow the song part.
                     partyProfile = PartyProfile(
-                        p.spike * (.75f + .25f * pi) * subMul(sub.spike) * lookSpike * tune * (moodMotion?.spike ?: 1f),
+                        p.spike * (.75f + .25f * pi) * subMul(sub.spike) * lookSpike * tune * (moodMotion?.spike ?: 1f) * look.spike * strengthMul,
                         p.particles * (.6f + .4f * pi) * subMul(sub.particles) * (1f + BUILD_PARTICLE_RISE * buildRise) * lookParticles * tune *
-                            (moodMotion?.particles ?: 1f),
-                        p.shake * pi * subMul(sub.shake) * lookShake * tune * (moodMotion?.shake ?: 1f),
-                        p.strobe * (if (effectsOn && pi >= .9f) 1f else 0f) * subMul(sub.strobe),
+                            (moodMotion?.particles ?: 1f) * look.particles * strengthMul,
+                        p.shake * pi * subMul(sub.shake) * lookShake * tune * (moodMotion?.shake ?: 1f) * look.shake * strengthMul,
+                        p.strobe * (if (effectsOn && pi >= .9f) 1f else 0f) * subMul(sub.strobe) * look.strobe *
+                            (if (strength < com.kododake.aabrowser.rave.party.GenreRules.STROBE_FROM_STRENGTH) 0f else 1f),
                         p.density * (1f + BUILD_DENSITY_RISE * buildRise),
                         // Sharp-spark genres stay sharp (> 1.2 switches to the soft bokeh look meant for rap/pop).
                         (p.softness * (moodMotion?.softness ?: 1f)).let { if (p.softness <= 1.2f) it.coerceAtMost(1.15f) else it })
                     // Pop: calm in the verse, a little more push in the chorus (Espen 2026-11-06) — small steps.
-                    val popLift = if (vibeAuto && genre == Genre.POP) genreDetector.chorus else 0f
+                    // Also reggae/reggaeton (pop-like); the bar no longer changes the genre, so not only in Auto.
+                    val popLift = if (genre == Genre.POP || genre == Genre.REGGAE || genre == Genre.REGGAETON) genreDetector.chorus else 0f
                     if (popLift > 0f) partyProfile = partyProfile.copy(
                         spike = partyProfile.spike * (1f + .35f * popLift),
                         particles = partyProfile.particles * (1f + .4f * popLift))
@@ -1169,8 +1203,10 @@ class RaveActivity : ComponentActivity() {
                     val untuned = if (buildRise > 0f) shapedPop.copy(kick = max(shapedPop.kick, rawTarget.snare * .45f * buildRise)) else shapedPop
                     // The pump follows the «for mye / for lite» level a little (not heavy: strobe and shake
                     // multiply kick × heavy × shake, so tuning all of them would stack up and kill the drop).
-                    val target = if (tune == 1f) untuned else
+                    val tuned = if (tune == 1f) untuned else
                         untuned.copy(kick = (untuned.kick * tune.coerceIn(.75f, 1.15f)).coerceAtMost(1f))
+                    // Genre rules: rap's 808 pulse / dubstep's half-time pulse replace the pump.
+                    val target = look.kick?.let { tuned.copy(kick = it.coerceIn(0f, 1f)) } ?: tuned
                     val liveSpectrum = playing && fresh
                     for (i in 0 until SPECTRUM_BANDS) {
                         val goal = if (liveSpectrum) target.spectrum[i] else 0f
@@ -1214,6 +1250,11 @@ class RaveActivity : ComponentActivity() {
                         shakeY = if (big) y else 0f
                         // A hint of rotation only on heavy hits (max ~0.8°).
                         shakeRotation = if (big) (f.heavy * f.kick * .8f * if (shakeDirection[0] > PI) -1f else 1f) else 0f
+                        // Genre motion: reggae sways, reggaeton bounces (scaled by the bar), rounded to whole px.
+                        swayX = kotlin.math.round(look.swayX * GENRE_SWAY_DP.dp.toPx() * strengthMul)
+                        swayRot = kotlin.math.round(look.swayRot * GENRE_SWAY_DEG * strengthMul * 10f) / 10f
+                        bounceY = kotlin.math.round(-look.bounceY * GENRE_BOUNCE_DP.dp.toPx() * strengthMul)
+                        if (warmth != look.warmth) warmth = look.warmth
                     }
                     // Analysis log: what was measured and what the effects did (one CSV line per bar).
                     if (playing && fresh) with(logFrame) {
@@ -1245,11 +1286,17 @@ class RaveActivity : ComponentActivity() {
         }
 
         val palette = colors
-        val hardPalette = remember(colors) {
+        val hardPalette = remember(colors, warmth) {
             (if (colors == DEFAULT_COLORS) listOf(Color.Cyan, Color(0xFFAA44FF), Color(0xFFFF44BB)) else colors).map { color ->
                 val hsv = FloatArray(3)
                 android.graphics.Color.RGBToHSV((color.red*255).toInt(), (color.green*255).toInt(), (color.blue*255).toInt(), hsv)
                 hsv[1] = max(hsv[1], .7f); hsv[2] = max(hsv[2], .85f)
+                // Reggae/reggaeton: pull the hues toward warm red/gold/green (shortest way round the colour wheel).
+                if (warmth > 0f) {
+                    val warmHue = listOf(0f, 45f, 120f).minBy { w -> abs(((hsv[0] - w + 540f) % 360f) - 180f) }
+                    val d = ((warmHue - hsv[0] + 540f) % 360f) - 180f
+                    hsv[0] = (hsv[0] + d * WARMTH_PULL * warmth + 360f) % 360f
+                }
                 Color(android.graphics.Color.HSVToColor(hsv))
             }.ifEmpty { listOf(Color.Cyan, Color(0xFFAA44FF)) }
         }
@@ -1821,7 +1868,8 @@ class RaveActivity : ComponentActivity() {
 
     /** Accent from the Timetracker app (hsl 271 81% 61%). */
     /** Dragging takes over from auto; saved when the finger lifts. */
-    private fun dragVibe(v: Float) { vibeAuto = false; vibeManual = v.coerceIn(0f, 1f) }
+    private var draggingBar = false
+    private fun dragVibe(v: Float) { draggingBar = true; vibeAuto = false; vibeManual = v.coerceIn(0f, 1f) }
 
     /**
      * The vibe meter: a vertical slider, calm at the bottom and full hardstyle/rock at the top.
@@ -1853,6 +1901,7 @@ class RaveActivity : ComponentActivity() {
                                 }
                             } finally {
                                 setVibe(vibeManual)
+                                draggingBar = false
                                 buttonInteraction()
                             }
                         }
@@ -2155,7 +2204,7 @@ class RaveActivity : ComponentActivity() {
                 .background(Color.Black.copy(alpha = .55f)).padding(horizontal = 12.u, vertical = 10.u)
         ) {
             Text(h.part, color = Color(0xFFF5F2EC), fontSize = 18.us, fontWeight = FontWeight.SemiBold, maxLines = 1)
-            Text("${vibeLabel(vibe)} · %.0f BPM".format(h.bpm),
+            Text("${genreLabel()} · styrke ${(strength * 100).toInt()} %% · %.0f BPM".format(h.bpm),
                 color = dim, fontSize = 12.us, maxLines = 1)
             Text("Lyd: ${if (micMode) (micSource?.deviceName ?: "mikrofon") else "telefonens lyd"}", color = dim, fontSize = 12.us, maxLines = 1)
             Text("takt ${h.barInPhrase}/8 · frase ${h.phrase} · ${if (h.ready) "klar for drop" else "ikke klar"}",

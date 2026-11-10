@@ -24,6 +24,8 @@ internal const val BUILD_PARTICLE_RISE = .25f
 internal const val BUILD_DENSITY_RISE = .2f
 /** Remembered part corrections switch this early (Espen taps after he hears the change). */
 internal const val MARK_LEAD_MS = 400L
+/** Rap's 808 pulse fades this slowly (heavy, «head-nod» feel). */
+internal const val PULSE_808_DECAY_MS = 350f
 /** The last part of every song fades down like an outro, to this share of the normal level. */
 internal const val OUTRO_FADE_MS = 20_000L
 internal const val OUTRO_FLOOR = .3f
@@ -91,17 +93,24 @@ internal class BeatClock {
 
     fun reset() { prevSince = -1f; lastPeakAt = 0L; active = false }
 
-    fun pulse(f: HardstyleFrame, now: Long, leadMs: Float = BEAT_LEAD_MS): Float? {
-        val p = f.beatPeriod
+    /**
+     * @param halfTime pulse every second beat (felt tempo: trap/drill/dubstep at 140 feel like 70),
+     *  anchored on even beats, with a longer, heavier decay ([decayMs]).
+     */
+    fun pulse(f: HardstyleFrame, now: Long, leadMs: Float = BEAT_LEAD_MS, halfTime: Boolean = false,
+              decayMs: Float = BEAT_PULSE_DECAY_MS): Float? {
+        val beatP = f.beatPeriod
         // Kicks must still be coming (the tracker stops filling in after 2 missing kicks).
-        active = f.beatConfidence >= BEAT_CLOCK_MIN_CONFIDENCE && p > 0f && f.beatAt > 0L && now - f.beatAt < p * 1.6f
+        active = f.beatConfidence >= BEAT_CLOCK_MIN_CONFIDENCE && beatP > 0f && f.beatAt > 0L && now - f.beatAt < beatP * 1.6f
         if (!active) { prevSince = -1f; return null }
-        val since = (((now + leadMs - f.beatAt) % p) + p) % p
+        val p = if (halfTime) beatP * 2f else beatP
+        val anchor = if (halfTime) f.beatAt - (f.beat % 2) * beatP.toLong() else f.beatAt
+        val since = (((now + leadMs - anchor) % p) + p) % p
         // A new beat starts when the phase wraps around. The re-sync to a real kick can nudge the
         // phase, so ignore a second wrap within 60 % of a beat (no double pulses).
         if (prevSince >= 0f && since < prevSince && now - lastPeakAt > p * .6f) lastPeakAt = now
         prevSince = since
-        return exp(-(now - lastPeakAt) / BEAT_PULSE_DECAY_MS)
+        return exp(-(now - lastPeakAt) / decayMs)
     }
 }
 
@@ -135,3 +144,9 @@ internal const val TUNE_STEP_UP = 1.15f
 internal const val TUNE_STEP_DOWN = .85f
 internal const val TUNE_MIN = .5f
 internal const val TUNE_MAX = 2f
+/** Genre motion of the whole scene at full bar strength: reggae sway (dp, degrees) and reggaeton bounce (dp). */
+internal const val GENRE_SWAY_DP = 14f
+internal const val GENRE_SWAY_DEG = .8f
+internal const val GENRE_BOUNCE_DP = 10f
+/** How far reggae/reggaeton pull the palette's hues toward warm red/gold/green (0..1). */
+internal const val WARMTH_PULL = .45f
