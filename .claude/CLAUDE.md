@@ -59,7 +59,10 @@ Gjør dette, i rekkefølge:
    Tas i bruk i appen **bare** når den slår reglene uten at drop blir dårligere. 2026-11-10 (9 sanger): modell 59 %,
    regler 69 %; men build-up 47 % mot 13 %. Hybrid (regler + modell for build-up ved ≥ 0,6) 68 %, build-up 31 %, drop 83 %.
    Trenger ~30 sanger merket med AUTO: AV, særlig build-ups.
-7. Velg robuste verdier (ikke overtilpass få sanger), bygg, installer, og fortell Espen kort hva som ble bedre/verre (tabell før/nå) og hva han bør merke mer av.
+7. **Drop-fingeravtrykk (fase D, eksperiment):** `…/venv/bin/python tools/party-analyse/preview_fft.py` (smakebit → FFT),
+   så `--tests '*PartyReplayTest.dropFingerprint'` og `'*PartyReplayTest.dropPrintHelps'`. 2026-11-10: avtrykket topper ved
+   Espens drop (AUC 78–90 %, 4/4 sanger), men gir ingen gevinst over fylde-reglene (69 % med/uten). Av (`PartyTuning.usePrint`).
+8. Velg robuste verdier (ikke overtilpass få sanger), bygg, installer, og fortell Espen kort hva som ble bedre/verre (tabell før/nå) og hva han bør merke mer av.
 
 Status 2026-11-06 (9 sanger med fasit): 69 % enig; drop 86 %, breakdown 66 %, intro 86 %, **build-up 12 % (svakest)**.
 Detaljer om hvordan alt henger sammen: `.claude/docs/party-analyse.md`. Data havner **aldri** i git (repoet er offentlig).

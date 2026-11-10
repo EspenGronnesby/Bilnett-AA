@@ -550,6 +550,16 @@ internal object PartyTuning {
     var reentryBars = 2f
     /** A pending drop also needs the sub this close to the song's peak (a build-up is bright, but thin). */
     var confirmSubDb = -99f
+    /** Drop fingerprint (phase D): a pending drop is real when the sound is this much more like the preview's drop than usual … */
+    var printConfirm = .02f
+    /** … and a drop ends when it is this much less like it (for [dullBars] bars). 0 = off. */
+    var printExit = -.04f
+    /**
+     * Use the fingerprint at all. Off (2026-11-10): it does peak at Espen's drops (AUC 78–90 % in 4/4 songs),
+     * but on 9 songs it added nothing over the fullness rules (69 % with and without). The app doesn't load
+     * fingerprints yet; PartyReplayTest.dropPrintHelps measures it again when there is more data.
+     */
+    var usePrint = false
 }
 /** DROP corrected back to BUILD-UP within this time = a fake drop. */
 internal const val FAKE_DROP_WINDOW_MS = 10_000L
@@ -610,6 +620,14 @@ internal class HardstyleStructure {
     private var fullSub = 0f; private var fullAir = 0f; private var fullPres = 0f
     private var refSub = 0f; private var refAir = 0f; private var refPres = 0f
     private var dullSince = 0L
+    /** The preview's drop fingerprint from the Mac (48 bands like [HardstyleFrame.spectrum]); null = none. */
+    var dropPrint: FloatArray? = null
+    private var printEma: FloatArray? = null
+    private var likeRef = 0f
+    private var unlikeSince = 0L
+    /** Likeness to the drop fingerprint minus this song's usual likeness (for the log/HUD). */
+    var printLikeRel = 0f
+        private set
     private var dropEndedAt = 0L
     private var buildSigSince = 0L
     /** Treble+presence vs this song's peak (dB, ≤ 0) and sub vs its peak — for the HUD/log too. */
@@ -639,6 +657,7 @@ internal class HardstyleStructure {
         part = SongPart.INTRO; dropKind = DropKind.NONE; label = ""; labelAt = 0L; hud = StructureHud()
         trackStart = now; partSince = now; started = false; joinChecked = false; forcedUntil = 0L
         dullSince = 0L; buildSigSince = 0L; brightRel = 0f; subFullRel = 0f; dropEndedAt = 0L
+        printEma = null; likeRef = 0f; printLikeRel = 0f; unlikeSince = 0L
         primed = false; introOver = false; buildSince = 0L; notBuildSince = 0L; dropHitAt = 0L; dropLowSince = 0L
         realDrops = 0; boostNext = false; dropBoost = 0f; intensity = .4f; lastBannerAt = 0L
         phaseVotes.fill(0); lastBarLogged = -1; lastKickAt = 0L; snareRate = 0f; grit1 = 0f
@@ -751,6 +770,18 @@ internal class HardstyleStructure {
         brightRel = ((fullAir - refAir) + (fullPres - refPres)) / 2f
         subFullRel = fullSub - refSub
         val warmedUp = now - trackStart > FULL_WARMUP_MS
+        // Drop fingerprint: 4 s average spectrum vs the preview's fullest part, against this song's usual likeness.
+        val print = dropPrint
+        if (print != null && PartyTuning.usePrint && f.spectrum.size == print.size) {
+            val e = printEma ?: FloatArray(print.size).also { printEma = it }
+            val a = 1f - exp(-dt / 4f)
+            var d = 0f; var na = 0f; var nb = 0f
+            for (i in e.indices) { e[i] += (f.spectrum[i] - e[i]) * a; d += e[i] * print[i]; na += e[i] * e[i]; nb += print[i] * print[i] }
+            val like = if (na > 0f && nb > 0f) d / kotlin.math.sqrt(na * nb) else 0f
+            likeRef = if (likeRef == 0f) like else likeRef + (like - likeRef) * (1f - exp(-dt / 30f))
+            printLikeRel = like - likeRef
+        }
+        val printOk = print != null && PartyTuning.usePrint && warmedUp
         noise1 = ema(noise1, f.noise, 1f); noise8 = ema(noise8, f.noise, 8f)
         val kickHit = f.kick > .95f && lastKick <= .95f
         val snareHit = f.snare > .95f && lastSnare <= .95f
@@ -799,7 +830,8 @@ internal class HardstyleStructure {
                         dropKind = DropKind.NONE; subMin = sub1
                         Log.d("RaveGenre", "ikke drop: diskant/vokal %.1f dB under toppen".format(-brightRel))
                         enter(SongPart.BREAKDOWN, now, "ikke fullt nok for drop")
-                    } else if (sub1 - dropBaseline >= 3f || atLoudLevel) {
+                    } else if (sub1 - dropBaseline >= 3f || atLoudLevel ||
+                        (printOk && !kickGone && printLikeRel >= PartyTuning.printConfirm)) {
                         realDrops++
                         lastRealDropAt = dropHitAt
                         primed = false
@@ -851,7 +883,8 @@ internal class HardstyleStructure {
                         // (kick still going, but treble/presence clearly down) and build-ups (sub down,
                         // treble full). Leave when that holds.
                         val buildSig = subFullRel < PartyTuning.buildSubDb && brightRel > PartyTuning.buildBrightDb
-                        val dull = brightRel < PartyTuning.dullBrightDb
+                        val unlike = printOk && PartyTuning.printExit < 0f && printLikeRel < PartyTuning.printExit
+                        val dull = brightRel < PartyTuning.dullBrightDb || unlike
                         buildSigSince = if (buildSig) (if (buildSigSince == 0L) now else buildSigSince) else 0L
                         dullSince = if (dull) (if (dullSince == 0L) now else dullSince) else 0L
                         if (buildSigSince > 0L && now - buildSigSince >= barMs) {

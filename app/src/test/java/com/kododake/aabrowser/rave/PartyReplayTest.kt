@@ -170,7 +170,35 @@ class PartyReplayTest {
     }
 
     private class Song(val name: String, val key: List<Pair<Long, String>>, val now: LongArray, val pos: LongArray,
-                       val frames: List<HardstyleFrame>)
+                       val frames: List<HardstyleFrame>, val print: FloatArray? = null)
+
+    /** The preview's drop fingerprint for a song: its fullest 8 s, 48-band profile through the real analysis. */
+    private fun fingerprint(csv: File): FloatArray? {
+        val pdir = File(raw.parentFile, "previews-fft")
+        val head = csv.useLines { it.firstOrNull() }.orEmpty().drop(2).split(" – ", limit = 2)
+        if (head.size < 2) return null
+        val pfile = File(pdir, Regex("[^a-z0-9]+").replace(GenreBook.key(head[1], head[0]), "_").take(80) + ".fft.gz")
+        if (!pfile.exists()) return null
+        val pf = frames(pfile); if (pf.size < 100) return null
+        val a = HardstyleAudio()
+        val fr = pf.map { a.accept(it.fft, it.rate, it.now) }
+        return printFrom(LongArray(pf.size) { pf[it].now }, fr)
+    }
+
+    /** Fingerprint from analysed frames: mean spectrum over the fullest 8 s (skipping the first quarter). */
+    private fun printFrom(times: LongArray, fr: List<HardstyleFrame>): FloatArray? {
+        if (fr.isEmpty()) return null
+        val n = fr[0].spectrum.size
+        var bestI = -1; var bestLevel = -1.0; var j = 0; var lvl = 0.0
+        for (i in fr.indices) {
+            lvl += fr[i].level
+            while (times[i] - times[j] > 8_000L) { lvl -= fr[j].level; j++ }
+            if (i >= fr.size / 4 && times[i] - times[j] >= 7_000L && lvl / (i - j + 1) > bestLevel) { bestLevel = lvl / (i - j + 1); bestI = i }
+        }
+        if (bestI < 0) return null
+        var start = bestI; while (start > 0 && times[bestI] - times[start - 1] <= 8_000L) start--
+        return FloatArray(n) { k -> (start..bestI).map { fr[it].spectrum[k] }.average().toFloat() }
+    }
 
     /** The teacher's answer for a song (style-book.json, looked up like the app does), or null. */
     private fun teacher(csv: File): com.kododake.aabrowser.rave.party.StyleBook.Style? {
@@ -201,7 +229,7 @@ class PartyReplayTest {
             val audio = HardstyleAudio()
             if (useTeacherTempo) audio.setTempoHint(teacher(csv)?.trustedBpm ?: 0f)
             Song(fft.name.drop(16), key, LongArray(fs.size) { fs[it].now }, LongArray(fs.size) { fs[it].pos },
-                fs.map { audio.accept(it.fft, it.rate, it.now) })
+                fs.map { audio.accept(it.fft, it.rate, it.now) }, fingerprint(csv))
         }
     }
 
@@ -214,7 +242,7 @@ class PartyReplayTest {
         val total = HashMap<String, HashMap<String, Double>>()
         var trueDrops = 0; var found = 0; var extra = 0
         for (sg in songs) {
-            val st = HardstyleStructure(); st.newTrack(sg.now[0])
+            val st = HardstyleStructure(); st.newTrack(sg.now[0]); st.dropPrint = sg.print
             var prev = sg.now[0]; var last = ""; val auto = ArrayList<Long>()
             for (i in sg.frames.indices) {
                 st.update(sg.frames[i], sg.now[i], sg.pos[i], -1L)
@@ -257,6 +285,26 @@ class PartyReplayTest {
         }
         println(sb)
         File(raw.parentFile, "sweep.txt").writeText(sb.toString())
+    }
+
+    /** Phase D check: does the drop fingerprint help the song parts? On/off plus a small search. */
+    @Test fun dropPrintHelps() {
+        assumeTrue(File(raw, "fft").isDirectory && File(raw.parentFile, "previews-fft").isDirectory)
+        val sg = songs(); assumeTrue(sg.isNotEmpty())
+        val sb = StringBuilder("\n${sg.count { it.print != null }} av ${sg.size} sanger har fingeravtrykk\n")
+        fun line(name: String, sc: Score) = sb.append("%-28s enig %3.0f %%  I %3.0f B %3.0f D %3.0f Br %3.0f  drop %d/%d  ekstra %d\n".format(Locale.US,
+            name, 100 * sc.agree, 100 * (sc.perClass["INTRO"] ?: 0.0), 100 * (sc.perClass["BUILDUP"] ?: 0.0),
+            100 * (sc.perClass["DROP"] ?: 0.0), 100 * (sc.perClass["BREAKDOWN"] ?: 0.0), sc.found, sc.trueDrops, sc.extra))
+        val (c0, e0) = PartyTuning.printConfirm to PartyTuning.printExit
+        PartyTuning.usePrint = false; line("uten avtrykk", evaluate(sg))
+        PartyTuning.usePrint = true
+        for (c in listOf(.01f, .02f, .04f, 1f)) for (e in listOf(-.02f, -.04f, -.08f, 0f)) {
+            PartyTuning.printConfirm = c; PartyTuning.printExit = e
+            line("bekreft %.2f / ut %.2f".format(Locale.US, c, e), evaluate(sg))
+        }
+        PartyTuning.printConfirm = c0; PartyTuning.printExit = e0; PartyTuning.usePrint = false
+        println(sb)
+        File(raw.parentFile, "drop-print-helps.txt").writeText(sb.toString())
     }
 
     /** Phase B check: the same replay with and without the teacher's tempo hint. */
@@ -315,6 +363,72 @@ class PartyReplayTest {
         }
         File(raw.parentFile, "parts-features.csv").writeText(out.toString())
         println("eksportert ${out.lines().size - 2} sekunder fra ${sg.size} sanger")
+    }
+
+    /**
+     * Phase D (experiment): the «drop fingerprint». The preview (converted to Visualizer-like FFT by
+     * preview_fft.py) runs through the real analysis; its fullest 8 s gives a 48-band profile. In the
+     * recorded song: does the live 4 s profile look most like it during Espen's drops?
+     */
+    @Test fun dropFingerprint() {
+        val pdir = File(raw.parentFile, "previews-fft")
+        assumeTrue(pdir.isDirectory && File(raw, "fft").isDirectory)
+        val csvs = raw.listFiles { f -> f.name.endsWith(".csv") && f.name != "feedback.csv" }?.toList().orEmpty()
+        fun slug(k: String) = Regex("[^a-z0-9]+").replace(k, "_").take(80)
+        fun cos(a: DoubleArray, b: DoubleArray): Double {
+            var d = 0.0; var na = 0.0; var nb = 0.0
+            for (i in a.indices) { d += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i] }
+            return if (na > 0 && nb > 0) d / Math.sqrt(na * nb) else 0.0
+        }
+        /** Mean spectrum over a sliding window of [windowMs], one value per frame. */
+        fun windowed(times: LongArray, spec: List<DoubleArray>, windowMs: Long): List<DoubleArray> {
+            val out = ArrayList<DoubleArray>(); var j = 0; val acc = DoubleArray(spec[0].size)
+            for (i in spec.indices) {
+                for (k in acc.indices) acc[k] += spec[i][k]
+                while (times[i] - times[j] > windowMs) { for (k in acc.indices) acc[k] -= spec[j][k]; j++ }
+                val n = (i - j + 1).toDouble(); out.add(DoubleArray(acc.size) { acc[it] / n })
+            }
+            return out
+        }
+        val sb = StringBuilder("\nSang                                         likhet drop  ellers   drop-topp\n")
+        var wins = 0; var tested = 0
+        for (fft in File(raw, "fft").listFiles { f -> f.name.endsWith(".fft.gz") }.orEmpty().sortedBy { it.name }) {
+            val csv = csvFor(fft, csvs) ?: continue
+            if (!structured(csv, fft.name)) continue
+            val key = truth(csv); if (key.size < 8) continue
+            val head = csv.useLines { it.firstOrNull() }.orEmpty().drop(2).split(" – ", limit = 2)
+            if (head.size < 2) continue
+            val pfile = File(pdir, slug(GenreBook.key(head[1], head[0])) + ".fft.gz").takeIf { it.exists() } ?: continue
+            // Fingerprint: the preview's fullest 8 s.
+            val pf = frames(pfile); if (pf.size < 100) continue
+            val pa = HardstyleAudio()
+            val pFrames = pf.map { pa.accept(it.fft, it.rate, it.now) }
+            val pSpec = pFrames.map { f -> DoubleArray(f.spectrum.size) { f.spectrum[it].toDouble() } }
+            val pTimes = LongArray(pf.size) { pf[it].now }
+            val pWin = windowed(pTimes, pSpec, 8_000L)
+            val pLevel = windowed(pTimes, pFrames.map { doubleArrayOf(it.level.toDouble()) }, 8_000L).map { it[0] }
+            val best = pLevel.indices.drop(pf.size / 4).maxByOrNull { pLevel[it] } ?: continue
+            val print = pWin[best]
+            // Live: 4 s profile vs fingerprint, compared with Espen's parts.
+            val lf = frames(fft); if (lf.size < 200) continue
+            val la = HardstyleAudio()
+            val lSpec = lf.map { fr -> la.accept(fr.fft, fr.rate, fr.now).spectrum.let { s -> DoubleArray(s.size) { s[it].toDouble() } } }
+            val lWin = windowed(LongArray(lf.size) { lf[it].now }, lSpec, 4_000L)
+            val inDrop = ArrayList<Double>(); val other = ArrayList<Double>()
+            for (i in lf.indices) {
+                val t = key.lastOrNull { it.first <= lf[i].pos }?.second ?: continue
+                (if (t == "DROP") inDrop else other).add(cos(lWin[i], print))
+            }
+            if (inDrop.isEmpty() || other.isEmpty()) continue
+            // «Peaks at the drop»: how often a drop moment beats a random other moment (AUC).
+            val o = other.sorted()
+            val auc = inDrop.sumOf { d -> o.count { it < d }.toDouble() } / (inDrop.size.toDouble() * o.size)
+            tested++; if (auc >= .65) wins++
+            sb.append("%-44s %6.3f  %6.3f   %3.0f %%\n".format(Locale.US, fft.name.drop(16).take(44), inDrop.average(), other.average(), 100 * auc))
+        }
+        sb.append("\nTopper ved Espens drop (AUC ≥ 65 %%) i %d av %d sanger\n".format(wins, tested))
+        println(sb)
+        File(raw.parentFile, "drop-fingerprint.txt").writeText(sb.toString())
     }
 
     @Test fun replayAgainstEspensAnswers() {

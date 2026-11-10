@@ -78,6 +78,10 @@ diskant + presence ca. 1,5–2 dB under sangens topp i breakdown, mens build-up 
 (målinger nå + endring over 2/4/8 s) og tester med én sang utenfor om gangen. På 9 sanger slår den ikke reglene
 totalt (59 % mot 69 %), men er mye bedre på build-up (47 % mot 13 %). Ikke i appen ennå – flere merkede sanger trengs.
 
+**Drop-fingeravtrykk (fase D, 2026-11-10):** smakebiten gjøres om til Visualizer-lignende FFT (`preview_fft.py`) og kjøres
+gjennom den ekte analysen; den fulleste 8 s-biten blir sangens «drop-profil» (48 bånd). Live-lyden ligner mest på profilen
+i Espens drop (AUC 78–90 % i 4 av 4 sanger), men som ekstra bevis ga den ingen bedring over fylde-reglene. Ligger klar, av.
+
 Gammel plan for trening:
 
 1. Hent loggene og lydopptakene (sync).
