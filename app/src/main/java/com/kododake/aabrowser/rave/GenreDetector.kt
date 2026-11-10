@@ -235,7 +235,11 @@ internal class GenreDetector {
         commit(g, now, "stil-lærer")
     }
 
+    /** Espen's own pick for this song (beats the teacher even before the genre list has the song). */
+    private var handLock: Genre? = null
+
     fun lockByHand(g: Genre, now: Long) {
+        handLock = g
         songLock = g
         hardstyleThisTrack = false
         if (g != Genre.ROCK) rockness = 0f
@@ -277,7 +281,7 @@ internal class GenreDetector {
 
     fun newTrack(now: Long) {
         apple = null; appleName = null; trackStart = now; announcedThisTrack = false; hardstyleThisTrack = false
-        songLock = null; lookupDone = false; dropSince = 0L; timeIn.fill(0f); reason = ""; teacher = null
+        songLock = null; lookupDone = false; dropSince = 0L; timeIn.fill(0f); reason = ""; teacher = null; handLock = null
         chorus = 0f; energyFast = 0f; energySlow = 0f; musicSeconds = 0f
         rockness = .1f
         // Start every song neutral (calm) instead of with the last song's genre (log 2026-11-06: a
@@ -302,7 +306,7 @@ internal class GenreDetector {
         // Apple once tagged a raw hardstyle track "Hip-Hop/Rap" (log 2026-11-03): only lock rap when
         // it is Apple's exact song or Deezer's, and neither source calls it dance.
         val (lock, why) = when {
-            chosen != null -> chosen to "du"
+            (chosen ?: handLock) != null -> (chosen ?: handLock)!! to "du"
             // The Mac's style teacher heard the song itself (Essentia on the preview): it beats Apple's
             // artist-level guesses and the sound (log 2026-11-06: rap → HARDSTYLE, pop → HARDSTYLE).
             teacher != null -> teacher!! to "stil-lærer"

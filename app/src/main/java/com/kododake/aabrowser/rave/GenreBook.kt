@@ -19,7 +19,10 @@ import java.util.concurrent.Executors
  * (→ HARDSTYLE). Removes « • Lossless», « • Hi-Res Lossless», « • Dolby Atmos», « • Spatial Audio» etc.
  */
 internal fun cleanArtist(a: String?): String? =
-    a?.replace(Regex("""\s*[•·]\s*(hi-?res\s+)?(lossless|dolby atmos|atmos|spatial audio|hi-?res|explicit|e)\s*$""", RegexOption.IGNORE_CASE), "")?.trim()
+    a?.replace(BADGES, "")?.trim()?.takeIf { it.isNotBlank() }
+
+/** One or more trailing badges, e.g. « • Lossless • Dolby Atmos». */
+private val BADGES = Regex("""(\s*[•·]\s*(hi-?res\s+)?(lossless|dolby atmos|atmos|spatial audio|hi-?res|explicit))+\s*$""", RegexOption.IGNORE_CASE)
 
 internal object GenreBook {
     internal data class Entry(
@@ -45,7 +48,8 @@ internal object GenreBook {
     private val writer = Executors.newSingleThreadExecutor()
 
     private fun norm(s: String) = s.lowercase(Locale.ROOT).replace(Regex("[^\\p{L}\\p{N}]+"), " ").trim()
-    fun key(title: String, artist: String) = "${norm(artist)}|${norm(LyricsSource.cleanTitle(title))}"
+    /** Same key whether or not the player added a badge («Artist • Lossless»), so old entries still match. */
+    fun key(title: String, artist: String) = "${norm(cleanArtist(artist) ?: artist)}|${norm(LyricsSource.cleanTitle(title))}"
 
     fun all(ctx: Context): List<Entry> = entries ?: synchronized(this) {
         entries ?: load(ctx).also { entries = it }

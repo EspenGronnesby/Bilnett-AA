@@ -68,7 +68,7 @@ def version_ok(phone_title, cand_title):
 
 def main_artist(artist):
     # The player adds badges like «Pop Smoke • Lossless» (2026-11-10): not part of the name.
-    artist = re.sub(r"\s*[•·]\s*(hi-?res\s+)?(lossless|dolby atmos|atmos|spatial audio|hi-?res|explicit|e)\s*$", "",
+    artist = re.sub(r"(\s*[•·]\s*(hi-?res\s+)?(lossless|dolby atmos|atmos|spatial audio|hi-?res|explicit))+\s*$", "",
                     artist or "", flags=re.I)
     return re.split(r",|&| feat\.? | ft\.? | x ", artist)[0].strip()
 

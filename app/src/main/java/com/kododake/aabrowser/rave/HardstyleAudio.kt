@@ -315,7 +315,10 @@ internal class BeatTracker {
             val hb = ((hintPeriod - 245f) / 10f).roundToInt().coerceIn(0, bins.size - 1)
             var hBest = -1; var hScore = 0f
             for (b in (hb - 2)..(hb + 2)) if (b in bins.indices && score(b) > hScore) { hScore = score(b); hBest = b }
-            if (hBest >= 0 && hScore >= 1.5f && hScore >= bestScore * HINT_MIN_SHARE) { best = hBest; bestScore = maxOf(bestScore, 3f); hinted = true }
+            // Needs real support: enough onsets and votes, so a few stray hits can't set the tempo.
+            if (hBest >= 0 && onsetCount >= 6 && hScore >= 2.5f && hScore >= bestScore * HINT_MIN_SHARE) {
+                best = hBest; bestScore = maxOf(bestScore, 3f); hinted = true
+            }
         }
         if (best >= 0 && bestScore >= 3f) {
             // Very fast estimates (< 280 ms ≈ > 214 BPM) are often 8th notes of a ~120 BPM song:

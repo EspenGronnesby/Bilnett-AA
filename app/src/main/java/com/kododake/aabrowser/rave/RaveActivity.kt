@@ -565,7 +565,8 @@ class RaveActivity : ComponentActivity() {
     }
 
     private fun updateMeta(m: MediaMetadata?) {
-        val identity = "${m?.getString(MediaMetadata.METADATA_KEY_MEDIA_ID)}|${m?.getString(MediaMetadata.METADATA_KEY_TITLE)}|${m?.getString(MediaMetadata.METADATA_KEY_ARTIST)}"
+        // Cleaned artist: a badge switching mid-song («• Lossless» on/off) is not a new song.
+        val identity = "${m?.getString(MediaMetadata.METADATA_KEY_MEDIA_ID)}|${m?.getString(MediaMetadata.METADATA_KEY_TITLE)}|${cleanArtist(m?.getString(MediaMetadata.METADATA_KEY_ARTIST))}"
         if (identity != trackIdentity) {
             // The song that just ended goes into the genre list with what it actually got.
             recordGenre()

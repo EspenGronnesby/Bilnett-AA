@@ -18,7 +18,8 @@ internal class SongMarks(private val file: File) {
     private val songs = LinkedHashMap<String, MutableList<Mark>>()
     private var loaded = false
 
-    fun key(artist: String, title: String) = "${artist.trim().lowercase(Locale.ROOT)}|${title.trim().lowercase(Locale.ROOT)}"
+    fun key(artist: String, title: String) =
+        "${(com.kododake.aabrowser.rave.cleanArtist(artist) ?: artist).trim().lowercase(Locale.ROOT)}|${title.trim().lowercase(Locale.ROOT)}"
 
     fun marks(key: String): List<Mark> { load(); return songs[key].orEmpty() }
 

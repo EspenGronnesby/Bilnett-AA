@@ -273,6 +273,50 @@ class PartyReplayTest {
         File(raw.parentFile, "teacher-tempo.txt").writeText(sb)
     }
 
+    /**
+     * Phase C: training data for our own song-part model. One row per second of each song Espen
+     * steered: what the analysis measured (now + change over 2/4/8 s), the rule's own answer and
+     * Espen's answer. Written to parts-features.csv next to the data (never in the repo).
+     */
+    @Test fun exportPartFeatures() {
+        assumeTrue(File(raw, "fft").isDirectory)
+        val sg = songs(); assumeTrue(sg.isNotEmpty())
+        val base = listOf("subRel", "airTrend", "build", "grit1", "screech", "bright", "subFull", "bass", "energy",
+            "kick", "snare", "noise", "centroid", "highs", "heavy")
+        val head = (listOf("song", "t") + base + base.flatMap { b -> listOf(2, 4, 8).map { "${b}_d$it" } } + listOf("rule", "truth"))
+        val out = StringBuilder(head.joinToString(",")).append('\n')
+        for ((si, s) in sg.withIndex()) {
+            val st = HardstyleStructure(); st.newTrack(s.now[0])
+            val hist = ArrayList<DoubleArray>()
+            val acc = DoubleArray(base.size); var n = 0; var secStart = s.now[0]
+            for (i in s.frames.indices) {
+                val f = s.frames[i]
+                st.update(f, s.now[i], s.pos[i], -1L)
+                val h = st.hud
+                val v = doubleArrayOf(h.subRelDb.toDouble(), h.airTrendDb.toDouble(), h.build.toDouble(), h.grit.toDouble(),
+                    h.screech.toDouble(), st.brightRel.toDouble(), st.subFullRel.toDouble(), f.bass.toDouble(), f.energy.toDouble(),
+                    f.kick.toDouble(), f.snare.toDouble(), f.noise.toDouble(), f.centroid / 1000.0, f.highs.toDouble(), f.heavy.toDouble())
+                for (k in v.indices) acc[k] += v[k]; n++
+                if (s.now[i] - secStart >= 1000L) {
+                    val mean = DoubleArray(acc.size) { acc[it] / n }
+                    hist.add(mean)
+                    val truth = s.key.lastOrNull { it.first <= s.pos[i] }?.second
+                    if (truth != null && hist.size > 8) {
+                        val row = ArrayList<String>()
+                        row += "$si"; row += "%.1f".format(Locale.US, s.pos[i] / 1000.0)
+                        mean.forEach { row += "%.4f".format(Locale.US, it) }
+                        for (k in mean.indices) for (d in listOf(2, 4, 8)) row += "%.4f".format(Locale.US, mean[k] - hist[hist.size - 1 - d][k])
+                        row += norm(st.part.name); row += truth
+                        out.append(row.joinToString(",")).append('\n')
+                    }
+                    acc.fill(0.0); n = 0; secStart = s.now[i]
+                }
+            }
+        }
+        File(raw.parentFile, "parts-features.csv").writeText(out.toString())
+        println("eksportert ${out.lines().size - 2} sekunder fra ${sg.size} sanger")
+    }
+
     @Test fun replayAgainstEspensAnswers() {
         val fftDir = File(raw, "fft")
         assumeTrue("ingen opptak på denne maskinen", fftDir.isDirectory)
