@@ -250,3 +250,26 @@ git push -u espen main
 ```
 
 **Lærdom:** Sjekk `--is-shallow-repository` før første push av en fork til et nytt repo.
+
+---
+
+### Stil-læreren låste feil sjanger: euphoric hardstyle ble «house»
+**Dato:** 2026-11-12
+**Kategori:** Party / sjanger
+**Berørte filer:** `rave/FestivalShow.kt` (`TEACHER_LOCK_MIN`), `rave/party/StyleBook.kt`, `rave/GenreDetector.kt` (`setTeacher`)
+
+**Problem:** DEEZL – «Rebirth» (euphoric hardstyle) fikk EDM-effekter. Læreren på Mac-en hadde hørt
+30 s-smakebiten som house, og appen låste sjangeren på det.
+
+**Årsak:** Smakebiten fra iTunes/Deezer er ofte et rolig, melodisk utdrag (intro/breakdown), ikke dropet.
+Essentia gir da lave, spredte score. `StyleBook.styleToGenre` godtar en familie fra sum ≥ 0,25, og
+`setTeacher` låste sjangeren på alt som passerte. En usikker gjetning slo dermed ut både Apple-sjangeren
+og lyd-detektoren.
+
+**Løsning:** To terskler. ≥ 0,25 = læreren får *uttale seg* (logges, hint). Først ≥ 0,4
+(`TEACHER_LOCK_MIN`) får den *låse* sjangeren. Under det bestemmer Apple/lyd som før.
+Espens eget valg (handLock) slår alltid læreren.
+
+**Lærdom:** En modell som bare har hørt 30 s av sangen skal ikke ha siste ord når den er usikker.
+Skill mellom «hint» og «lås», og krev høyere sikkerhet for å låse. Sjekk familie-summen i
+`rapport.html` (lærer-tabellen) før du stoler på en lærer-sjanger.
