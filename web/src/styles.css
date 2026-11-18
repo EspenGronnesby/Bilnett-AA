@@ -272,10 +272,11 @@ body {
 .stage.wide.split .hero { align-self: center; }
 .stage.wide.split .cover { --size: min(calc(100vh - 300 * var(--u)), 36vw, calc(300 * var(--u))); }
 /* Portrait: cover, title, lyrics filling the middle, buttons at the bottom. */
-.stage.tall { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: calc(24 * var(--u)); }
+.stage.tall { display: flex; flex-direction: column; align-items: center; justify-content: safe center; gap: calc(24 * var(--u)); }
+/* «safe»: if everything doesn't fit, start at the top (never cut the cover off above). */
 .stage.tall.with-lyrics .hero { gap: calc(16 * var(--u)); }
 .stage.tall.with-lyrics .cover { --size: calc(min(75vw, calc(340 * var(--u))) * 0.62); }
-.stage.tall.with-lyrics .lyrics-panel { flex: 1; width: min(100%, calc(900 * var(--u))); min-height: calc(260 * var(--u)); }
+.stage.tall.with-lyrics .lyrics-panel { flex: 1; width: min(100%, calc(900 * var(--u))); min-height: calc(160 * var(--u)); }
 
 .lyrics-panel {
   position: relative; display: flex; flex-direction: column; min-height: 0;
@@ -442,3 +443,35 @@ button.chip:active, .chip.sync button:active { transform: scale(0.97); }
 .lt-meter { width: 100%; height: calc(14 * var(--u)); border-radius: 999px; background: var(--control); overflow: hidden; }
 .lt-meter div { height: 100%; background: var(--fg); }
 .lt-spectrum { width: 100%; height: calc(160 * var(--u)); border-radius: calc(12 * var(--u)); background: var(--card); }
+
+/* ---------- Party ---------- */
+.party-layer { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+/* In Party the canvas draws the lights and the vignette; the blurred cover drifts faster (8 s, as the app). */
+.backdrop.party .lights, .backdrop.party::after { display: none; }
+.backdrop.party img { animation-duration: 8s; }
+.party-grain { position: absolute; inset: 0; pointer-events: none; opacity: 0.06; mix-blend-mode: overlay; background-repeat: repeat; }
+
+/* The cover with its ring and glow (the app's ReactiveCover): ring and glow behind the cover. */
+.cover-wrap { position: relative; display: grid; place-items: center; }
+.cover-wrap .cover { position: relative; z-index: 1; }
+.party-orb, .party-glow { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 0; }
+.party-edge {
+  position: absolute; inset: 5%; z-index: 2; pointer-events: none; opacity: 0;
+  border: calc(3 * var(--u)) solid #fff; border-radius: calc(var(--radius-cover) * 1.6);
+}
+
+.party-banner {
+  position: absolute; left: 50%; top: 12%; transform: translateX(-50%); z-index: 5; pointer-events: none;
+  font-weight: 800; font-size: calc(30 * var(--u)); letter-spacing: 0.08em; color: var(--fg);
+  text-shadow: 0 2px 16px hsl(0 0% 0% / 0.7);
+  animation: banner 1800ms var(--ease-out) both;
+}
+@keyframes banner { 0% { opacity: 0 } 12% { opacity: 1 } 75% { opacity: 1 } 100% { opacity: 0 } }
+
+.party-controls { display: grid; justify-items: center; gap: calc(10 * var(--u)); margin-top: calc(6 * var(--u)); }
+.party-controls .vibe { display: flex; align-items: center; gap: calc(10 * var(--u)); }
+.party-controls .vibe input { width: calc(200 * var(--u)); accent-color: var(--fg); }
+.chip.info { background: none; color: var(--muted); cursor: default; }
+.chip.small { height: calc(32 * var(--u)); padding: 0 calc(12 * var(--u)); font-size: calc(13 * var(--u)); }
+.icon-pill.small-icon.on { background: var(--fg); color: var(--on-pill); }
+@media (prefers-reduced-motion: reduce) { .party-banner { animation: fade-in 300ms linear both; } }

@@ -16,6 +16,9 @@ import { SettingsSheet } from './ui/Settings'
 import { useFullscreen } from './ui/useFullscreen'
 import { useIdle } from './ui/useIdle'
 import { useWakeLock } from './ui/useWakeLock'
+import { PartyBanner, PartyControls, PartyCoverFx, PartyGrain, PartyParticles, PartyScene, PartyShaker } from './party/PartyLayers'
+import { useParty, type Party } from './party/useParty'
+import { Koko } from './party/Koko'
 import { useZone } from './ui/useZone'
 
 export default function App() {
@@ -81,7 +84,10 @@ const noop = () => {}
 const DEMO: Now = {
   source: 'remote',
   status: 'playing',
-  track: { id: 'demo', title: 'Blinding Lights', artist: 'The Weeknd', album: 'After Hours', coverUrl: DEMO_COVER, durationMs: 200_040, kind: 'track' },
+  // ?song=hard → a hardstyle track (Party tests), else a well-known pop song with lyrics.
+  track: new URLSearchParams(location.search).get('song') === 'hard'
+    ? { id: 'demo-hard', title: 'Nothing Like The Oldschool', artist: 'D-Sturb, Sefa', album: '', coverUrl: DEMO_COVER, durationMs: 240_000, kind: 'track' }
+    : { id: 'demo', title: 'Blinding Lights', artist: 'The Weeknd', album: 'After Hours', coverUrl: DEMO_COVER, durationMs: 200_040, kind: 'track' },
   device: { id: 'phone', name: 'Pixel 9', type: 'Smartphone', volume: 70, supportsVolume: true },
   // Starts a minute into the song (or ?at=<seconds>) and runs in real time.
   positionMs: (() => { const t0 = performance.now(); const at = Number(new URLSearchParams(location.search).get('at') ?? 60) * 1000; return () => at + performance.now() - t0 })(),
@@ -96,11 +102,18 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
   const [stored, updateSettings] = useSettings()
   // Demo only: ?style=karaoke etc. picks the lyrics style for screenshots.
   const demoStyle = demo ? new URLSearchParams(location.search).get('style') : null
-  const settings = demoStyle ? { ...stored, lyricsStyle: demoStyle as typeof stored.lyricsStyle } : stored
+  const demoParams = demo ? new URLSearchParams(location.search) : null
+  const settings = {
+    ...stored,
+    ...(demoStyle ? { lyricsStyle: demoStyle as typeof stored.lyricsStyle } : {}),
+    // Demo only: ?party turns Party on with made-up sound, ?novideo hides the video.
+    ...(demoParams?.has('party') ? { party: true } : {}),
+    ...(demoParams?.has('novideo') ? { videoOn: false } : {}),
+  }
   const live = useNowPlaying(!demo, settings.player, settings.volume, volume => updateSettings({ volume }))
   const now = demo ? DEMO : live
   const { status, track } = now
-  const { wide } = useScreen(settings.orientation)
+  const { wide, scale: dp } = useScreen(settings.orientation)
   const [fullscreen, toggleFullscreen] = useFullscreen(settings.autoFullscreen)
   const [settingsOpen, setSettingsOpen] = useState(() => demo && new URLSearchParams(location.search).has('settings'))
   useWakeLock(settings.keepAwake)
@@ -113,6 +126,19 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
   const accent = accentOf(coverColors)
   const videos = useVideos(track, status === 'playing', settings.videoOn)
   const showVideo = settings.videoOn && videos.current !== null && videos.shown
+  // Party: the volume that drives it (Rave PC's own, or the playing device's), as the phone volume in the app.
+  const partyVolume = now.source === 'local' ? settings.volume / 100 : (now.device?.volume ?? 100) / 100
+  const party = useParty({
+    enabled: settings.party, source: settings.partySource, playing: status === 'playing', track,
+    positionMs: now.positionMs, volume: partyVolume,
+    strengthFor: g => settings.partyStrength[g],
+    setEnabled: on => updateSettings({ party: on }),
+    setSource: kind => updateSettings({ partySource: kind }),
+    demoSound: demo,
+  })
+  // Demo only: let automated tests read the engine (window.__raveParty).
+  if (demo) (window as unknown as { __raveParty?: unknown }).__raveParty = party.engine
+  const hasCover = !!track?.coverUrl
 
   if (status === 'loggedOut') return <Login error="Innloggingen gikk ut. Logg inn igjen." />
   if (status === 'loading') return <div className="screen" />
@@ -120,16 +146,26 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
   // Everything below shares the settings button and sheet.
   const shell = (content: ReactNode, cover: string | null = null) => (
     <div className={`screen${idle ? ' idle' : ''}${autoHide ? ' autohide' : ''}`}>
-      <Backdrop url={cover} colors={coverColors} covered={showVideo} />
+      <Backdrop url={cover} colors={coverColors} covered={showVideo} party={party.on} />
+      {party.on && <PartyScene party={party} palette={coverColors} hasCover={hasCover} />}
       {settings.videoOn && videos.current && (
         <VideoLayer key={videos.current.url} url={videos.current.url} playing={status === 'playing'}
           visible={videos.shown} onFrame={videos.onFrame} onFail={videos.onFail} />
       )}
       {/* Dark veil over the video so cover, lyrics and buttons stay readable (as in the app). */}
       {showVideo && <div className="veil" aria-hidden />}
+      {party.on && <PartyParticles party={party} palette={coverColors} hasCover={hasCover} volume={partyVolume} video={showVideo} dp={dp} />}
+      {party.on && <PartyShaker party={party} dp={dp} />}
+      {party.on && (settings.koko || demoParams?.has('koko')) && <Koko party={party} playing={status === 'playing'} volume={partyVolume} dp={dp} quick={!!demoParams?.has('koko')} />}
+      {party.on && <PartyGrain />}
       {content}
+      <PartyBanner party={party} />
       <Zone className="corner-zone">
       <div className="corner-buttons hideable">
+        <button className={party.on ? 'icon-pill small-icon on' : 'icon-pill small-icon'} aria-label={party.on ? 'Slå av Party' : 'Party'}
+          title={party.on ? 'Slå av Party' : 'Party (eller 5 trykk på coveret)'} onClick={party.toggle}>
+          <svg viewBox="0 0 24 24" aria-hidden><path d={PARTY_ICON} /></svg>
+        </button>
         <button className="icon-pill small-icon" data-fullscreen aria-label={fullscreen ? 'Avslutt fullskjerm' : 'Fullskjerm'}
           title={fullscreen ? 'Avslutt fullskjerm (F)' : 'Fullskjerm (F)'} onClick={toggleFullscreen}>
           <svg viewBox="0 0 24 24" aria-hidden><path d={fullscreen ? EXIT_FULL : ENTER_FULL} /></svg>
@@ -171,11 +207,27 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
       )}
     </ModeButtons>
   )
-  // Lyrics have no real «hit» signal until Party listens to the sound (later phase).
-  const noPulse = () => 0
+  // «Bass-puls» and the word hits follow the music while Party listens (as the app's lyricsPulse).
+  const pulse = () => (party.on ? Math.max(party.engine.kick, party.engine.bass * 0.6) : 0)
   const panel = (align: 'center' | 'start', footer?: ReactNode) => (
     <LyricsPanel lyrics={lyrics} positionMs={now.positionMs} offsetMs={offsetMs} settings={settings}
-      update={updateSettings} accent={accent} pulse={noPulse} align={align} footer={footer} />
+      update={updateSettings} accent={accent} pulse={pulse} align={align} footer={footer} />
+  )
+  const partyControls = party.on && (
+    <div className="hideable">
+      <PartyControls party={party} strength={settings.partyStrength[party.engine.genre]}
+        koko={settings.koko} setKoko={koko => updateSettings({ koko })}
+        setStrength={v => {
+          const next = { ...settings.partyStrength }
+          if (v === undefined) delete next[party.engine.genre]; else next[party.engine.genre] = v
+          updateSettings({ partyStrength: next })
+          party.engine.setStrength(v ?? null)
+        }} />
+    </div>
+  )
+  const cover = (
+    <Cover url={track.coverUrl} party={party}
+      fx={party.on && <PartyCoverFx party={party} palette={coverColors} hasCover={hasCover} volume={partyVolume} dp={dp} />} />
   )
 
   return shell(
@@ -184,9 +236,10 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
         // Landscape: cover with title and buttons; lyrics in a panel on the right (as in the car).
         <main className={lyricsOn ? 'stage wide split' : 'stage wide'}>
           <HeroColumn autoHide={autoHide}
-            top={<><Cover url={track.coverUrl} /><Info track={track} compact /></>}
+            top={<>{cover}<Info track={track} compact /></>}
             rest={<>
               <div className="hideable"><Controls now={now} /></div>
+              {partyControls}
               {!lyricsOn && <div className="hideable">{modes}</div>}
               {problem && <p className="notice hideable">{problem}</p>}
             </>} />
@@ -196,16 +249,21 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
         // Portrait: cover on top (smaller with lyrics), title, lyrics filling the middle, buttons.
         <main className={lyricsOn ? 'stage tall with-lyrics' : 'stage tall'}>
           <section className="hero">
-            <Cover url={track.coverUrl} />
+            {cover}
             <Info track={track} compact={false} />
           </section>
           {lyricsOn && panel('center')}
           <Zone className="hero">
             <div className="hideable"><Controls now={now} /></div>
+            {partyControls}
             <div className="hideable">{modes}</div>
             {problem && <p className="notice hideable">{problem}</p>}
           </Zone>
         </main>
+      )}
+      {/* Party on after a reload: sharing the sound needs a click, so ask for it clearly. */}
+      {party.on && !party.listening && !party.error && !demo && (
+        <button className="pill banner" onClick={() => party.listenTo(settings.partySource)}>Trykk for å lytte til musikken (Party)</button>
       )}
       {now.playerProblem === 'autoplay' && (
         <button className="pill banner" onClick={now.controls.unlock}>Trykk for å starte lyden</button>
@@ -218,6 +276,8 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
 // Material «fullscreen» / «fullscreen_exit» icons (Apache-2.0).
 const ENTER_FULL = 'M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z'
 const EXIT_FULL = 'M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z'
+// Party icon: a speaker with sound waves.
+const PARTY_ICON = 'M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z'
 const GEAR = 'M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z' // Material «settings» icon (Apache-2.0)
 
 /**
@@ -225,10 +285,10 @@ const GEAR = 'M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a
  * 32 s round), three soft lights in the cover's colours drifting on their own paths, and a
  * vignette. All CSS animation, so it costs next to nothing to draw.
  */
-function Backdrop({ url, colors, covered }: { url: string | null; colors: Rgb[]; covered: boolean }) {
+function Backdrop({ url, colors, covered, party }: { url: string | null; colors: Rgb[]; covered: boolean; party: boolean }) {
   // Under a playing video the background can't be seen: stop its animations (saves the GPU).
   return (
-    <div className={`backdrop${url ? ' with-cover' : ''}${covered ? ' covered' : ''}`} aria-hidden>
+    <div className={`backdrop${url ? ' with-cover' : ''}${covered ? ' covered' : ''}${party ? ' party' : ''}`} data-shake="overscan" aria-hidden>
       {url && <img src={url} alt="" />}
       <div className="lights">
         {colors.slice(0, 3).map((c, i) => (
@@ -244,10 +304,21 @@ function Backdrop({ url, colors, covered }: { url: string | null; colors: Rgb[];
   )
 }
 
-function Cover({ url }: { url: string | null }) {
+function Cover({ url, party, fx }: { url: string | null; party?: Party; fx?: ReactNode }) {
+  // 5 quick taps on the cover switch Party on/off, as in the app.
+  const taps = useRef({ count: 0, first: 0 })
+  const tap = () => {
+    if (!party) return
+    const t = performance.now(), s = taps.current
+    if (t - s.first > 1_500) { s.first = t; s.count = 0 }
+    if (++s.count >= 5) { s.count = 0; party.toggle() }
+  }
   return (
-    <div className="cover">
-      {url ? <img src={url} alt="" /> : <div className="cover-empty">♪</div>}
+    <div className="cover-wrap" data-party-cover data-shake={party?.on ? '' : undefined} onClick={tap}>
+      {fx}
+      <div className="cover">
+        {url ? <img src={url} alt="" /> : <div className="cover-empty">♪</div>}
+      </div>
     </div>
   )
 }

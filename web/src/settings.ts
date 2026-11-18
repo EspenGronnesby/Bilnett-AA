@@ -26,6 +26,14 @@ export interface Settings {
   lyricsOffsets: Record<string, number>
   /** Silent music video behind everything (the «Video» button). */
   videoOn: boolean
+  /** Party mode (5 taps on the cover, or the Party button). */
+  party: boolean
+  /** Where Party listens: the PC's sound (screen sharing), this tab, or a microphone. */
+  partySource: 'system' | 'tab' | 'mic'
+  /** Vibe slider per genre, as the app's «styrke_<GENRE>»; missing = Auto. */
+  partyStrength: Record<string, number>
+  /** Koko the dancing ghost in Party (off by default, as in the app). */
+  koko: boolean
 }
 
 export const LYRICS_STYLES = [
@@ -41,6 +49,7 @@ const KEY = 'rave.settings'
 const DEFAULTS: Settings = {
   orientation: 'auto', keepAwake: true, autoHide: true, autoFullscreen: false, volume: 80, player: true,
   showLyrics: true, lyricsStyle: 'scroll', lyricsGlass: true, lyricsOffsets: {}, videoOn: true,
+  party: false, partySource: 'system', partyStrength: {}, koko: false,
 }
 
 function read(): Settings {

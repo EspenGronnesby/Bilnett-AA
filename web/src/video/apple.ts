@@ -160,15 +160,23 @@ const shuffled = <T,>(xs: T[]) => xs.map(x => [Math.random(), x] as const).sort(
 
 /** Apple Music's genre for the song (e.g. "Hip-Hop/Rap"), or null. */
 export async function appleGenre(title: string, artist: string): Promise<string | null> {
+  return (await appleGenreInfo(title, artist)).name
+}
+
+/**
+ * Apple's genre and whether it came from this exact song (true) or only from the artist (false,
+ * a weaker hint) — like SpotifyVideoLookup.appleGenre in the app, for Party's genre detector.
+ */
+export async function appleGenreInfo(title: string, artist: string): Promise<{ name: string | null; exact: boolean }> {
   const clean = title.replace(/\s*[-–([].*$/, '').trim() || title
   const main = artist.split(ARTIST_SPLIT)[0]
   const hits = [...await search(`${main} ${clean}`, 'no', 'song'), ...await search(`${main} ${clean}`, 'us', 'song')]
   const exact = hits.find(h => norm(h.trackName ?? '').startsWith(norm(clean)) && sameArtist(h.artistName, artist))
   const byArtist = hits.find(h => sameArtist(h.artistName, artist))
-  if (exact?.primaryGenreName) return exact.primaryGenreName
-  if (byArtist?.primaryGenreName) return byArtist.primaryGenreName
+  if (exact?.primaryGenreName) return { name: exact.primaryGenreName, exact: true }
+  if (byArtist?.primaryGenreName) return { name: byArtist.primaryGenreName, exact: false }
   const artists = [...await search(main, 'no', 'musicArtist'), ...await search(main, 'us', 'musicArtist')]
-  return artists.find(a => sameArtist(a.artistName, artist))?.primaryGenreName || null
+  return { name: artists.find(a => sameArtist(a.artistName, artist))?.primaryGenreName || null, exact: false }
 }
 
 async function genreVideos(wanted: Genre | null, apple: string | null): Promise<AppleItem[]> {
