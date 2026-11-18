@@ -412,12 +412,3 @@ internal class RippleBank {
         }
     }
 }
-
-/** Phone media volume 0..1 -> visual strength. Low volume = calm, max = full power. */
-internal fun volumeGain(volume: Float): Float = .35f + .65f * volume.coerceIn(0f, 1f).pow(1.5f)
-/** 1.0 below 90 % volume, rising to 1/0.7 (~1.43x) at 100 %. */
-internal fun maxVolumeBoost(volume: Float): Float = 1f + (1f / .7f - 1f) * ((volume - .9f) / .1f).coerceIn(0f, 1f)
-/** 0 below 70 % volume, rising to 1 at 100 %. */
-internal fun loudRamp(volume: Float): Float = ((volume - .7f) / .3f).coerceIn(0f, 1f)
-/** 0 below 75 % volume, 1 at max. */
-internal fun loudness(volume: Float): Float = ((volume - .75f) / .25f).coerceIn(0f, 1f)
