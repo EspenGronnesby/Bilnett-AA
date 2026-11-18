@@ -222,3 +222,156 @@ body {
   .switch span, .hideable { transition-duration: 0ms; }
   .scrim { animation: none; }
 }
+
+/* ---------- Lyrics: layout ---------- */
+/* Landscape with lyrics: cover column (44 %) and the lyrics panel (56 %), as in the app. */
+.stage.wide.split { display: grid; grid-template-columns: 44fr 56fr; gap: calc(24 * var(--u)); place-items: stretch; }
+/* Room for the settings button above the panel. */
+.stage.wide.split { padding-top: calc(72 * var(--u)); }
+.stage.wide.split .hero { align-self: center; }
+.stage.wide.split .cover { --size: min(calc(100vh - 300 * var(--u)), 36vw, calc(300 * var(--u))); }
+/* Portrait: cover, title, lyrics filling the middle, buttons at the bottom. */
+.stage.tall { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: calc(24 * var(--u)); }
+.stage.tall.with-lyrics .hero { gap: calc(16 * var(--u)); }
+.stage.tall.with-lyrics .cover { --size: calc(min(75vw, calc(340 * var(--u))) * 0.62); }
+.stage.tall.with-lyrics .lyrics-panel { flex: 1; width: min(100%, calc(900 * var(--u))); min-height: calc(260 * var(--u)); }
+
+.lyrics-panel {
+  position: relative; display: flex; flex-direction: column; min-height: 0;
+  border-radius: calc(20 * var(--u)); padding: calc(12 * var(--u)) calc(18 * var(--u));
+  overflow: hidden; user-select: none; touch-action: pan-y;
+}
+.lyrics-panel.glass {
+  background:
+    linear-gradient(hsl(0 0% 100% / 0.14), hsl(0 0% 100% / 0.05)),
+    linear-gradient(hsl(280 20% 7% / 0.2), hsl(280 20% 4% / 0.3));
+  border: 1px solid hsl(0 0% 100% / 0.16);
+}
+.lyrics-body { flex: 1; min-height: 0; display: flex; }
+.lyrics-foot { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: calc(12 * var(--u)); margin-top: calc(12 * var(--u)); }
+.lyrics-foot:empty { display: none; }
+.stage.tall .lyrics-foot { justify-content: center; }
+
+.lyrics { width: 100%; height: 100%; display: flex; align-items: center; }
+.lyrics.align-center { justify-content: center; text-align: center; }
+.lyrics.align-start { justify-content: flex-start; text-align: left; }
+.lyrics p { text-shadow: 0 2px 12px hsl(0 0% 0% / 0.65); }
+.ly-fade { width: 100%; height: 100%; display: flex; align-items: center; animation: fade-in 400ms var(--ease-out); }
+.align-center .ly-fade { justify-content: center; }
+
+.ly-status { font-family: 'Grenze Gotisch', serif; font-size: calc(22 * var(--u)); color: hsl(40 27% 94% / 0.4); transition: opacity 600ms var(--ease-out); }
+.ly-status.gone { opacity: 0; }
+.ly-plain { overflow-y: auto; align-items: flex-start; }
+.ly-plain p { white-space: pre-wrap; font-size: calc(20 * var(--u)); line-height: calc(28 * var(--u)); color: hsl(40 27% 94% / 0.8); padding: calc(8 * var(--u)) 0; }
+
+.ly-next { margin-top: calc(30 * var(--u)); font-weight: 600; font-size: calc(22 * var(--u)); line-height: 1.25; }
+.ly-next.small { font-size: calc(20 * var(--u)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dim { color: hsl(40 27% 94% / 0.4); }
+.faint { color: hsl(40 27% 94% / 0.25); }
+
+/* Myk rulling: the list glides, distant lines fade and blur; soft edges top and bottom. */
+.ly-scroll {
+  width: 100%; height: 100%; overflow: hidden;
+  mask-image: linear-gradient(transparent, #000 20%, #000 80%, transparent);
+}
+.ly-scroll-list { transition: transform 600ms var(--ease-out); }
+.ly-scroll-line {
+  font-weight: 700; font-size: calc(30 * var(--u)); line-height: calc(36 * var(--u));
+  padding: calc(8 * var(--u)) 0;
+  transition: opacity 500ms var(--ease-out), filter 500ms var(--ease-out), transform 500ms var(--ease-out);
+}
+.align-start .ly-scroll-line { transform-origin: 0 50%; }
+
+/* Ord for ord: words pop in as they are sung; the longest (or a held) word in the cover colour. */
+.ly-words { display: flex; flex-wrap: wrap; column-gap: calc(10 * var(--u)); }
+.align-center .ly-words { justify-content: center; }
+.ly-word {
+  font-weight: 900; font-size: calc(42 * var(--u)); line-height: calc(48 * var(--u));
+  text-shadow: 0 2px 12px hsl(0 0% 0% / 0.65);
+  opacity: 0; transform: translateY(calc(14 * var(--u))) scale(0.3);
+  transition: transform 350ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 120ms linear;
+}
+.ly-word.shown { opacity: 1; transform: none; }
+.ly-word.accent { color: var(--accent-ly); }
+
+/* Karaoke-fyll: the line fills word by word; a ball hops from word to word. */
+.ly-karaoke { width: 100%; padding-top: calc(30 * var(--u)); }
+.ly-k-box { position: relative; }
+.ly-k-line {
+  font-weight: 800; font-size: calc(36 * var(--u)); line-height: calc(42 * var(--u));
+  color: hsl(40 27% 94% / 0.32);
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.k-done { color: var(--fg); }
+.k-ball {
+  position: absolute; left: 0; top: 0; opacity: 0;
+  width: calc(14 * var(--u)); height: calc(14 * var(--u));
+  margin: calc(-16 * var(--u)) 0 0 calc(-7 * var(--u));
+  border-radius: 999px; background: var(--accent-ly);
+  box-shadow: 0 2px 4px hsl(0 0% 0% / 0.35);
+}
+
+/* Én stor linje: only the line being sung, big; it glides in from below. */
+.ly-big { width: 100%; }
+.ly-big-line {
+  font-weight: 900; font-size: calc(48 * var(--u)); line-height: calc(52 * var(--u));
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  animation: big-in 420ms var(--ease-out);
+}
+@keyframes big-in { from { opacity: 0; transform: translateY(33%); } to { opacity: 1; transform: none; } }
+
+/* Bass-puls: big capitals that glow, grow and shake with the bass (needs the sound, see Party). */
+.ly-bass { width: 100%; text-align: center; }
+.ly-bass-stack { display: grid; }
+.ly-bass-line {
+  grid-area: 1 / 1; color: #fff; font-weight: 900;
+  font-size: calc(44 * var(--u)); line-height: calc(46 * var(--u));
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.ly-bass-next {
+  margin-top: calc(30 * var(--u)); color: hsl(0 0% 100% / 0.55);
+  font-weight: 700; font-size: calc(15 * var(--u)); letter-spacing: 4px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* Pause in the singing: a breathing music note, the next line faintly underneath. */
+.ly-pause { display: flex; flex-direction: column; width: 100%; }
+.align-center .ly-pause { align-items: center; }
+.ly-note {
+  width: calc(72 * var(--u)); height: calc(72 * var(--u)); fill: var(--accent-ly);
+  animation: breathe 1.4s ease-in-out infinite alternate;
+}
+@keyframes breathe { from { opacity: 0.55; } to { opacity: 1; } }
+
+.ly-toast {
+  position: absolute; top: calc(12 * var(--u)); left: 50%; transform: translateX(-50%);
+  background: hsl(0 0% 0% / 0.6); color: var(--fg);
+  padding: calc(8 * var(--u)) calc(14 * var(--u)); border-radius: 999px;
+  font-weight: 600; font-size: calc(14 * var(--u)); pointer-events: none;
+  animation: fade-in 150ms var(--ease-out);
+}
+
+.style-dots { display: flex; align-items: center; gap: calc(6 * var(--u)); }
+.dot { width: calc(8 * var(--u)); height: calc(8 * var(--u)); border: 0; padding: 0; border-radius: 999px; background: hsl(0 0% 100% / 0.33); cursor: pointer; }
+.dot.on { width: calc(22 * var(--u)); background: #fff; }
+
+/* «Tekst» and the sync buttons. */
+.mode-buttons { display: flex; flex-wrap: wrap; justify-content: center; gap: calc(10 * var(--u)); }
+.chip {
+  height: calc(42 * var(--u)); padding: 0 calc(18 * var(--u));
+  display: inline-flex; align-items: center; gap: calc(8 * var(--u));
+  border: 0; border-radius: 999px; background: hsl(0 0% 100% / 0.13); color: var(--fg);
+  font: 600 calc(15 * var(--u)) / 1 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  cursor: pointer; transition: transform var(--t-press) var(--ease-press);
+}
+button.chip:active, .chip.sync button:active { transform: scale(0.97); }
+.chip.on { background: var(--fg); color: var(--on-pill); }
+.chip.sync { cursor: default; padding: 0 calc(8 * var(--u)); }
+.chip.sync span { min-width: calc(64 * var(--u)); text-align: center; font-variant-numeric: tabular-nums; }
+.chip.sync button { background: none; border: 0; color: inherit; font: inherit; font-size: calc(20 * var(--u)); padding: 0 calc(8 * var(--u)); cursor: pointer; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ly-word { transform: none; transition: opacity 120ms linear; }
+  .ly-big-line { animation: fade-in 300ms linear; }
+  .ly-scroll-list { transition-duration: 0ms; }
+}

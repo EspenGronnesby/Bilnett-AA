@@ -14,10 +14,30 @@ export interface Settings {
   volume: number
   /** Let this page be a Spotify speaker («Rave PC»). */
   player: boolean
+  /** Lyrics on/off (the «Tekst» button). */
+  showLyrics: boolean
+  /** Lyrics style, as in the app (swipe or ←/→ to change). */
+  lyricsStyle: LyricsStyle
+  /** Lyrics on frosted glass (true) or open without a box. Double-click the lyrics to switch. */
+  lyricsGlass: boolean
+  /** Lyrics sync in ms per kind of device (the phone lags differently than this PC). */
+  lyricsOffsets: Record<string, number>
 }
 
+export const LYRICS_STYLES = [
+  { id: 'scroll', label: 'Myk rulling' },
+  { id: 'words', label: 'Ord for ord' },
+  { id: 'karaoke', label: 'Karaoke-fyll' },
+  { id: 'big', label: 'Én stor linje' },
+  { id: 'bass', label: 'Bass-puls' },
+] as const
+export type LyricsStyle = typeof LYRICS_STYLES[number]['id']
+
 const KEY = 'rave.settings'
-const DEFAULTS: Settings = { orientation: 'auto', keepAwake: true, autoHide: true, volume: 80, player: true }
+const DEFAULTS: Settings = {
+  orientation: 'auto', keepAwake: true, autoHide: true, volume: 80, player: true,
+  showLyrics: true, lyricsStyle: 'scroll', lyricsGlass: true, lyricsOffsets: {},
+}
 
 function read(): Settings {
   try {

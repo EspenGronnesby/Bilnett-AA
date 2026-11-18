@@ -2,7 +2,10 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { CLIENT_ID, handleCallback, isLoggedIn, login, needsNewPermissions } from './spotify/auth'
 import { useNowPlaying, type NowPlaying as Now } from './spotify/nowPlaying'
 import type { Track } from './spotify/playback'
+import { LyricsPanel, ModeButtons } from './lyrics/LyricsPanel'
+import { useLyrics } from './lyrics/useLyrics'
 import { useSettings } from './settings'
+import { accentOf, useCoverColors } from './ui/colors'
 import { Controls, playerProblemText } from './ui/Controls'
 import { useScreen } from './ui/scale'
 import { SettingsSheet } from './ui/Settings'
@@ -66,9 +69,10 @@ const noop = () => {}
 const DEMO: Now = {
   source: 'remote',
   status: 'playing',
-  track: { id: 'demo', title: 'Nothing Like The Oldschool', artist: 'D-Sturb, Sefa', album: '', coverUrl: DEMO_COVER, durationMs: 200_000, kind: 'track' },
+  track: { id: 'demo', title: 'Blinding Lights', artist: 'The Weeknd', album: '', coverUrl: DEMO_COVER, durationMs: 200_040, kind: 'track' },
   device: { id: 'phone', name: 'Pixel 9', type: 'Smartphone', volume: 70, supportsVolume: true },
-  positionMs: () => 0,
+  // Starts a minute into the song (or ?at=<seconds>) and runs in real time.
+  positionMs: (() => { const t0 = performance.now(); const at = Number(new URLSearchParams(location.search).get('at') ?? 60) * 1000; return () => at + performance.now() - t0 })(),
   controls: { toggle: noop, next: noop, previous: noop, setVolume: noop, playHere: noop, unlock: noop },
   playerReady: true,
   raveDeviceId: null,
@@ -77,7 +81,10 @@ const DEMO: Now = {
 }
 
 function NowPlaying({ demo = false }: { demo?: boolean }) {
-  const [settings, updateSettings] = useSettings()
+  const [stored, updateSettings] = useSettings()
+  // Demo only: ?style=karaoke etc. picks the lyrics style for screenshots.
+  const demoStyle = demo ? new URLSearchParams(location.search).get('style') : null
+  const settings = demoStyle ? { ...stored, lyricsStyle: demoStyle as typeof stored.lyricsStyle } : stored
   const live = useNowPlaying(!demo, settings.player, settings.volume, volume => updateSettings({ volume }))
   const now = demo ? DEMO : live
   const { status, track } = now
@@ -87,6 +94,8 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
   useWakeLock(settings.keepAwake)
   const idle = useIdle(settings.autoHide && !settingsOpen)
   const problem = playerProblemText(now)
+  const lyrics = useLyrics(track)
+  const accent = accentOf(useCoverColors(track?.coverUrl ?? null))
 
   if (status === 'loggedOut') return <Login error="Innloggingen gikk ut. Logg inn igjen." />
   if (status === 'loading') return <div className="screen" />
@@ -115,16 +124,47 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
       : <MessageBody title="Spill noe i Spotify" text={problem ?? 'Rave viser det som spilles på PC-en eller telefonen.'} />)
   }
 
+  const deviceType = now.device?.type ?? 'Computer'
+  const offsetMs = settings.lyricsOffsets[deviceType] ?? 0
+  const hasLyrics = lyrics.state === 'ok' && lyrics.lines.length > 0
+  const lyricsOn = settings.showLyrics && track.kind === 'track'
+  const modes = <ModeButtons settings={settings} update={updateSettings} deviceType={deviceType} hasLyrics={hasLyrics} />
+  // Lyrics have no real «hit» signal until Party listens to the sound (later phase).
+  const noPulse = () => 0
+  const panel = (align: 'center' | 'start', footer?: ReactNode) => (
+    <LyricsPanel lyrics={lyrics} positionMs={now.positionMs} offsetMs={offsetMs} settings={settings}
+      update={updateSettings} accent={accent} pulse={noPulse} align={align} footer={footer} />
+  )
+
   return shell(
     <>
-      <main className={wide ? 'stage wide' : 'stage tall'}>
-        <section className="hero">
-          <Cover url={track.coverUrl} />
-          <Info track={track} compact={wide} />
-          <div className="hideable"><Controls now={now} /></div>
-          {problem && <p className="notice hideable">{problem}</p>}
-        </section>
-      </main>
+      {wide ? (
+        // Landscape: cover with title and buttons; lyrics in a panel on the right (as in the car).
+        <main className={lyricsOn ? 'stage wide split' : 'stage wide'}>
+          <section className="hero">
+            <Cover url={track.coverUrl} />
+            <Info track={track} compact />
+            <div className="hideable"><Controls now={now} /></div>
+            {!lyricsOn && <div className="hideable">{modes}</div>}
+            {problem && <p className="notice hideable">{problem}</p>}
+          </section>
+          {lyricsOn && panel('start', modes)}
+        </main>
+      ) : (
+        // Portrait: cover on top (smaller with lyrics), title, lyrics filling the middle, buttons.
+        <main className={lyricsOn ? 'stage tall with-lyrics' : 'stage tall'}>
+          <section className="hero">
+            <Cover url={track.coverUrl} />
+            <Info track={track} compact={false} />
+          </section>
+          {lyricsOn && panel('center')}
+          <section className="hero">
+            <div className="hideable"><Controls now={now} /></div>
+            <div className="hideable">{modes}</div>
+            {problem && <p className="notice hideable">{problem}</p>}
+          </section>
+        </main>
+      )}
       {now.playerProblem === 'autoplay' && (
         <button className="pill banner" onClick={now.controls.unlock}>Trykk for å starte lyden</button>
       )}
