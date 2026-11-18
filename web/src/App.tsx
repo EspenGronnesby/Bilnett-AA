@@ -213,7 +213,7 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
   // «Bass-puls» and the word hits follow the music while Party listens (as the app's lyricsPulse).
   const pulse = () => (party.on ? Math.max(party.engine.kick, party.engine.bass * 0.6) : 0)
   const panel = (align: 'center' | 'start', footer?: ReactNode) => (
-    <LyricsPanel lyrics={lyrics} positionMs={now.positionMs} offsetMs={offsetMs} settings={!wide && settings.portraitLayout !== 'original' && settings.portraitLayout !== 'lyrics' ? { ...settings, lyricsStyle: 'big', lyricsGlass: false } : settings}
+    <LyricsPanel lyrics={lyrics} positionMs={now.positionMs} offsetMs={offsetMs} settings={settings}
       update={updateSettings} accent={accent} pulse={pulse} align={align} footer={footer} />
   )
   const partyControls = party.on && (

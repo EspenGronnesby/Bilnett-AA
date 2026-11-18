@@ -499,7 +499,6 @@ select option { background: #211827; color: white; }
 .stage.tall[data-layout="cinema"] .lyrics-panel { align-self: end; height: min(26vh, 360px); text-shadow: 0 2px 8px #000; }
 .stage.tall:not(.with-lyrics):not([data-layout="original"]) { grid-template-rows: minmax(0, 1fr) auto; }
 
-.stage.tall:not([data-layout="original"]):not([data-layout="lyrics"]) .style-dots { display: none; }
 .portrait-cinema .veil { background: hsl(0 0% 0% / .3); }
 .stage.tall:not([data-layout="original"]) > .lyrics-panel { align-self: stretch; height: 100%; overflow: hidden; }
 .stage.tall:not([data-layout="original"]) > .hero { min-height: 0; }
