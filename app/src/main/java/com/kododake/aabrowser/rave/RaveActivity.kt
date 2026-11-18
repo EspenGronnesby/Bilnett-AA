@@ -203,6 +203,8 @@ class RaveActivity : ComponentActivity() {
     /** Live analysis panel (HUD): what the structure engine sees right now. */
     private var hudData by mutableStateOf(StructureHud())
     private var showAnalysis by mutableStateOf(true)
+    /** Koko the ghost dancing in a corner now and then (Party). Off until Espen wants him. */
+    private var showKoko by mutableStateOf(false)
     private var lastHudAt = 0L
     private var lastHeavyFlashAt = 0L
     private var strobeColorIndex = 0
@@ -484,6 +486,7 @@ class RaveActivity : ComponentActivity() {
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         showAnalysis = try { getSharedPreferences("rave", MODE_PRIVATE).getBoolean("analysis", true) } catch (_: Exception) { true }
         autoParts = try { getSharedPreferences("rave", MODE_PRIVATE).getBoolean("autoParts", false) } catch (_: Exception) { false }
+        showKoko = try { getSharedPreferences("rave", MODE_PRIVATE).getBoolean("koko", false) } catch (_: Exception) { false }
         syncMs = try { getSharedPreferences("rave", MODE_PRIVATE).getInt("syncMs", 0) } catch (_: Exception) { 0 }
             .coerceIn(-SYNC_LIMIT_MS, SYNC_LIMIT_MS)
         try {
@@ -1525,7 +1528,7 @@ class RaveActivity : ComponentActivity() {
                         density = partyProfile.density, softness = partyProfile.softness)
                 }
                 // Koko the ghost drops by now and then and does his St. James Infirmary glide.
-                RaveDancer(Modifier.fillMaxSize(), { displayedFrame }, volume, playing)
+                if (showKoko) RaveDancer(Modifier.fillMaxSize(), { displayedFrame }, volume, playing)
             }
             // Same layout with or without video: cover, title and controls stay in place,
             // the music video just plays behind them with a dark veil for readability.
@@ -1820,6 +1823,20 @@ class RaveActivity : ComponentActivity() {
         ) {
             Text("Analyse", maxLines = 1, softWrap = false, fontSize = 15.us, fontWeight = FontWeight.SemiBold,
                 color = if (showAnalysis) Color(0xFF0A0A0A) else Color(0xFFF5F2EC))
+        }
+        // Koko the dancing ghost on/off (off by default).
+        Box(
+            Modifier.height(42.u).clip(RoundedCornerShape(50))
+                .background(if (showKoko) Color(0xFFF5F2EC) else Color(0x22FFFFFF))
+                .clickable {
+                    buttonInteraction(); showKoko = !showKoko
+                    try { getSharedPreferences("rave", MODE_PRIVATE).edit().putBoolean("koko", showKoko).apply() } catch (_: Exception) { }
+                }
+                .padding(horizontal = 18.u),
+            contentAlignment = Alignment.Center
+        ) {
+            Text("Koko", maxLines = 1, softWrap = false, fontSize = 15.us, fontWeight = FontWeight.SemiBold,
+                color = if (showKoko) Color(0xFF0A0A0A) else Color(0xFFF5F2EC))
         }
         // The genre list: which songs were played, what the app thinks they are and why.
         Box(
