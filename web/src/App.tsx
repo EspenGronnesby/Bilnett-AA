@@ -4,7 +4,7 @@ import { useNowPlaying, type NowPlaying as Now } from './spotify/nowPlaying'
 import type { Track } from './spotify/playback'
 import { LyricsPanel, ModeButtons } from './lyrics/LyricsPanel'
 import { useLyrics } from './lyrics/useLyrics'
-import { useSettings } from './settings'
+import { PORTRAIT_LAYOUTS, useSettings } from './settings'
 import { accentOf, css, useCoverColors, type Rgb } from './ui/colors'
 import { SOURCE_LABEL } from './video/apple'
 import { useVideos } from './video/useVideos'
@@ -145,7 +145,7 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
 
   // Everything below shares the settings button and sheet.
   const shell = (content: ReactNode, cover: string | null = null) => (
-    <div className={`screen${idle ? ' idle' : ''}${autoHide ? ' autohide' : ''}`}>
+    <div className={`screen${!wide ? ` portrait-${settings.portraitLayout}` : ''}${idle ? ' idle' : ''}${autoHide ? ' autohide' : ''}`}>
       <Backdrop url={cover} colors={coverColors} covered={showVideo} party={party.on} />
       {party.on && <PartyScene party={party} palette={coverColors} hasCover={hasCover} />}
       {settings.videoOn && videos.current && (
@@ -162,6 +162,9 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
       <PartyBanner party={party} />
       <Zone className="corner-zone">
       <div className="corner-buttons hideable">
+        {!wide && <select className="portrait-picker chip" aria-label="Stående oppsett" value={settings.portraitLayout} onChange={e => updateSettings({ portraitLayout: e.target.value as typeof settings.portraitLayout })}>
+          {Object.entries(PORTRAIT_LAYOUTS).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+        </select>}
         <button className={party.on ? 'icon-pill small-icon on' : 'icon-pill small-icon'} aria-label={party.on ? 'Slå av Party' : 'Party'}
           title={party.on ? 'Slå av Party' : 'Party (eller 5 trykk på coveret)'} onClick={party.toggle}>
           <svg viewBox="0 0 24 24" aria-hidden><path d={PARTY_ICON} /></svg>
@@ -210,7 +213,7 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
   // «Bass-puls» and the word hits follow the music while Party listens (as the app's lyricsPulse).
   const pulse = () => (party.on ? Math.max(party.engine.kick, party.engine.bass * 0.6) : 0)
   const panel = (align: 'center' | 'start', footer?: ReactNode) => (
-    <LyricsPanel lyrics={lyrics} positionMs={now.positionMs} offsetMs={offsetMs} settings={settings}
+    <LyricsPanel lyrics={lyrics} positionMs={now.positionMs} offsetMs={offsetMs} settings={!wide && settings.portraitLayout !== 'original' ? { ...settings, lyricsStyle: settings.portraitLayout === 'lyrics' ? 'scroll' : 'big', lyricsGlass: false } : settings}
       update={updateSettings} accent={accent} pulse={pulse} align={align} footer={footer} />
   )
   const partyControls = party.on && (
@@ -247,7 +250,7 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
         </main>
       ) : (
         // Portrait: cover on top (smaller with lyrics), title, lyrics filling the middle, buttons.
-        <main className={lyricsOn ? 'stage tall with-lyrics' : 'stage tall'}>
+        <main data-layout={settings.portraitLayout} className={lyricsOn ? 'stage tall with-lyrics' : 'stage tall'}>
           <section className="hero">
             {cover}
             <Info track={track} compact={false} />

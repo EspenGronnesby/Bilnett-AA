@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { getDevices, getMe, transfer, type DeviceInfo, type Me } from '../spotify/api'
 import { logout } from '../spotify/auth'
 import type { NowPlaying } from '../spotify/nowPlaying'
-import type { Settings as SettingsData } from '../settings'
+import { PORTRAIT_LAYOUTS, type Settings as SettingsData } from '../settings'
 
 // Settings sheet: «Konto og enhet» and «Skjerm». Opens over a dark scrim (fade only),
 // closes with Esc or a click outside.
@@ -111,6 +111,12 @@ function Screen({ settings, update, fullscreen, toggleFullscreen }: Pick<Props, 
         </div>
         <div className="divider" />
         <Toggle label="Fullskjerm automatisk (ved første klikk eller tast)" on={settings.autoFullscreen} onChange={autoFullscreen => update({ autoFullscreen })} />
+        <div className="divider" />
+        <div className="row"><span className="grow">Stående oppsett</span>
+          <select aria-label="Stående oppsett" value={settings.portraitLayout} onChange={e => update({ portraitLayout: e.target.value as SettingsData['portraitLayout'] })}>
+            {Object.entries(PORTRAIT_LAYOUTS).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+          </select>
+        </div>
         <div className="divider" />
         <Toggle label="Hold skjermen våken" on={settings.keepAwake} onChange={keepAwake => update({ keepAwake })} />
         <div className="divider" />
