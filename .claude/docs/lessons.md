@@ -273,3 +273,46 @@ Espens eget valg (handLock) slår alltid læreren.
 **Lærdom:** En modell som bare har hørt 30 s av sangen skal ikke ha siste ord når den er usikker.
 Skill mellom «hint» og «lås», og krev høyere sikkerhet for å låse. Sjekk familie-summen i
 `rapport.html` (lærer-tabellen) før du stoler på en lærer-sjanger.
+
+
+---
+
+### Animert figur fra en gammel tegnefilm: klipp ut den ekte bevegelsen i stedet for å la AI lage den
+**Dato:** 2026-11-18
+**Kategori:** Assets / AI-verktøy
+**Berørte filer:** `rave/RaveDancer.kt`, `app/src/main/assets/koko/` (rammer), `Bilnett-AA-assets/koko/make_frames.py` (utenfor repoet)
+
+**Problem:** Koko-spøkelset fra Betty Boop-tegnefilmen (1933) skulle danse i Party. AI-genererte bilder
+(8 poser) så barnslige og goofy ut. Higgsfield Genjutsu (motion control) ville koste 4–15 credits, og
+kontoen hadde 3,2 credits uten daglig påfyll.
+
+**Årsak:** Å la AI tegne bevegelsen fra scratch gir en generisk, «kopiert» stil. Motion control trenger en
+referansevideo, og dyre verktøy betales per sekund. Små klipp blir dyrere per sekund (minstepris).
+
+**Løsning:**
+1. Finn et klipp der figuren står alene. Lag kontaktark: `ffmpeg -i klipp.mp4 -vf "fps=0.5,scale=240:-1,tile=5x4" -frames:v 1 ark.png`.
+2. Klipp ut biten: `ffmpeg -ss 21.5 -i ref.mp4 -an -c:v libx264 -crf 16 ut.mp4` (15 s).
+3. Sjekk pris først: `higgsfield generate cost video_background_remover --video ut.mp4` (1 credit for 15 s).
+   Kjør deretter `higgsfield generate create video_background_remover --video ut.mp4 --wait --json` og last ned `result_url`.
+   Resultatet er en mp4 med **svart** bakgrunn, ikke alfakanal.
+4. Gjør svart gjennomsiktig uten å spise de svarte omrissene: lysstyrke > 45 = kropp → `binary_fill_holes` →
+   behold biter ≥ 25 % av største (fjerner rester) → `binary_dilation` 3 px (tar med det mørke omrisset) →
+   gaussian 0.8 på kanten. Vanlig «chroma key på svart» spiser omrisset.
+5. Felles høyde, fast bredde sentrert på føttene (median x av nederste 18 % av figuren), 256 px høyde, webp q82.
+   Annenhver ramme (12,5 fps) holder fordi tegnefilmen er tegnet «på toere». Resultat: 194 rammer, 1,5 MB.
+6. I appen: rammene ligger i `assets/` (ikke `res/drawable`, da får man 194 R-id-er). Dekodet blir det ~60 MB,
+   så `RaveDancer.kt` dekoder bare ~16 rammer fremover i en bakgrunns-coroutine og viser forrige ramme hvis neste
+   ikke er klar. Av/på-knapp «Koko» i Party (standard av).
+
+**Resultat:** Figuren danser flytende, og den er laget for 1 credit.
+
+**Prevention:**
+- Sjekk alltid saldo (`higgsfield account status`) og pris (`generate cost`) før en kjøring.
+- Vurder først et billigere verktøy som bare trenger én mp4 (background remover) før et dyrt motion control-verktøy.
+- Ny git worktree mangler `local.properties` → «SDK location not found». Kopier den fra hovedmappa (gitignored).
+- Higgsfield `sam_3_video` ga HTTP 500 på cost-sjekk. Ikke testet.
+- Rettigheter: rammer fra en film fra 1933 i et offentlig repo er en gråsone. Vurder dette før publisering.
+
+**🟢 Enkelt forklart:** I stedet for å be en AI tegne dansen på nytt, klipte vi ut den ekte dansen fra
+filmen og fjernet bakgrunnen. Det ble billigere, og det ser mer ekte ut. Figuren er lagt inn som en
+rekke bilder som spilles av etter hverandre, og bare en liten del lastes om gangen så appen ikke blir for stor i minnet.
