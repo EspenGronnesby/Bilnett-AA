@@ -9,6 +9,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import kotlin.math.*
@@ -36,15 +40,23 @@ private fun DrawScope.drawSoftDot(center: Offset, radius: Float, alpha: Float, t
 /** Music driven particles emitted from the cover center. The shared scene Canvas
  * supplies the same background lighting as normal mode. */
 @Composable
-internal fun HardstyleBackdrop(modifier: Modifier, frame: HardstyleFrame, time: Float, colors: List<Color>, video: Boolean,
-    coverCenter: Offset, coverRadius: Float, intensity: Float, volume: Float = 1f, particles: Float = 1f,
-    density: Float = 1f, softness: Float = 1f) {
+internal fun HardstyleBackdrop(modifier: Modifier, frameOf: () -> HardstyleFrame, timeOf: () -> Float, colors: List<Color>, video: Boolean,
+    coverCenter: Offset, coverRadius: Float, intensityOf: () -> Float, volume: Float = 1f, profile: () -> PartyProfile) {
     val ripples = remember { RippleBank() }
     // Accumulated particle clock: phase += dt * speed. (Multiplying the ever-growing time by a speed
     // that changes with the music made every particle jump on each beat.)
     val clock = remember { FloatArray(2) }
+    // Particles listen to what the ring/shake/ripples do NOT use: vocals, melody, hi-hats and
+    // snares. Every driver is eased, so the motion glides instead of twitching.
+    // [vocal, vocal hit, sparkle (snare/hats), highs, drop]
+    val mood = remember { FloatArray(5) }
+    val sparkle = remember { IntArray(2) } // [seed for which particles twinkle, armed]
+    val flashes = remember { FloatArray(224) } // per-particle twinkle, fading out on its own
     val tints = remember(colors) { colors.map { ColorFilter.tint(it, BlendMode.Modulate) } }
     Canvas(modifier) {
+        // Audio values are read here, while drawing, so they don't recompose the screen every frame.
+        val frame = frameOf(); val intensity = intensityOf()
+        val p = profile(); val particles = p.particles; val density = p.density; val softness = p.softness
         val gain = volumeGain(volume)
         val ramp = loudRamp(volume)
         val c = coverCenter
@@ -53,12 +65,27 @@ internal fun HardstyleBackdrop(modifier: Modifier, frame: HardstyleFrame, time: 
         for (band in 32 until SPECTRUM_BANDS) highActivity += frame.spectrum[band]
         highActivity = (highActivity / 16f).coerceIn(0f, 1f)
         val shimmer = max(frame.highMotion, highActivity * .35f)
-        val beatKick = max(frame.kick, frame.bass * .35f)
-        val heavyHit = frame.heavy * beatKick
-        val speed = (.10f + intensity * .20f + frame.energy * .08f + frame.heavy * .35f) * (.6f + .4f * gain) * (1f + ramp * .4f) * particles
         val nowMs = SystemClock.uptimeMillis()
         val dt = if (clock[1] == 0f) 0f else ((nowMs % 1_000_000L) / 1000f - clock[1]).coerceIn(0f, .1f)
         clock[1] = (nowMs % 1_000_000L) / 1000f
+        fun ease(i: Int, target: Float, rise: Float, fall: Float) {
+            val tau = if (target > mood[i]) rise else fall
+            mood[i] += (target - mood[i]) * (1f - exp(-dt / tau))
+        }
+        val hats = max(frame.snare, frame.crash)
+        // A new snare / hi-hat hit lights up a fresh random handful of particles.
+        if (hats < .3f) sparkle[1] = 1
+        val newHit = hats > .7f && sparkle[1] == 1
+        if (newHit) { sparkle[1] = 0; sparkle[0]++ }
+        val flashDecay = exp(-dt / .35f)
+        ease(0, frame.vocal, .12f, .6f)
+        ease(1, frame.vocalHit, .05f, .5f)
+        ease(2, hats, .03f, .3f)
+        ease(3, max(max(frame.highs, shimmer * .6f), frame.build * .6f), .15f, .5f)
+        ease(4, frame.heavy, .15f, .8f)
+        val vocal = mood[0]; val vocalHit = mood[1]; val twinkle = mood[2]; val highs = mood[3]; val drop = mood[4]
+        val speed = (.07f + intensity * .10f + vocal * .16f + vocalHit * .22f + highs * .06f + drop * .18f) *
+            (.6f + .4f * gain) * (1f + ramp * .3f) * particles
         clock[0] = (clock[0] + dt * speed) % 10_000f
         // Ripples only on lots of bass AND distortion together (zaag etc.). Clean bass,
         // kicks, highs and quiet drops do not trigger them.
@@ -70,14 +97,14 @@ internal fun HardstyleBackdrop(modifier: Modifier, frame: HardstyleFrame, time: 
             val strength = ripples.strength[r]
             val life = 1100L - (strength * 250f).toLong()
             if (strength <= 0f || age !in 0 until life) continue
-            val p = age.toFloat() / life
-            val eased = 1f - (1f - p) * (1f - p) * (1f - p)
+            val q = age.toFloat() / life
+            val eased = 1f - (1f - q) * (1f - q) * (1f - q)
             val radius = coverRadius + reach * eased
-            val fade = (1f - p) * (1f - p) * strength
+            val fade = (1f - q) * (1f - q) * strength
             val color = colors[r % colors.size]
             // Soft wide band, a mid glow and a sharp front edge, blended as light.
             drawCircle(color.copy(alpha = (.10f * fade).coerceAtMost(1f)), radius, c,
-                style = Stroke((10.dp.toPx() + 30.dp.toPx() * strength) * (1f - p * .6f)), blendMode = BlendMode.Screen)
+                style = Stroke((10.dp.toPx() + 30.dp.toPx() * strength) * (1f - q * .6f)), blendMode = BlendMode.Screen)
             drawCircle(color.copy(alpha = (.22f * fade).coerceAtMost(1f)), radius, c,
                 style = Stroke(5.dp.toPx() + 4.dp.toPx() * strength), blendMode = BlendMode.Screen)
             drawCircle(Color.White.copy(alpha = (.35f * fade).coerceAtMost(1f)), radius, c,
@@ -86,27 +113,34 @@ internal fun HardstyleBackdrop(modifier: Modifier, frame: HardstyleFrame, time: 
         // From 70 % volume up to 100 %, up to twice as many particles join in (never more than 224).
         val baseCount = (112 * density).toInt()
         val count = ((112 + 112 * ramp) * density).toInt().coerceIn(12, 224)
-        val streak = heavyHit * (1f + ramp) / softness
+        val streak = drop * drop * (1f + ramp) / softness
         // Each particle has a deterministic direction and its own steady speed. It is born just
-        // beyond the cover, flies outward (growing, as if towards the camera), fades at the edge
-        // and is emitted again.
+        // beyond the cover, glides straight outward (growing, as if towards the camera),
+        // fades at the edge and is emitted again.
         for (i in 0 until count) {
             val band = frame.spectrum[32 + i % 16]
             val own = .8f + .4f * ((i * 0.754877f) % 1f)
             val phase = (i * .618034f + clock[0] * own) % 1f
-            val angle = i * 2.399963f + sin(time * .35f + i) * shimmer * .08f
-            val travel = .78f + frame.burst * .35f + beatKick * .18f + heavyHit * .4f / softness
+            val angle = i * 2.399963f
+            val travel = .8f + vocalHit * .15f + drop * .25f / softness
             val distance = coverRadius + span * phase * phase * travel
             val direction = Offset(cos(angle), sin(angle))
             val position = c + direction * distance
-            val musicalGlow = (frame.energy * .28f + frame.bass * .25f + frame.highs * .18f + shimmer * .45f + band * .25f).coerceIn(0f, 1f)
+            // Twinkle: on each snare/hi-hat a different ~1 in 6 particles lights up, then fades out softly.
+            if (newHit && ((i * 0.618034f + sparkle[0] * 0.381966f) % 1f) < .17f) flashes[i] = max(flashes[i], twinkle.coerceAtLeast(.7f))
+            else flashes[i] *= flashDecay
+            val flash = flashes[i]
+            // Vocals and melody lead; build-ups and drops add light too (calm start, max on the drop).
+            val musicalGlow = (vocal * .45f + vocalHit * .3f + highs * .2f + band * .15f + flash * .6f +
+                drop * .5f + frame.energy * .2f).coerceIn(0f, 1f)
             // Fade in right after birth (no popping) and out towards the edge.
             val edgeFade = (1f - phase).coerceIn(0f, 1f) * (phase * 10f).coerceAtMost(1f)
-            val alpha = edgeFade * (.18f + musicalGlow * .72f) * (if (video) .72f else 1f) * (if (i >= baseCount) ramp else 1f) / softness
+            val alpha = edgeFade * (.14f + musicalGlow * .76f) * (if (video) .72f else 1f) * (if (i >= baseCount) ramp else 1f) / softness
             if (alpha < .01f) continue
             // Depth: small and dim near the cover, bigger as they come "closer".
             val depth = .45f + 1.1f * phase
-            val radius = (1.3f + musicalGlow * 3.2f + beatKick * 1.8f + heavyHit * 2.5f) * (.6f + .4f * gain) * (1f + ramp * .5f) * softness * depth
+            val radius = (1.2f + vocal * 1.8f + vocalHit * 1.4f + flash * 2.2f + drop * 1.2f) *
+                (.6f + .4f * gain) * (1f + ramp * .4f) * softness * depth
             val col = colors[i % colors.size]
             // Soft profiles (rap) draw glowing bokeh instead of sharp sparks.
             if (softness > 1.2f) {
@@ -114,11 +148,12 @@ internal fun HardstyleBackdrop(modifier: Modifier, frame: HardstyleFrame, time: 
             } else {
                 drawSoftDot(position, radius * 3f, alpha * .45f, tints[i % tints.size])
                 if (streak > .15f) {
-                    // Motion streaks on heavy drops: a short trail back towards the cover.
+                    // Motion streaks only deep in a heavy drop: a short trail back towards the cover.
                     val tail = position - direction * (radius * 4f * streak * (.5f + phase))
                     drawLine(col.copy(alpha = alpha), tail, position, strokeWidth = radius * 1.1f,
                         cap = StrokeCap.Round, blendMode = BlendMode.Screen)
-                } else drawCircle(col.copy(alpha = alpha), radius, position, blendMode = BlendMode.Screen)
+                } else drawCircle(if (flash > .2f) lerp(col, Color.White, flash * .6f).copy(alpha = alpha) else col.copy(alpha = alpha),
+                    radius, position, blendMode = BlendMode.Screen)
             }
         }
     }
@@ -133,8 +168,9 @@ private const val POINTS = 128
 /** Mirrored frequency contours; motion comes from FFT values, never an oscillator. */
 @Composable
 internal fun HardstyleOrb(
-    modifier: Modifier, frame: HardstyleFrame, colors: List<Color>,
-    roundedSquare: Boolean = false, volume: Float = 1f, spikeGain: Float = 1f
+    modifier: Modifier, frameOf: () -> HardstyleFrame, colors: List<Color>,
+    roundedSquare: Boolean = false, volume: Float = 1f, spikeGain: () -> Float = { 1f },
+    breath: () -> Float = { 0f }, aberration: () -> Float = { 0f }, shape: OrbShape? = null
 ) {
     val path = remember { Path() }
     val history = remember { SpectrumHistory() }
@@ -153,6 +189,7 @@ internal fun HardstyleOrb(
     val sweepKey = remember { arrayOfNulls<Any>(1) }
     val sweepCenter = remember { LongArray(1) }
     Canvas(modifier) {
+        val frame = frameOf()
         val now = SystemClock.uptimeMillis()
         history.push(now, frame.spectrum)
         for (layer in layers.indices) {
@@ -176,11 +213,12 @@ internal fun HardstyleOrb(
         // At (near) 100 % volume the ring takes off: today's max becomes 70 % of the new max.
         val boost = maxVolumeBoost(volume)
         val kickExpansion = boost * (if (roundedSquare) frame.kick*(.035f + drive*.16f) else frame.kick*(.11f + drive*.14f)) * gain
-        val maximumDisplacement = min(36.dp.toPx() + drive*70.dp.toPx(), side * (.12f + drive*.22f)) * gain * boost * spikeGain
+        val maximumDisplacement = min(36.dp.toPx() + drive*70.dp.toPx(), side * (.12f + drive*.22f)) * gain * boost * spikeGain()
         // Big, but never so big that spikes cover the text or leave the screen.
         val displacementCap = side * .38f * boost
         val spikeCurve = 1f - drive*.5f
-        val radius = base * (1f + kickExpansion)
+        // Breathes with the overall loudness, together with the cover.
+        val radius = base * (1f + kickExpansion) * (1f + breath() * .05f)
         // Exaggerated spikes on drops: tall bands grow much more than low ones. The top 25 % of the
         // cap is a soft knee, so peaks round off instead of being cut flat.
         fun spike(values: FloatArray, i: Int, extra: Float, exponent: Float): Float {
@@ -242,12 +280,26 @@ internal fun HardstyleOrb(
             if (layer == 0) {
                 // Soft bloom under the core line: three widening, fading strokes (cheap, no blur pass).
                 points.copyInto(layer0Points)
+                shape?.let { sh ->
+                    for (k in 0..POINTS) { sh.points[k*2] = points[k*2] - center.x; sh.points[k*2+1] = points[k*2+1] - center.y }
+                    sh.ready = true; sh.drive = drive; sh.bass = frame.bass; sh.kick = frame.kick
+                }
                 val g = (.6f + frame.bass * .5f + drive * frame.kick * .9f).coerceAtMost(1.6f)
                 val glowColor = colors[0]
-                drawPath(path, glowColor.copy(alpha = (.05f * g).coerceAtMost(1f)),
-                    style = Stroke(20.dp.toPx() + drive*frame.kick*10.dp.toPx(), join = StrokeJoin.Round))
-                drawPath(path, glowColor.copy(alpha = (.09f * g).coerceAtMost(1f)),
-                    style = Stroke(10.dp.toPx() + drive*frame.kick*6.dp.toPx(), join = StrokeJoin.Round))
+                if (!BLOOM_ENABLED) {
+                    drawPath(path, glowColor.copy(alpha = (.05f * g).coerceAtMost(1f)),
+                        style = Stroke(20.dp.toPx() + drive*frame.kick*10.dp.toPx(), join = StrokeJoin.Round))
+                    drawPath(path, glowColor.copy(alpha = (.09f * g).coerceAtMost(1f)),
+                        style = Stroke(10.dp.toPx() + drive*frame.kick*6.dp.toPx(), join = StrokeJoin.Round))
+                }
+                // Chromatic split on heavy kicks: red and blue copies of the core line pull apart.
+                val split = aberration()
+                if (split > .5f) {
+                    translate(split, 0f) { drawPath(path, Color(0xFFFF2050).copy(alpha = .55f),
+                        style = Stroke(2.dp.toPx(), join = StrokeJoin.Round), blendMode = BlendMode.Screen) }
+                    translate(-split, 0f) { drawPath(path, Color(0xFF2080FF).copy(alpha = .55f),
+                        style = Stroke(2.dp.toPx(), join = StrokeJoin.Round), blendMode = BlendMode.Screen) }
+                }
                 drawPath(path, glowColor.copy(alpha = (.16f * g).coerceAtMost(1f)),
                     style = Stroke(4.5.dp.toPx(), join = StrokeJoin.Round))
                 drawPath(path, color.copy(alpha = .14f))
@@ -274,6 +326,56 @@ internal fun HardstyleOrb(
                 base*(1.1f+(1-pulse)*(.65f+drive*.5f)),style=Stroke(.8.dp.toPx()+drive*pulse*4.dp.toPx()))
         }
     }
+}
+
+/** Real bloom on the ring. Set to false to fall back to the cheap stroke glow (e.g. if it runs hot). */
+internal const val BLOOM_ENABLED = true
+
+/** Ring outline shared from HardstyleOrb to its glow (points relative to the centre). */
+internal class OrbShape {
+    val points = FloatArray((POINTS + 1) * 2)
+    var ready = false
+    var drive = 0f; var bass = 0f; var kick = 0f
+}
+
+/** Soft blurred glow behind the ring. Rendered at half resolution and scaled up 2x, so the blur
+ * costs a quarter as much, and the layer is larger than the cover so spikes are never clipped. */
+@Composable
+internal fun HardstyleOrbGlow(coverSize: Dp, shape: OrbShape, frameOf: () -> HardstyleFrame, colors: List<Color>, volumeOf: () -> Float,
+    introScale: () -> Float = { 1f }) {
+    val path = remember { Path() }
+    val density = LocalDensity.current
+    val blur = remember(density) {
+        val r = with(density) { 9.dp.toPx() }
+        android.graphics.RenderEffect.createBlurEffect(r, r, android.graphics.Shader.TileMode.DECAL).asComposeRenderEffect()
+    }
+    Canvas(Modifier.requiredSize(coverSize * 1.2f).graphicsLayer { val s = 2f * introScale(); scaleX = s; scaleY = s; renderEffect = blur }) {
+        frameOf() // redraw every frame with the music
+        if (!shape.ready) return@Canvas
+        val c = center
+        path.rewind()
+        val pts = shape.points
+        fun x(i: Int) = c.x + pts[i*2] * .5f
+        fun y(i: Int) = c.y + pts[i*2+1] * .5f
+        path.moveTo((x(0) + x(1)) / 2f, (y(0) + y(1)) / 2f)
+        for (i in 1..POINTS) {
+            val n = if (i == POINTS) 1 else i + 1
+            path.quadraticTo(x(i), y(i), (x(i) + x(n)) / 2f, (y(i) + y(n)) / 2f)
+        }
+        path.close()
+        val g = ((.55f + shape.bass * .45f + shape.drive * shape.kick * .8f) * volumeGain(volumeOf())).coerceAtMost(1.4f)
+        drawPath(path, colors[0].copy(alpha = (.5f * g).coerceAtMost(1f)),
+            style = Stroke(4.dp.toPx() + shape.drive * shape.kick * 3.dp.toPx(), join = StrokeJoin.Round))
+        drawPath(path, colors[1 % colors.size].copy(alpha = (.12f * g).coerceAtMost(1f)))
+    }
+}
+
+/** Grey noise tile for the film-grain overlay. */
+internal val grainTexture: ImageBitmap by lazy {
+    val n = 128
+    val rnd = java.util.Random(7)
+    val px = IntArray(n * n) { val v = 64 + rnd.nextInt(128); (0xFF shl 24) or (v shl 16) or (v shl 8) or v }
+    android.graphics.Bitmap.createBitmap(px, n, n, android.graphics.Bitmap.Config.ARGB_8888).asImageBitmap()
 }
 
 /** Light moving average across neighbouring bands (radius in bands); outer echo layers look softer. */

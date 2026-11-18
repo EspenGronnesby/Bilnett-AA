@@ -64,7 +64,11 @@ internal data class HardstyleFrame(val bass: Float = 0f, val kick: Float = 0f, v
     /** Spectral centroid 250 Hz–12 kHz in Hz: climbs during filter sweeps / pitch risers. */
     val centroid: Float = 0f,
     /** 0..1: share of bass hits landing between the kicks (reverse bass = euphoric/classic hardstyle). */
-    val offbeat: Float = 0f)
+    val offbeat: Float = 0f,
+    /** 0..1 while vocals / a melodic lead sing (tonal 300–3400 Hz above its usual level). */
+    val vocal: Float = 0f,
+    /** Pulse 0..1 when a new vocal phrase/syllable starts (not on kicks or snares). */
+    val vocalHit: Float = 0f)
 
 /** Independent from the original visualizer. Input sample rate is Hz, not Android's milliHz. */
 internal class HardstyleAudio {
@@ -84,6 +88,7 @@ internal class HardstyleAudio {
     private var songRef = 0f
     private var lastHeldGrit = 0f
     private var offbeatScore = 0f
+    private var vocalAvg = 0f; private var lastVocalValue = 0f; private var lastVocalHit = -1000L
     private val beats = BeatTracker()
     private var fluxAvg = 0f
     private var lastCandidate = -1000L
@@ -98,6 +103,7 @@ internal class HardstyleAudio {
         spectrumAnalyzer.reset()
         peak = 8f; average = 0f; lastBass = 0f; lastAt = 0; lastKick = -1000; lastBurst = -5000
         shortAverage = 0f; longAverage = 0f; beatPeriod = 0f
+        vocalAvg = 0f; lastVocalValue = 0f; lastVocalHit = -1000
         snareAvg = 0f; lastSnareValue = 0f; lastSnare = -1000; crashAvg = 0f; lastCrashValue = 0f; lastCrash = -1000; screechAvg = 0f
         songRef = 0f; lastHeldGrit = 0f; offbeatScore = 0f
         beats.reset(); fluxAvg = 0f; lastCandidate = -1000
@@ -110,6 +116,8 @@ internal class HardstyleAudio {
         // Spectral flatness (2–12 kHz) and centroid (250 Hz–12 kHz) for build-up detection.
         var flatLog = 0f; var flatSum = 0f; var nf = 0
         var centNum = 0f; var centDen = 0f
+        // Vocal band: level plus tonality (sung notes have clear harmonic peaks, drums are noise).
+        var voice = 0f; var voiceLog = 0f; var nv = 0
         for (k in 1 until fft.size / 2) {
             val hz = k.toFloat() * sampleRate / fft.size
             val magnitude = hypot(fft[2*k].toFloat(), fft[2*k+1].toFloat())
@@ -125,9 +133,13 @@ internal class HardstyleAudio {
             if (hz in 1000f..4000f) { snareBand += magnitude; ns++ }
             if (hz in 6000f..12000f) { air += magnitude; na++ }
             if (hz in 1200f..5000f) { scr += magnitude; nsc++ }
+            if (hz in 300f..3400f) { voice += magnitude; voiceLog += ln(1f + magnitude); nv++ }
         }
         low /= max(1, nl); bass /= max(1, nb); high /= max(1, nh); mid /= max(1, nm)
         snareBand /= max(1, ns); air /= max(1, na); scr /= max(1, nsc)
+        voice /= max(1, nv)
+        // 0 = flat noise, towards 1 = a few strong harmonic peaks (voice, lead synth).
+        val tonality = if (voice > 1f) (1f - (exp(voiceLog / max(1, nv)) - 1f) / voice).coerceIn(0f, 1f) else 0f
         val value = max(low, bass)
         val dt = if (lastAt == 0L) 0.016f else ((now-lastAt)/1000f).coerceIn(.001f, .2f)
         lastAt = now
@@ -149,6 +161,11 @@ internal class HardstyleAudio {
         // Snare / guitar attacks and cymbal crashes: sudden jumps above their own average.
         val snareOnset = snareBand > 3f && snareBand > snareAvg * 1.45f && snareBand > lastSnareValue * 1.15f && now - lastSnare >= 90
         if (snareOnset) lastSnare = now
+        // Vocal phrase start: the vocal band rises clearly above its own level while no kick or
+        // snare hits at the same moment (those already drive other effects).
+        val vocalOnset = voice > 2.5f && tonality > .35f && voice > vocalAvg * 1.3f && voice > lastVocalValue * 1.12f &&
+            !onset && !snareOnset && now - lastKick > 80 && frame.screech < .3f && now - lastVocalHit >= 180
+        if (vocalOnset) lastVocalHit = now
         val crashOnset = air > 2f && air > crashAvg * 1.8f && air > lastCrashValue * 1.3f && now - lastCrash >= 400
         if (crashOnset) lastCrash = now
         // Beat tracking: looser onset candidates (rise in bass, even on top of a long kick tail),
@@ -235,8 +252,18 @@ internal class HardstyleAudio {
             beats.confidence,
             smooth(frame.noise, noise, .3f),
             smooth(frame.centroid, centroid, .3f),
-            offbeatScore)
+            offbeatScore,
+            run {
+                val target = if (voice > 2f && vocalAvg > 0f)
+                    // Steady sound at its usual level gives 0; only singing above it counts. Screeches
+                    // (raw hardstyle leads) are not vocals.
+                    ((voice / vocalAvg - 1f) / .6f).coerceIn(0f, 1f) * ((tonality - .25f) / .35f).coerceIn(0f, 1f) *
+                        (1f - frame.screech) else 0f
+                smooth(frame.vocal, target, if (target > frame.vocal) .08f else .4f)
+            },
+            if (vocalOnset) 1f else frame.vocalHit * exp(-dt/.3f))
         average = smooth(average, value, .5f); lastBass = value
+        vocalAvg = if (vocalAvg == 0f) voice else smooth(vocalAvg, voice, 8f); lastVocalValue = voice
         screechAvg = if (screechAvg == 0f) scr else smooth(screechAvg, scr, 6f)
         snareAvg = smooth(snareAvg, snareBand, .6f); lastSnareValue = snareBand
         crashAvg = smooth(crashAvg, air, .8f); lastCrashValue = air

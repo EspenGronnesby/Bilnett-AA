@@ -21,6 +21,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -252,6 +253,11 @@ class RaveActivity : ComponentActivity() {
     private var dip by mutableFloatStateOf(0f)
     /** 0..1: the single big hit on the drop's first beat, fading out. */
     private var dropHit by mutableFloatStateOf(0f)
+    // Premium layer (Party): music "breath" for the cover, colour grade per song part,
+    // chromatic split on heavy kicks. Written by the frame loop, read only while drawing.
+    private var breath by mutableFloatStateOf(0f)
+    private var grade by mutableFloatStateOf(0f)
+    private var aberration by mutableFloatStateOf(0f)
     private var lastPart = SongPart.INTRO
     /** When the current dip started (0 = none) and whether this build-up already used its dip. */
     private var dipStartedAt = 0L
@@ -1038,7 +1044,7 @@ class RaveActivity : ComponentActivity() {
         val shakeDirection = remember { FloatArray(2) } // [angle, armed]
         val density = androidx.compose.ui.platform.LocalDensity.current
         LaunchedEffect(hardstyleOn, foreground, playing) {
-            if (!hardstyleOn || !foreground) { shakeX = 0f; shakeY = 0f; shakeRotation = 0f; dip = 0f; dropHit = 0f; return@LaunchedEffect }
+            if (!hardstyleOn || !foreground) { shakeX = 0f; shakeY = 0f; shakeRotation = 0f; dip = 0f; dropHit = 0f; breath = 0f; grade = 0f; aberration = 0f; return@LaunchedEffect }
             var previous = 0L
             while (true) {
                 withFrameNanos { now ->
@@ -1278,7 +1284,8 @@ class RaveActivity : ComponentActivity() {
                         grit = blend(displayedFrame.grit, target.grit),
                         bpm = target.bpm, snare = target.snare, crash = target.crash, sub = target.sub, level = target.level, screech = blend(displayedFrame.screech, target.screech),
                         bassLevel = target.bassLevel, air = target.air, subLevel = target.subLevel,
-                        presence = target.presence, beat = target.beat)
+                        presence = target.presence, beat = target.beat,
+                        vocal = blend(displayedFrame.vocal, target.vocal), vocalHit = target.vocalHit)
                     // Camera shake (Trap Nation style): each kick punches the scene in a new random
                     // direction and settles with the kick's decay; screeches add a light tremble.
                     with(density) {
@@ -1302,12 +1309,31 @@ class RaveActivity : ComponentActivity() {
                         shakeY = if (big) y else 0f
                         // A hint of rotation only on heavy hits (max ~0.8°).
                         shakeRotation = if (big) (f.heavy * f.kick * .8f * if (shakeDirection[0] > PI) -1f else 1f) else 0f
+                        // Chromatic split on heavy kicks in the drop (drawn on the ring), max ~5 dp.
+                        val split = f.heavy * f.kick * partyProfile.shake
+                        aberration = if (effectsOn && split > .25f) ((split - .25f) / .75f).coerceAtMost(1f) * 5.dp.toPx() else 0f
                         // Genre motion: reggae sways, reggaeton bounces (scaled by the bar), rounded to whole px.
                         swayX = kotlin.math.round(look.swayX * GENRE_SWAY_DP.dp.toPx() * strengthMul)
                         swayRot = kotlin.math.round(look.swayRot * GENRE_SWAY_DEG * strengthMul * 10f) / 10f
                         bounceY = kotlin.math.round(-look.bounceY * GENRE_BOUNCE_DP.dp.toPx() * strengthMul)
                         if (warmth != look.warmth) warmth = look.warmth
                     }
+                    // The cover "breathes" with the overall loudness (Trap Nation: logo size follows a
+                    // soft-kneed loudness), separate from the sharp kick pulse.
+                    var lowBands = 0f
+                    for (i in 0 until SPECTRUM_BANDS / 2) lowBands += smoothSpectrum[i]
+                    lowBands /= (SPECTRUM_BANDS / 2).toFloat()
+                    val knee = (5f * (1.2f * lowBands - lowBands.pow(1.2f))).coerceIn(0f, 1f).pow(.8f)
+                    breath += (knee - breath) * (1f - kotlin.math.exp(-dt / if (knee > breath) .08f else .35f))
+                    // Colour grade by song part: muted in intro/breakdown, vivid on the drop. Slow (1.5 s)
+                    // so it never reads as an extra flash.
+                    val gradeTarget = if (sw > .5f) when (songPhase.part) {
+                        SongPart.INTRO, SongPart.BREAKDOWN, SongPart.OUTRO, SongPart.ANTI_CLIMAX -> -.6f
+                        SongPart.VOCAL, SongPart.GROOVE -> 0f
+                        SongPart.BUILDUP -> .35f
+                        SongPart.DROP -> 1f
+                    } else (-.4f + displayedFrame.energy * 1.2f).coerceIn(-.6f, .8f)
+                    grade += ((if (playing) gradeTarget else 0f) - grade) * (1f - kotlin.math.exp(-dt / 1.5f))
                     // Analysis log: what was measured and what the effects did (one CSV line per bar).
                     if (playing && fresh) with(logFrame) {
                         positionMs = positionMs()
@@ -1440,17 +1466,18 @@ class RaveActivity : ComponentActivity() {
                 val subGlow = .12f * displayedFrame.sub * displayedFrame.bass * showOn
                 val screechTint = (displayedFrame.screech * .7f * showOn).coerceAtMost(.7f)
                 // Blurred album cover fills the background and drifts slowly (Ken Burns), both modes.
+                val g = if (hardstyleOn) grade else 0f
                 val bg = blurredArt
                 if (bg != null) {
-                    val zoom = 1.2f + .04f * sin(t)
+                    val zoom = 1.2f + .04f * sin(t) + (if (hardstyleOn) breath * .03f else 0f)
                     val fit = max(w / bg.width, h / bg.height) * zoom
                     val dw = bg.width * fit; val dh = bg.height * fit
                     val ox = (w - dw) / 2f + w * .03f * cos(t); val oy = (h - dh) / 2f + h * .03f * sin(t)
                     drawImage(bg, srcOffset = androidx.compose.ui.unit.IntOffset.Zero, srcSize = androidx.compose.ui.unit.IntSize(bg.width, bg.height),
                         dstOffset = androidx.compose.ui.unit.IntOffset(ox.toInt(), oy.toInt()), dstSize = androidx.compose.ui.unit.IntSize(dw.toInt(), dh.toInt()),
-                        alpha = .6f, filterQuality = androidx.compose.ui.graphics.FilterQuality.Medium)
-                    // Dark toning so the cover, ring and text stay on top.
-                    drawRect(Color.Black.copy(alpha = .38f))
+                        alpha = .6f, colorFilter = gradeFilter(g), filterQuality = androidx.compose.ui.graphics.FilterQuality.Medium)
+                    // Dark toning so the cover, ring and text stay on top (a bit lighter on the drop).
+                    drawRect(Color.Black.copy(alpha = (.38f - g * .08f).coerceIn(.25f, .5f)))
                 }
                 val blobAlpha = if (bg != null) .55f else 1f
                 palette.forEachIndexed { i, paletteColor ->
@@ -1518,6 +1545,8 @@ class RaveActivity : ComponentActivity() {
                         )
                     )
                 }
+                // Drop: a faint cover-coloured glow lifts the whole scene (eased over 1.5 s, not a flash).
+                if (g > .05f) drawRect(hardPalette[0].copy(alpha = .07f * g), blendMode = androidx.compose.ui.graphics.BlendMode.Screen)
                 // The drop's single big hit (fades out over ~0.6 s).
                 val hit = dropHit
                 if (hit > .02f) drawRect(
@@ -1528,7 +1557,8 @@ class RaveActivity : ComponentActivity() {
                 )
                 drawRect(
                     Brush.radialGradient(
-                        listOf(Color.Transparent, Color.Black.copy(alpha = 0.65f)),
+                        // Calm parts get a deeper vignette, the drop opens up.
+                        listOf(Color.Transparent, Color.Black.copy(alpha = (0.65f - g * .12f).coerceIn(.5f, .8f))),
                         center = center, radius = max(w, h) * 0.8f
                     )
                 )
@@ -1570,12 +1600,25 @@ class RaveActivity : ComponentActivity() {
             if (hardstyleOn && foreground) {
                 coverCenter?.let { center ->
                     HardstyleBackdrop(Modifier.fillMaxSize().graphicsLayer { alpha = 1f - PRE_DROP_DIP_DEPTH * dip }.sceneShake(),
-                        displayedFrame, visualTime, showPalette, showVideo,
-                        center, coverRadius, audioIntensity, volume, particles = partyProfile.particles,
-                        density = partyProfile.density, softness = partyProfile.softness)
+                        { displayedFrame }, { visualTime }, showPalette, showVideo,
+                        center, coverRadius, { audioIntensity }, volume, profile = { partyProfile })
                 }
                 // Koko the ghost drops by now and then and does his St. James Infirmary glide.
                 if (showKoko) RaveDancer(Modifier.fillMaxSize(), { displayedFrame }, volume, playing)
+                // Film grain: a tiled noise texture over the scene (under cover, text and buttons),
+                // moved ~15x a second by its own small clock, barely visible.
+                val grain = remember { androidx.compose.ui.graphics.ShaderBrush(androidx.compose.ui.graphics.ImageShader(grainTexture,
+                    androidx.compose.ui.graphics.TileMode.Repeated, androidx.compose.ui.graphics.TileMode.Repeated)) }
+                var grainStep by remember { mutableLongStateOf(0L) }
+                LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(66L); grainStep++ } }
+                Canvas(Modifier.fillMaxSize()) {
+                    val step = grainStep
+                    val dx = ((step * 73L) % 128L).toFloat(); val dy = ((step * 151L) % 128L).toFloat()
+                    translate(-dx, -dy) {
+                        drawRect(grain, size = androidx.compose.ui.geometry.Size(size.width + 128f, size.height + 128f), alpha = .06f,
+                            blendMode = androidx.compose.ui.graphics.BlendMode.Overlay)
+                    }
+                }
             }
             // Same layout with or without video: cover, title and controls stay in place,
             // the music video just plays behind them with a dark veil for readability.
@@ -1742,6 +1785,10 @@ class RaveActivity : ComponentActivity() {
             Box(Modifier.size(size).partyTaps()) { Cover(size) }
             return
         }
+        // The ring grows out of the cover when a new song starts.
+        val intro = remember(trackChangedAt) { androidx.compose.animation.core.Animatable(if (introDone()) 1f else 0f) }
+        LaunchedEffect(trackChangedAt) { intro.animateTo(1f, tween(800, easing = androidx.compose.animation.core.EaseOutCubic)) }
+        val orbShape = remember { OrbShape() }
         Box(Modifier.size(size).partyTaps().onGloballyPositioned { coordinates ->
             val position = coordinates.positionInRoot() - sceneOrigin
             onPosition(
@@ -1750,9 +1797,13 @@ class RaveActivity : ComponentActivity() {
             )
         }.sceneShake(), contentAlignment = Alignment.Center) {
             androidx.compose.runtime.key(trackIdentity, foreground) {
-                HardstyleOrb(Modifier.fillMaxSize(), frame, palette, roundedSquare = true, volume = volume, spikeGain = partyProfile.spike)
+                if (BLOOM_ENABLED) HardstyleOrbGlow(size, orbShape, { frame }, palette, { volume }, { .85f + .15f * intro.value })
+                HardstyleOrb(Modifier.fillMaxSize().graphicsLayer {
+                    val s = .85f + .15f * intro.value; scaleX = s; scaleY = s
+                }, { frame }, palette, roundedSquare = true, volume = volume, spikeGain = { partyProfile.spike },
+                    breath = { breath }, aberration = { aberration }, shape = orbShape)
             }
-            Cover(size * .86f, scale = 1f + frame.kick * (.045f + frame.heavy * .09f) * volumeGain(volume) * (.4f + .6f * phaseLevel))
+            Cover(size * .86f, scale = 1f + breath * .05f + frame.kick * (.045f + frame.heavy * .09f) * volumeGain(volume) * (.4f + .6f * phaseLevel))
             // Snare → a short glow around the cover's edge (its own hero, so the kick isn't doing everything).
             val edge = frame.snare * structureWeight(vibe)
             if (edge > .05f) Canvas(Modifier.size(size * .9f)) {
@@ -2462,6 +2513,20 @@ class RaveActivity : ComponentActivity() {
             contentAlignment = Alignment.Center
         ) {
             Text(text, color = Color(0xFFF5F2EC), fontSize = 24.us, fontFamily = BodyFont, lineHeight = 32.us, modifier = Modifier.padding(40.u))
+        }
+    }
+
+    /** Saturation/brightness grade for the background, cached per step so nothing is allocated per frame. */
+    private val gradeFilters = HashMap<Int, androidx.compose.ui.graphics.ColorFilter?>()
+    private fun gradeFilter(g: Float): androidx.compose.ui.graphics.ColorFilter? {
+        val key = kotlin.math.round(g * 20f).toInt()
+        if (key == 0) return null
+        return gradeFilters.getOrPut(key) {
+            val level = key / 20f
+            val m = androidx.compose.ui.graphics.ColorMatrix().apply { setToSaturation(1f + .35f * level) }
+            val b = 1f + .12f * level
+            m.timesAssign(androidx.compose.ui.graphics.ColorMatrix(floatArrayOf(b,0f,0f,0f,0f, 0f,b,0f,0f,0f, 0f,0f,b,0f,0f, 0f,0f,0f,1f,0f)))
+            androidx.compose.ui.graphics.ColorFilter.colorMatrix(m)
         }
     }
 
