@@ -53,7 +53,7 @@ Gjør dette, i rekkefølge:
    Appen leser `files/style-book.json` (`rave/party/StyleBook.kt`) – foreløpig bare logget (`RaveGenre: stil-lærer: …`).
 3. **Rapport:** `python3 tools/party-analyse/report.py` → les `rapport.html` (hvor ofte appen var enig med Espen, per del og per sang).
 4. **Avspilling mot fasit:** `./gradlew testDebugUnitTest --tests '*PartyReplayTest.replayAgainstEspensAnswers'` → les `replay.txt`.
-5. **Trening (søk etter beste terskler):** `touch …/party-analyse/SWEEP`, kjør `--tests '*PartyReplayTest.sweepTuning'`, les `sweep.txt`, slett `SWEEP` etterpå. Tersklene står i `PartyTuning` (`GenreDetector.kt`).
+5. **Trening (søk etter beste terskler):** `touch …/party-analyse/SWEEP`, kjør `--tests '*PartyReplayTest.sweepTuning'`, les `sweep.txt`, slett `SWEEP` etterpå. Tersklene står i `PartyTuning` (`rave-core/…/GenreDetector.kt`); kjør `syncWebCore` etter endring.
 6. **Egen del-modell (fase C):** `--tests '*PartyReplayTest.exportPartFeatures'` → `parts-features.csv`, så
    `…/venv/bin/python tools/party-analyse/train_parts.py` (leave-one-song-out mot reglene, lagrer `parts-model.json`).
    Tas i bruk i appen **bare** når den slår reglene uten at drop blir dårligere. 2026-11-10 (9 sanger): modell 59 %,
@@ -90,25 +90,38 @@ scrcpy --no-audio --stay-awake          # speil telefonskjermen til Mac-en
 ## Struktur — det vi har laget
 
 ```
-app/src/main/java/com/kododake/aabrowser/rave/
-├── RaveActivity.kt        # Skjermen: metadata, tekst, video, bakgrunnslys, shake, strobe, volum
+rave-core/src/commonMain/kotlin/com/kododake/aabrowser/rave/   # Felles Party-analyse (app = JVM, nettside = JS)
 ├── HardstyleAudio.kt      # FFT → HardstyleFrame (bass, kick, energy, heavy, grit …)
 ├── HardstyleSpectrum.kt   # 48 logaritmiske bånd + historikk for ekko-lagene
-├── HardstyleVisuals.kt    # HardstyleOrb (ringen), HardstyleBackdrop (partikler, ripples), volumkurver
+├── GenreDetector.kt       # Sjanger, HardstyleStructure (intro/build-up/drop), PartyTuning (tersklene)
+├── FestivalShow.kt        # Konstanter, BeatClock, FlashBudget, SyncTapper
+├── PcmFft.kt              # Rå lyd → FFT i Visualizer-format (mikrofon i bilen, delt lyd på nettsiden)
+├── Volume.kt              # volumeGain, loudness, loudRamp, maxVolumeBoost
+└── party/                 # GenreRules, SongMood
+rave-core/src/jsMain/…/WebPartyEngine.kt   # Nettsidens Party-motor (port av appens effektløkke)
+app/src/main/java/com/kododake/aabrowser/rave/
+├── RaveActivity.kt        # Skjermen: metadata, tekst, video, bakgrunnslys, shake, strobe, volum
+├── HardstyleVisuals.kt    # HardstyleOrb (ringen), HardstyleBackdrop (partikler, ripples)
 ├── SilentClipView.kt      # Musikkvideo
 ├── SpotifyVideoLookup.kt  # Finner video via iTunes-søk
 ├── NowPlayingListener.kt  # Varseltilgang for å lese hva som spilles
 └── party/                 # Analyselogg, FFT-opptak, rettelser per sang (se .claude/docs/party-analyse.md)
 tools/party-analyse/       # Mac: henter loggene fra telefonen + HTML-rapport (data i Bilnett-AA-assets, aldri i git)
+web/                       # Rave-nettsiden (Vite/React, https://rave-espen.vercel.app); motoren i web/src/core/generated
 ```
+
+**Endrer du noe i `rave-core/src/commonMain` eller `jsMain`** (terskler, analyse, motor): kjør
+`./gradlew :rave-core:syncWebCore` og commit `web/src/core/generated/`. Ellers stopper nettsidens bygg
+(`web/scripts/check-core.mjs`). Kjernen bruker Node som er installert (ingen nedlasting). Testene:
+`./gradlew :rave-core:allTests` (JVM + Node), `PartyReplayTest` ligger fortsatt i `app/src/test`.
 
 ### Party-modus — signaler og hvor tallene står
 
 | Signal / effekt | Fil | Hva den betyr |
 |---|---|---|
-| `heavy` | `HardstyleAudio.kt` | Tung + distortert bass, eller drop etter breakdown (0..1) |
-| `grit` | `HardstyleAudio.kt` | Kun distortion på sterk bass (mid 250–2500 Hz / bass) |
-| `volumeGain`, `loudness`, `loudRamp`, `maxVolumeBoost` | `HardstyleVisuals.kt` | Telefonvolum → styrke (rolig lavt, ekstra fra 70 %, «tar av» 90–100 %) |
+| `heavy` | `rave-core/…/HardstyleAudio.kt` | Tung + distortert bass, eller drop etter breakdown (0..1) |
+| `grit` | `rave-core/…/HardstyleAudio.kt` | Kun distortion på sterk bass (mid 250–2500 Hz / bass) |
+| `volumeGain`, `loudness`, `loudRamp`, `maxVolumeBoost` | `rave-core/…/Volume.kt` | Telefonvolum → styrke (rolig lavt, ekstra fra 70 %, «tar av» 90–100 %) |
 | Spikes, ekstra strek, lys på topper | `HardstyleOrb` | Utslag, tak (`displacementCap`) og glød |
 | Partikler, ripples | `HardstyleBackdrop`, `RippleBank` | Ripples kun når `bass > .72 && grit > .35` |
 | Shake, strobe, blink | `RaveActivity.kt` (`graphicsLayer`, bakgrunns-Canvas) | Strobe fra 85 % volum + heavy kick |

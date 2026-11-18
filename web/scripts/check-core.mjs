@@ -11,7 +11,7 @@ const core = join(web, '..', 'rave-core')
 const stamp = join(web, 'src', 'core', 'generated', 'SOURCE_HASH')
 
 if (!existsSync(core)) {
-  console.log('check-core: rave-core not found next to web/, skipping')
+  console.warn('check-core: WARNING rave-core not found next to web/ — cannot check the Party core copy, skipping')
   process.exit(0)
 }
 

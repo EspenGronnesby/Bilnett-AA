@@ -70,6 +70,7 @@ Hva vi ser etter i rapporten:
 Kommandoene står i CLAUDE.md under «Når Espen sier analyser». Kort:
 `report.py` (rapport) → `PartyReplayTest.replayAgainstEspensAnswers` (avspilling mot fasit, `replay.txt`)
 → `PartyReplayTest.sweepTuning` med `SWEEP`-fil (søk etter terskler i `PartyTuning`, `sweep.txt`).
+  `PartyTuning` og resten av analysen ligger i `rave-core/src/commonMain/…` (delt med nettsiden): etter endring, kjør `./gradlew :rave-core:syncWebCore` og commit `web/src/core/generated/`.
 
 Funn 2026-11-06: Espens breakdowns har ofte kick (2,4 kick/s, som drop). Det som skiller er «fylde»:
 diskant + presence ca. 1,5–2 dB under sangens topp i breakdown, mens build-up har lite sub (−6 dB) og full diskant.
