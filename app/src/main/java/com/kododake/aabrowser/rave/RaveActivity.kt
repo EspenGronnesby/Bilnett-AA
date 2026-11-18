@@ -333,6 +333,33 @@ class RaveActivity : ComponentActivity() {
     private val hardstyleAudio = HardstyleAudio()
     private var hardstyleAudioAt = 0L
     private var trackIdentity = ""
+    /** When a new song started (for the title intro); 0 until the first song change. */
+    private var trackChangedAt by mutableLongStateOf(0L)
+    private var introTitle = ""
+    /** True when no title intro is running (first start, or the last one finished). */
+    private fun introDone() = trackChangedAt == 0L || SystemClock.uptimeMillis() - trackChangedAt > 900L
+    /** Heavily blurred copy of the cover for the background, made once per song. */
+    private var blurredArt by mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null)
+    private var blurGeneration = 0
+
+    /** Background blur without a per-frame cost: shrink the cover to a few pixels and scale it
+     * back up in several filtered steps, once per song, off the UI thread. */
+    private fun makeBlurredArt(src: Bitmap?) {
+        val generation = ++blurGeneration
+        if (src == null) { blurredArt = null; return }
+        Thread {
+            val result = try {
+                // Hardware bitmaps can't be scaled directly; copy to a normal bitmap first.
+                val soft = if (src.config == Bitmap.Config.HARDWARE) src.copy(Bitmap.Config.ARGB_8888, false) else src
+                val aspect = soft.height.toFloat() / soft.width.coerceAtLeast(1)
+                fun scaled(b: Bitmap, w: Int) = Bitmap.createScaledBitmap(b, w, (w * aspect).toInt().coerceAtLeast(1), true)
+                var b = scaled(soft, 128); b = scaled(b, 64); b = scaled(b, 32); b = scaled(b, 16)
+                b = scaled(b, 32); b = scaled(b, 64); b = scaled(b, 128); b = scaled(b, 256)
+                b.asImageBitmap()
+            } catch (_: Exception) { null }
+            runOnUiThread { if (generation == blurGeneration) blurredArt = result }
+        }.start()
+    }
     private var controls by mutableStateOf(RaveControls())
     /** Party extras (vibe slider, synk, analyse) show with the other buttons while Party is on. */
     private val partyControls: Boolean get() = hardstyleOn && controls.transport
@@ -573,7 +600,7 @@ class RaveActivity : ComponentActivity() {
         controller?.unregisterCallback(mediaCallback)
         controller = next
         if (next == null) {
-            title = ""; artist = ""; art = null; colors = DEFAULT_COLORS; playing = false
+            title = ""; artist = ""; art = null; blurredArt = null; blurGeneration++; colors = DEFAULT_COLORS; playing = false
             lastState = null
             lyricsKey = ""; lyrics = emptyList(); plainLyrics = null; lyricsState = ""; lyricsTiming = null
             songFacts = null; songGenre = ""; vocalSylPerSec = 0f
@@ -590,6 +617,9 @@ class RaveActivity : ComponentActivity() {
         // Cleaned artist: a badge switching mid-song («• Lossless» on/off) is not a new song.
         val identity = "${m?.getString(MediaMetadata.METADATA_KEY_MEDIA_ID)}|${m?.getString(MediaMetadata.METADATA_KEY_TITLE)}|${cleanArtist(m?.getString(MediaMetadata.METADATA_KEY_ARTIST))}"
         if (identity != trackIdentity) {
+            val newTitle = m?.getString(MediaMetadata.METADATA_KEY_TITLE).orEmpty()
+            if (trackIdentity.isNotEmpty() && newTitle.isNotBlank() && newTitle != introTitle) trackChangedAt = SystemClock.uptimeMillis()
+            if (newTitle.isNotBlank()) introTitle = newTitle
             // The song that just ended goes into the genre list with what it actually got.
             recordGenre()
             trackIdentity = identity
@@ -681,6 +711,9 @@ class RaveActivity : ComponentActivity() {
         val bmp = m?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
             ?: m?.getBitmap(MediaMetadata.METADATA_KEY_ART)
             ?: m?.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
+        val old = art
+        if (bmp == null || old == null || bmp.width != old.width || bmp.height != old.height ||
+            (bmp !== old && !bmp.sameAs(old))) makeBlurredArt(bmp)
         art = bmp
         colors = extractColors(bmp)
         fetchLyrics(m)
@@ -1406,6 +1439,20 @@ class RaveActivity : ComponentActivity() {
                 val showOn = if (hardstyleOn) structureWeight(vibe) else 0f
                 val subGlow = .12f * displayedFrame.sub * displayedFrame.bass * showOn
                 val screechTint = (displayedFrame.screech * .7f * showOn).coerceAtMost(.7f)
+                // Blurred album cover fills the background and drifts slowly (Ken Burns), both modes.
+                val bg = blurredArt
+                if (bg != null) {
+                    val zoom = 1.2f + .04f * sin(t)
+                    val fit = max(w / bg.width, h / bg.height) * zoom
+                    val dw = bg.width * fit; val dh = bg.height * fit
+                    val ox = (w - dw) / 2f + w * .03f * cos(t); val oy = (h - dh) / 2f + h * .03f * sin(t)
+                    drawImage(bg, srcOffset = androidx.compose.ui.unit.IntOffset.Zero, srcSize = androidx.compose.ui.unit.IntSize(bg.width, bg.height),
+                        dstOffset = androidx.compose.ui.unit.IntOffset(ox.toInt(), oy.toInt()), dstSize = androidx.compose.ui.unit.IntSize(dw.toInt(), dh.toInt()),
+                        alpha = .6f, filterQuality = androidx.compose.ui.graphics.FilterQuality.Medium)
+                    // Dark toning so the cover, ring and text stay on top.
+                    drawRect(Color.Black.copy(alpha = .38f))
+                }
+                val blobAlpha = if (bg != null) .55f else 1f
                 palette.forEachIndexed { i, paletteColor ->
                     val col = if (screechTint > .01f) androidx.compose.ui.graphics.lerp(paletteColor, palette[(i + 1) % palette.size], screechTint) else paletteColor
                     val a = t + i * 2.1f
@@ -1416,7 +1463,7 @@ class RaveActivity : ComponentActivity() {
                     val r = base * (0.6f + 0.35f * energy) * (1f + partyHit * .1f)
                     drawCircle(
                         brush = Brush.radialGradient(
-                            listOf(col.copy(alpha = ((0.45f + 0.35f * energy + partyHit * .18f + subGlow)).coerceIn(0f,.95f)), Color.Transparent),
+                            listOf(col.copy(alpha = ((0.45f + 0.35f * energy + partyHit * .18f + subGlow) * blobAlpha).coerceIn(0f,.95f)), Color.Transparent),
                         center = c, radius = r
                         ),
                         radius = r, center = c
@@ -1745,15 +1792,22 @@ class RaveActivity : ComponentActivity() {
     ) {
         val ta = if (align == Alignment.CenterHorizontally) TextAlign.Center else TextAlign.Start
         val narrow = align == Alignment.CenterHorizontally
+        // New song: title fades in and glides up, artist follows a moment later (not on first start).
+        val intro = remember(trackChangedAt) { androidx.compose.animation.core.Animatable(if (introDone()) 1f else 0f) }
+        LaunchedEffect(trackChangedAt) { intro.animateTo(1f, tween(720, easing = androidx.compose.animation.core.EaseOutCubic)) }
+        fun Modifier.introIn(delay: Float) = graphicsLayer {
+            val p = ((intro.value - delay) / (1f - delay)).coerceIn(0f, 1f)
+            alpha = p; translationY = (1f - p) * 12.dp.toPx()
+        }
         Column(modifier, horizontalAlignment = align) {
             Text(
-                title.ifBlank { "Start Spotify" }, textAlign = ta, fontFamily = FontFamily.Default,
+                title.ifBlank { "Start Spotify" }, modifier = Modifier.introIn(0f), textAlign = ta, fontFamily = FontFamily.Default,
                 color = Color(0xFFF5F2EC), fontSize = if (compact) 20.us else 36.us, fontWeight = FontWeight.SemiBold,
                 maxLines = if (compact) 1 else 2, overflow = TextOverflow.Ellipsis, lineHeight = if (compact) 24.us else 40.us
             )
             Spacer(Modifier.height(8.u))
             Text(
-                artist.ifBlank { "Spill av noe, så starter Rave" }, textAlign = ta, fontFamily = BodyFont,
+                artist.ifBlank { "Spill av noe, så starter Rave" }, modifier = Modifier.introIn(.17f), textAlign = ta, fontFamily = BodyFont,
                 color = Color(0xB3F5F2EC), fontSize = if (compact) 15.us else 20.us, maxLines = 1, overflow = TextOverflow.Ellipsis
             )
             if (showLyrics && includeLyrics) {
