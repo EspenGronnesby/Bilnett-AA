@@ -217,9 +217,9 @@ class RaveActivity : ComponentActivity() {
 
     private fun Modifier.sceneShake(overscan: Boolean = false): Modifier = graphicsLayer {
         if (!hardstyleOn) return@graphicsLayer
-        translationX = shakeX + swayX
+        translationX = shakeX
         translationY = shakeY + bounceY
-        rotationZ = shakeRotation + swayRot
+        rotationZ = shakeRotation
         if (overscan && (translationX != 0f || translationY != 0f)) {
             val minSide = min(size.width, size.height).coerceAtLeast(1f)
             val zoom = 1f + 2f * hypot(translationX, translationY) / minSide + .02f * abs(rotationZ)
@@ -242,8 +242,6 @@ class RaveActivity : ComponentActivity() {
     private var teacherStyles: List<Pair<String, Float>> = emptyList()
     private var edmSub by mutableStateOf<com.kododake.aabrowser.rave.party.EdmSub?>(null)
     /** Genre motion of the whole scene in px (reggae sway, reggaeton bounce) and colour warmth 0..1. */
-    private var swayX by mutableFloatStateOf(0f)
-    private var swayRot by mutableFloatStateOf(0f)
     private var bounceY by mutableFloatStateOf(0f)
     private var warmth by mutableFloatStateOf(0f)
     /** The genre whose bar strength is loaded in [vibeAuto]/[vibeManual]. */
@@ -1312,9 +1310,7 @@ class RaveActivity : ComponentActivity() {
                         // Chromatic split on heavy kicks in the drop (drawn on the ring), max ~5 dp.
                         val split = f.heavy * f.kick * partyProfile.shake
                         aberration = if (effectsOn && split > .25f) ((split - .25f) / .75f).coerceAtMost(1f) * 5.dp.toPx() else 0f
-                        // Genre motion: reggae sways, reggaeton bounces (scaled by the bar), rounded to whole px.
-                        swayX = kotlin.math.round(look.swayX * GENRE_SWAY_DP.dp.toPx() * strengthMul)
-                        swayRot = kotlin.math.round(look.swayRot * GENRE_SWAY_DEG * strengthMul * 10f) / 10f
+                        // Genre motion: reggaeton bounces (scaled by the bar), rounded to whole px. No side-to-side sway (Espen 2026-11-18).
                         bounceY = kotlin.math.round(-look.bounceY * GENRE_BOUNCE_DP.dp.toPx() * strengthMul)
                         if (warmth != look.warmth) warmth = look.warmth
                     }
