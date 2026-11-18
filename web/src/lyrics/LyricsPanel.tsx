@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { LYRICS_STYLES, type LyricsStyle, type Settings } from '../settings'
 import type { Rgb } from '../ui/colors'
+import { useZone } from '../ui/useZone'
 import { LyricsView, StyleDots } from './LyricsView'
 import type { Lyrics } from './useLyrics'
 
@@ -32,6 +33,8 @@ interface PanelProps {
 
 export function LyricsPanel({ lyrics, positionMs, offsetMs, settings, update, accent, pulse, align, footer }: PanelProps) {
   const [toast, setToast] = useState<string | null>(null)
+  // The buttons under the lyrics show while the mouse is over the panel.
+  const [awake, zone] = useZone()
   const [dragX, setDragX] = useState(0)
   const drag = useRef<{ x: number; id: number } | null>(null)
   const toastTimer = useRef(0)
@@ -62,7 +65,8 @@ export function LyricsPanel({ lyrics, positionMs, offsetMs, settings, update, ac
 
   return (
     <div
-      className={settings.lyricsGlass ? 'lyrics-panel glass' : 'lyrics-panel'}
+      className={`lyrics-panel zone${settings.lyricsGlass ? ' glass' : ''}${awake ? ' awake' : ''}`}
+      {...zone}
       onPointerDown={e => {
         if (e.button !== 0 || (e.target as HTMLElement).closest('button')) return
         const startX = e.clientX
@@ -115,18 +119,41 @@ export function ModeButtons({ settings, update, deviceType, hasLyrics, children 
   children?: React.ReactNode
 }) {
   const offset = settings.lyricsOffsets[deviceType] ?? 0
-  const nudge = (dir: number) => {
-    const next = Math.min(Math.max(offset + dir * OFFSET_STEP_MS, -OFFSET_LIMIT_MS), OFFSET_LIMIT_MS)
-    update({ lyricsOffsets: { ...settings.lyricsOffsets, [deviceType]: next } })
+  // The latest values, so a held button keeps counting from where it is now (not a stale copy).
+  const latest = useRef({ settings, deviceType, update })
+  latest.current = { settings, deviceType, update }
+  const setOffset = (value: number) => {
+    const { settings: st, deviceType: dt, update: up } = latest.current
+    up({ lyricsOffsets: { ...st.lyricsOffsets, [dt]: Math.min(Math.max(value, -OFFSET_LIMIT_MS), OFFSET_LIMIT_MS) } })
   }
+  const nudge = (dir: number) => {
+    const { settings: st, deviceType: dt } = latest.current
+    setOffset((st.lyricsOffsets[dt] ?? 0) + dir * OFFSET_STEP_MS)
+  }
+  // Hold − or + : one step at once, then steady steps after a short moment (50 ms each, as in the app).
+  const hold = useRef<{ wait: number; repeat: number }>({ wait: 0, repeat: 0 })
+  const stop = () => { clearTimeout(hold.current.wait); clearInterval(hold.current.repeat) }
+  const start = (dir: number) => {
+    stop()
+    nudge(dir)
+    hold.current.wait = window.setTimeout(() => { hold.current.repeat = window.setInterval(() => nudge(dir), 70) }, 400)
+  }
+  useEffect(() => stop, [])
+  const stepButton = (dir: number, label: string, text: string) => (
+    <button aria-label={label}
+      onPointerDown={e => { if (e.button === 0) start(dir) }}
+      onPointerUp={stop} onPointerLeave={stop} onPointerCancel={stop}
+      // Keyboard (Enter/Space) still gives one step per press.
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); nudge(dir) } }}>{text}</button>
+  )
   return (
     <div className="mode-buttons">
       <button className={settings.showLyrics ? 'chip on' : 'chip'} onClick={() => update({ showLyrics: !settings.showLyrics })}>Tekst</button>
       {settings.showLyrics && hasLyrics && (
-        <div className="chip sync" title="Tekst-synk: + viser ordene senere">
-          <button aria-label="Tekst tidligere" onClick={() => nudge(-1)}>−</button>
-          <span>{offset > 0 ? '+' : ''}{offset} ms</span>
-          <button aria-label="Tekst senere" onClick={() => nudge(1)}>+</button>
+        <div className="chip sync" title="Tekst-synk: + viser ordene senere. Hold inne for å gå raskt, trykk på tallet for 0.">
+          {stepButton(-1, 'Tekst tidligere', '−')}
+          <button className="sync-value" title="Trykk for å nullstille" onClick={() => setOffset(0)}>{offset > 0 ? '+' : ''}{offset} ms</button>
+          {stepButton(1, 'Tekst senere', '+')}
         </div>
       )}
       {children}

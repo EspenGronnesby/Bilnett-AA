@@ -107,12 +107,14 @@ function Screen({ settings, update, fullscreen, toggleFullscreen }: Pick<Props, 
         <div className="divider" />
         <div className="row">
           <span className="grow">Fullskjerm <span className="hint">(tast F)</span></span>
-          <button className="pill small" onClick={toggleFullscreen}>{fullscreen ? 'Avslutt' : 'Slå på'}</button>
+          <button className="pill small" data-fullscreen onClick={toggleFullscreen}>{fullscreen ? 'Avslutt' : 'Slå på'}</button>
         </div>
+        <div className="divider" />
+        <Toggle label="Fullskjerm automatisk (ved første klikk eller tast)" on={settings.autoFullscreen} onChange={autoFullscreen => update({ autoFullscreen })} />
         <div className="divider" />
         <Toggle label="Hold skjermen våken" on={settings.keepAwake} onChange={keepAwake => update({ keepAwake })} />
         <div className="divider" />
-        <Toggle label="Skjul knapper og musepeker etter 3 sekunder" on={settings.autoHide} onChange={autoHide => update({ autoHide })} />
+        <Toggle label="Vis knappene bare når musa er over dem" on={settings.autoHide} onChange={autoHide => update({ autoHide })} />
       </div>
     </section>
   )

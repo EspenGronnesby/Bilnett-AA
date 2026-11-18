@@ -180,10 +180,14 @@ body {
 
 /* Shell: settings button in the corner, things that hide when the mouse rests. */
 .fill { position: absolute; inset: 0; }
-.corner { position: absolute; top: calc(16 * var(--u)); right: calc(16 * var(--u)); width: calc(40 * var(--u)); height: calc(40 * var(--u)); }
+/* Top-right corner: a generous area around the buttons, so they show as the mouse comes near. */
+.corner-zone { position: absolute; top: 0; right: 0; padding: calc(16 * var(--u)) calc(16 * var(--u)) calc(32 * var(--u)) calc(48 * var(--u)); }
+.corner-buttons { display: flex; gap: calc(10 * var(--u)); }
+.icon-pill.small-icon { width: calc(40 * var(--u)); height: calc(40 * var(--u)); }
 .hideable { transition: opacity 250ms var(--ease-out); }
 .screen.idle { cursor: none; }
-.screen.idle .hideable { opacity: 0; pointer-events: none; }
+/* Each group of buttons shows only while the mouse is over its own area («zone»). */
+.screen.autohide .zone:not(.awake) .hideable { opacity: 0; pointer-events: none; }
 
 /* Settings sheet: dark scrim, one panel, sections with one title each (no subtitles). */
 .scrim {
@@ -285,15 +289,27 @@ body {
   border: 1px solid hsl(0 0% 100% / 0.16);
 }
 .lyrics-body { flex: 1; min-height: 0; display: flex; }
-.lyrics-foot { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: calc(12 * var(--u)); margin-top: calc(12 * var(--u)); }
+/* The buttons under the lyrics stay on one row (wrapping rows would take the lyrics' room);
+   if they don't fit they scroll sideways instead. */
+.lyrics-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: calc(12 * var(--u));
+  margin-top: calc(12 * var(--u)); flex: none;
+  overflow-x: auto; scrollbar-width: none;
+}
+.lyrics-foot::-webkit-scrollbar { display: none; }
+.lyrics-foot .mode-buttons { flex-wrap: nowrap; flex: none; }
+.lyrics-foot .style-dots { flex: none; }
+.lyrics-foot .chip { white-space: nowrap; flex: none; }
 .lyrics-foot:empty { display: none; }
 .stage.tall .lyrics-foot { justify-content: center; }
 
-.lyrics { width: 100%; height: 100%; display: flex; align-items: center; }
+.lyrics { width: 100%; height: 100%; display: flex; align-items: safe center; overflow: hidden; }
+/* «safe»: content taller than the panel starts at the top (cut at the bottom, never the top). */
 .lyrics.align-center { justify-content: center; text-align: center; }
 .lyrics.align-start { justify-content: flex-start; text-align: left; }
 .lyrics p { text-shadow: 0 2px 12px hsl(0 0% 0% / 0.65); }
-.ly-fade { width: 100%; height: 100%; display: flex; align-items: center; animation: fade-in 400ms var(--ease-out); }
+.ly-fade { width: 100%; height: 100%; display: flex; align-items: safe center; animation: fade-in 400ms var(--ease-out); }
+.ly-fit { width: 100%; }
 .align-center .ly-fade { justify-content: center; }
 
 .ly-status { font-family: 'Grenze Gotisch', serif; font-size: calc(22 * var(--u)); color: hsl(40 27% 94% / 0.4); transition: opacity 600ms var(--ease-out); }
@@ -404,7 +420,8 @@ body {
 button.chip:active, .chip.sync button:active { transform: scale(0.97); }
 .chip.on { background: var(--fg); color: var(--on-pill); }
 .chip.sync { cursor: default; padding: 0 calc(8 * var(--u)); }
-.chip.sync span { min-width: calc(64 * var(--u)); text-align: center; font-variant-numeric: tabular-nums; }
+.chip.sync .sync-value { min-width: calc(80 * var(--u)); font-size: calc(15 * var(--u)); text-align: center; font-variant-numeric: tabular-nums; }
+.chip.sync button { touch-action: none; user-select: none; }
 .chip.sync button { background: none; border: 0; color: inherit; font: inherit; font-size: calc(20 * var(--u)); padding: 0 calc(8 * var(--u)); cursor: pointer; }
 
 @media (prefers-reduced-motion: reduce) {
@@ -412,3 +429,8 @@ button.chip:active, .chip.sync button:active { transform: scale(0.97); }
   .ly-big-line { animation: fade-in 300ms linear; }
   .ly-scroll-list { transition-duration: 0ms; }
 }
+
+/* Landscape cover column: cover + title glide down to the middle while the buttons are hidden. */
+.hero-top { display: grid; justify-items: center; gap: calc(12 * var(--u)); transition: transform 350ms cubic-bezier(0.77, 0, 0.175, 1); }
+.hero-rest { display: grid; justify-items: center; gap: calc(12 * var(--u)); }
+@media (prefers-reduced-motion: reduce) { .hero-top { transition: none; } }

@@ -49,6 +49,36 @@ export function LyricsView({ lyrics, positionMs, offsetMs, style, accent, pulse,
   const synced = state === 'ok' && lines.length > 0
   useFrame(synced)
   const [hiddenFor, setHiddenFor] = useState('')
+  // Fit: a line taller than the panel is shown a bit smaller instead of being cut off.
+  const box = useRef<HTMLDivElement>(null)
+  /** Scale and vertical offset for content taller than the panel (1 = fits as it is). */
+  const [fit, setFit] = useState({ scale: 1, y: 0 })
+  const [boxHeight, setBoxHeight] = useState(0)
+  const fitFor = useRef('')
+  const fitKey = useRef('')
+
+  useEffect(() => {
+    const el = box.current
+    if (!el) return
+    const ro = new ResizeObserver(() => setBoxHeight(el.clientHeight))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [synced])
+
+  // Measured only when the line, style or panel size changes (not every frame).
+  useLayoutEffect(() => {
+    const el = box.current
+    if (!el || fitFor.current === fitKey.current) return
+    fitFor.current = fitKey.current
+    const inner = el.querySelector('.ly-fit') as HTMLElement | null
+    // offsetHeight = the layout height, not changed by the scale transform below.
+    const natural = inner?.offsetHeight ?? 0
+    const room = el.clientHeight - 4
+    // Same line breaks, just smaller, and centred in the panel (never below 55 %).
+    const scale = natural > room ? Math.max(0.55, room / natural) : 1
+    const y = scale < 1 ? Math.max(0, (room - natural * scale) / 2) : 0
+    if (Math.abs(scale - fit.scale) > 0.005 || Math.abs(y - fit.y) > 1) setFit({ scale, y })
+  })
 
   // «Fant ingen tekst»: shown briefly, then it fades away.
   useEffect(() => {
@@ -80,16 +110,24 @@ export function LyricsView({ lyrics, positionMs, offsetMs, style, accent, pulse,
   // The scrolling list keeps its own context, so it gets no pause note.
   const showPause = pause && style !== 'scroll'
   const vars = { '--accent-ly': css(accent) } as CSSProperties
+  fitKey.current = `${showPause ? 'pause' : style}|${idx}|${boxHeight}`
 
   return (
-    <div className={cls} style={vars}>
+    <div className={cls} style={vars} ref={box}>
       <div className="ly-fade" key={showPause ? 'pause' : style}>
-        {showPause ? <PauseNote upcoming={upcoming && upcoming !== '♪' ? upcoming : null} pulse={pulse} />
-          : style === 'scroll' ? <Scroll lines={lines} idx={idx} />
-          : style === 'words' ? <Words lines={lines} idx={idx} now={now} pulse={pulse} />
-          : style === 'karaoke' ? <Karaoke lines={lines} idx={idx} now={now} />
-          : style === 'big' ? <Big lines={lines} idx={idx} />
-          : <Bass lines={lines} idx={idx} accent={accent} pulse={pulse} />}
+        {!showPause && style === 'scroll' ? <Scroll lines={lines} idx={idx} /> : (
+          // Everything but the scrolling list (which fills the panel) shrinks to fit when too tall.
+          <div className="ly-fit" style={fit.scale < 1 ? {
+            transform: `translateY(${fit.y}px) scale(${fit.scale})`,
+            transformOrigin: align === 'center' ? 'top center' : 'top left',
+          } : undefined}>
+            {showPause ? <PauseNote upcoming={upcoming && upcoming !== '♪' ? upcoming : null} pulse={pulse} />
+              : style === 'words' ? <Words lines={lines} idx={idx} now={now} pulse={pulse} />
+              : style === 'karaoke' ? <Karaoke lines={lines} idx={idx} now={now} />
+              : style === 'big' ? <Big lines={lines} idx={idx} />
+              : <Bass lines={lines} idx={idx} accent={accent} pulse={pulse} />}
+          </div>
+        )}
       </div>
     </div>
   )

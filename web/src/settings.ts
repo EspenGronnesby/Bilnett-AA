@@ -10,6 +10,8 @@ export interface Settings {
   keepAwake: boolean
   /** Hide buttons and the mouse pointer after a few seconds without movement. */
   autoHide: boolean
+  /** Go full screen on the first click or key press after the page opens (browsers allow no more). */
+  autoFullscreen: boolean
   /** Volume for «Rave PC», 0–100. */
   volume: number
   /** Let this page be a Spotify speaker («Rave PC»). */
@@ -37,7 +39,7 @@ export type LyricsStyle = typeof LYRICS_STYLES[number]['id']
 
 const KEY = 'rave.settings'
 const DEFAULTS: Settings = {
-  orientation: 'auto', keepAwake: true, autoHide: true, volume: 80, player: true,
+  orientation: 'auto', keepAwake: true, autoHide: true, autoFullscreen: false, volume: 80, player: true,
   showLyrics: true, lyricsStyle: 'scroll', lyricsGlass: true, lyricsOffsets: {}, videoOn: true,
 }
 

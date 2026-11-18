@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { CLIENT_ID, handleCallback, isLoggedIn, login, needsNewPermissions } from './spotify/auth'
 import { useNowPlaying, type NowPlaying as Now } from './spotify/nowPlaying'
 import type { Track } from './spotify/playback'
@@ -15,6 +15,7 @@ import { SettingsSheet } from './ui/Settings'
 import { useFullscreen } from './ui/useFullscreen'
 import { useIdle } from './ui/useIdle'
 import { useWakeLock } from './ui/useWakeLock'
+import { useZone } from './ui/useZone'
 
 export default function App() {
   const [ready, setReady] = useState(false)
@@ -92,10 +93,12 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
   const now = demo ? DEMO : live
   const { status, track } = now
   const { wide } = useScreen(settings.orientation)
-  const [fullscreen, toggleFullscreen] = useFullscreen()
+  const [fullscreen, toggleFullscreen] = useFullscreen(settings.autoFullscreen)
   const [settingsOpen, setSettingsOpen] = useState(() => demo && new URLSearchParams(location.search).has('settings'))
   useWakeLock(settings.keepAwake)
+  // The mouse pointer hides after 3 s still; the buttons only show over their own area.
   const idle = useIdle(settings.autoHide && !settingsOpen)
+  const autoHide = settings.autoHide && !settingsOpen
   const problem = playerProblemText(now)
   const lyrics = useLyrics(track)
   const coverColors = useCoverColors(track?.coverUrl ?? null)
@@ -108,7 +111,7 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
 
   // Everything below shares the settings button and sheet.
   const shell = (content: ReactNode, cover: string | null = null) => (
-    <div className={idle ? 'screen idle' : 'screen'}>
+    <div className={`screen${idle ? ' idle' : ''}${autoHide ? ' autohide' : ''}`}>
       <Backdrop url={cover} colors={coverColors} covered={showVideo} />
       {settings.videoOn && videos.current && (
         <VideoLayer key={videos.current.url} url={videos.current.url} playing={status === 'playing'}
@@ -117,9 +120,17 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
       {/* Dark veil over the video so cover, lyrics and buttons stay readable (as in the app). */}
       {showVideo && <div className="veil" aria-hidden />}
       {content}
-      <button className="icon-pill corner hideable" aria-label="Innstillinger" title="Innstillinger" onClick={() => setSettingsOpen(true)}>
+      <Zone className="corner-zone">
+      <div className="corner-buttons hideable">
+        <button className="icon-pill small-icon" data-fullscreen aria-label={fullscreen ? 'Avslutt fullskjerm' : 'Fullskjerm'}
+          title={fullscreen ? 'Avslutt fullskjerm (F)' : 'Fullskjerm (F)'} onClick={toggleFullscreen}>
+          <svg viewBox="0 0 24 24" aria-hidden><path d={fullscreen ? EXIT_FULL : ENTER_FULL} /></svg>
+        </button>
+      <button className="icon-pill small-icon" aria-label="Innstillinger" title="Innstillinger" onClick={() => setSettingsOpen(true)}>
         <svg viewBox="0 0 24 24" aria-hidden><path d={GEAR} /></svg>
       </button>
+      </div>
+      </Zone>
       {settingsOpen && (
         <SettingsSheet now={now} settings={settings} update={updateSettings}
           fullscreen={fullscreen} toggleFullscreen={toggleFullscreen} onClose={() => setSettingsOpen(false)} />
@@ -164,13 +175,13 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
       {wide ? (
         // Landscape: cover with title and buttons; lyrics in a panel on the right (as in the car).
         <main className={lyricsOn ? 'stage wide split' : 'stage wide'}>
-          <section className="hero">
-            <Cover url={track.coverUrl} />
-            <Info track={track} compact />
-            <div className="hideable"><Controls now={now} /></div>
-            {!lyricsOn && <div className="hideable">{modes}</div>}
-            {problem && <p className="notice hideable">{problem}</p>}
-          </section>
+          <HeroColumn autoHide={autoHide}
+            top={<><Cover url={track.coverUrl} /><Info track={track} compact /></>}
+            rest={<>
+              <div className="hideable"><Controls now={now} /></div>
+              {!lyricsOn && <div className="hideable">{modes}</div>}
+              {problem && <p className="notice hideable">{problem}</p>}
+            </>} />
           {lyricsOn && panel('start', modes)}
         </main>
       ) : (
@@ -181,11 +192,11 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
             <Info track={track} compact={false} />
           </section>
           {lyricsOn && panel('center')}
-          <section className="hero">
+          <Zone className="hero">
             <div className="hideable"><Controls now={now} /></div>
             <div className="hideable">{modes}</div>
             {problem && <p className="notice hideable">{problem}</p>}
-          </section>
+          </Zone>
         </main>
       )}
       {now.playerProblem === 'autoplay' && (
@@ -196,6 +207,9 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
   )
 }
 
+// Material «fullscreen» / «fullscreen_exit» icons (Apache-2.0).
+const ENTER_FULL = 'M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z'
+const EXIT_FULL = 'M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z'
 const GEAR = 'M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z' // Material «settings» icon (Apache-2.0)
 
 /**
@@ -227,6 +241,39 @@ function Cover({ url }: { url: string | null }) {
     <div className="cover">
       {url ? <img src={url} alt="" /> : <div className="cover-empty">♪</div>}
     </div>
+  )
+}
+
+/** An area whose buttons only show while the mouse is over it (see useZone). */
+function Zone({ className, children }: { className: string; children: ReactNode }) {
+  const [awake, zone] = useZone()
+  return <section className={`${className} zone${awake ? ' awake' : ''}`} {...zone}>{children}</section>
+}
+
+/**
+ * Landscape cover column. When the buttons hide (mouse still), cover and title glide down by half
+ * the buttons' height, so they sit centred next to the lyrics; they glide back when the mouse moves.
+ * (Espen asked for this, 2026-11-18.)
+ */
+function HeroColumn({ autoHide, top, rest }: { autoHide: boolean; top: ReactNode; rest: ReactNode }) {
+  const [awake, zone] = useZone()
+  const restRef = useRef<HTMLDivElement>(null)
+  const [restHeight, setRestHeight] = useState(0)
+  useEffect(() => {
+    const el = restRef.current
+    if (!el) return
+    const ro = new ResizeObserver(() => setRestHeight(el.offsetHeight))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  // The gap between the two parts counts too (it disappears with the buttons).
+  const gap = restRef.current ? parseFloat(getComputedStyle(restRef.current.parentElement!).rowGap) || 0 : 0
+  const shift = autoHide && !awake ? (restHeight + gap) / 2 : 0
+  return (
+    <section className={awake ? 'hero zone awake' : 'hero zone'} {...zone}>
+      <div className="hero-top" style={{ transform: shift ? `translateY(${shift}px)` : undefined }}>{top}</div>
+      <div className="hero-rest" ref={restRef}>{rest}</div>
+    </section>
   )
 }
 
