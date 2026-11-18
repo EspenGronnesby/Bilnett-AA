@@ -376,7 +376,7 @@ class GenreDetector {
         if (now - lastLog >= 5_000L) {
             lastLog = now
             RaveLog.d("RaveGenre", "nå=${genre.label} apple=$appleName bpm=%.0f grit=%.2f sub=%.2f kick/s=%.2f snare/s=%.2f rock=%.2f refreng=%.2f → lyd sier ${audioGuess(f.bpm).label}"
-                .format(f.bpm, grit, sub, kickRate, snareRate, rockness, chorus))
+                .fmt(f.bpm, grit, sub, kickRate, snareRate, rockness, chorus))
         }
         manual?.let { if (it != genre) commit(it, now, "valgt"); return genre }
         // Metadata is sure (e.g. rap): that genre the whole song, the sound can't turn it into hardstyle.
@@ -473,7 +473,7 @@ class GenreDetector {
         announcedAt = now; reason = why
         if (g == Genre.HARDSTYLE && why != "valgt") hardstyleThisTrack = true
         RaveLog.d("RaveGenre", "→ ${g.label} ($why) apple=$appleName grit=%.2f sub=%.2f kick/s=%.2f snare/s=%.2f"
-            .format(grit, sub, kickRate, snareRate))
+            .fmt(grit, sub, kickRate, snareRate))
     }
 
     /** 0..1 progress of the soft change from [previous] to [genre]. */
@@ -827,7 +827,7 @@ class HardstyleStructure {
                     val fullEnough = !warmedUp || (brightRel >= PartyTuning.confirmBrightDb && subFullRel >= PartyTuning.confirmSubDb)
                     if (!fullEnough) {
                         dropKind = DropKind.NONE; subMin = sub1
-                        RaveLog.d("RaveGenre", "ikke drop: diskant/vokal %.1f dB under toppen".format(-brightRel))
+                        RaveLog.d("RaveGenre", "ikke drop: diskant/vokal %.1f dB under toppen".fmt(-brightRel))
                         enter(SongPart.BREAKDOWN, now, "ikke fullt nok for drop")
                     } else if (sub1 - dropBaseline >= 3f || atLoudLevel ||
                         (printOk && !kickGone && printLikeRel >= PartyTuning.printConfirm)) {
@@ -841,18 +841,18 @@ class HardstyleStructure {
                             else -> DropKind.MIDDLE
                         }
                         show(dropKind.label, now, always = true)
-                        RaveLog.d("RaveGenre", "ekte drop #$realDrops → ${dropKind.label} (%.0f%% ut, sub +%.1f dB)".format(songFraction * 100f, sub1 - dropBaseline))
+                        RaveLog.d("RaveGenre", "ekte drop #$realDrops → ${dropKind.label} (%.0f%% ut, sub +%.1f dB)".fmt(songFraction * 100f, sub1 - dropBaseline))
                     } else {
                         boostNext = true
                         dropKind = DropKind.NONE
                         // Raw: screeches over a held-back low end is the anti-climax, not a failed drop.
                         if (f.screech > .35f && grit1 > .25f) {
-                            RaveLog.d("RaveGenre", "ANTI-CLIMAX (sub bare +%.1f dB, screech %.2f)".format(sub1 - dropBaseline, f.screech))
+                            RaveLog.d("RaveGenre", "ANTI-CLIMAX (sub bare +%.1f dB, screech %.2f)".fmt(sub1 - dropBaseline, f.screech))
                             enter(SongPart.ANTI_CLIMAX, now, "anti-climax")
                         } else {
                             // One banner per fake series, not one every second.
                             show("FAKE DROP", now, always = now - lastFakeAt > 8_000L)
-                            RaveLog.d("RaveGenre", "FAKE DROP (sub bare +%.1f dB etter 1 takt)".format(sub1 - dropBaseline))
+                            RaveLog.d("RaveGenre", "FAKE DROP (sub bare +%.1f dB etter 1 takt)".fmt(sub1 - dropBaseline))
                             enter(if (kickGone) SongPart.BREAKDOWN else SongPart.BUILDUP, now, "fake drop")
                         }
                         lastFakeAt = now
@@ -891,7 +891,7 @@ class HardstyleStructure {
                             enter(SongPart.BUILDUP, now, "lite sub, full diskant")
                         } else if (dullSince > 0L && now - dullSince >= PartyTuning.dullBars * barMs) {
                             dropKind = DropKind.NONE; dropBoost = 0f; buildSigSince = 0L; dullSince = 0L
-                            enter(SongPart.BREAKDOWN, now, "diskant/vokal ned %.1f dB".format(brightRel))
+                            enter(SongPart.BREAKDOWN, now, "diskant/vokal ned %.1f dB".fmt(brightRel))
                         }
                     }
                 }
@@ -927,7 +927,7 @@ class HardstyleStructure {
                     dropKind = DropKind.PENDING; introOver = true
                     forcedUntil = 0L   // a drop heard out of a corrected part takes over at once
                     voteBoundary(f.beat)
-                    enter(SongPart.DROP, now, "sub +%.1f dB".format(subHitRel))
+                    enter(SongPart.DROP, now, "sub +%.1f dB".fmt(subHitRel))
                 } else {
                     val next = when {
                         remainingMs in 0L..(16 * barMs).toLong() && now - trackStart > 30_000L -> SongPart.OUTRO
@@ -958,10 +958,10 @@ class HardstyleStructure {
         val phase = phaseVotes.indices.maxByOrNull { phaseVotes[it] } ?: 0
         val pos = ((f.beat - phase) % 32 + 32) % 32
         val barInPhrase = pos / 4 + 1
-        val phrase = Math.floorDiv(f.beat - phase, 32) + 1
+        val phrase = (f.beat - phase).floorDiv(32) + 1
         val partName = when (part) {
             SongPart.DROP -> if (dropKind == DropKind.PENDING) "DROP?" else dropKind.label.ifBlank { "DROP" }
-            SongPart.BUILDUP -> "BUILD-UP %.0f%%".format(build * 100f)
+            SongPart.BUILDUP -> "BUILD-UP %.0f%%".fmt(build * 100f)
             SongPart.VOCAL -> "BREAKDOWN (SYNG?)"
             else -> part.label.uppercase()
         }
@@ -973,7 +973,7 @@ class HardstyleStructure {
             lastBarLogged = bar
             // Names go in as %s arguments: a name containing "%" must never be read as a format code.
             RaveLog.d("RaveGenre", "takt %d/8 frase %d | %s | sub %+.1f dB (treff %+.1f) diskant %+.1f dB build %.0f%% grit %.2f snare/s %.1f klar=%b"
-                .format(barInPhrase, phrase, partName, subRel, subHitRel, airTrend, build * 100f, grit1, snareRate, primed))
+                .fmt(barInPhrase, phrase, partName, subRel, subHitRel, airTrend, build * 100f, grit1, snareRate, primed))
         }
 
         val boost = dropBoost
@@ -1076,7 +1076,7 @@ class HardSubDetector {
             decidedThisTrack = true
             if (candidate == sub) return sub
             sub = candidate; changedAt = now
-            RaveLog.d("RaveGenre", "undersjanger → ${sub.label} (bpm=%.0f grit=%.2f screech=%.2f)".format(bpm, grit, screech))
+            RaveLog.d("RaveGenre", "undersjanger → ${sub.label} (bpm=%.0f grit=%.2f screech=%.2f)".fmt(bpm, grit, screech))
         }
         return sub
     }

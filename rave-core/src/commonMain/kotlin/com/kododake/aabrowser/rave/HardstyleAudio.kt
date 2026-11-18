@@ -97,9 +97,9 @@ class HardstyleAudio {
      * Tempo from the Mac's style teacher (TempoCNN on the preview), or 0 = unknown. Kept across
      * [reset] (mic ↔ visualizer switches); set again at every new song.
      */
-    @Synchronized fun setTempoHint(bpm: Float) { beats.setHint(bpm) }
+    @JvmSync fun setTempoHint(bpm: Float) { beats.setHint(bpm) }
 
-    @Synchronized fun reset() {
+    @JvmSync fun reset() {
         spectrumAnalyzer.reset()
         peak = 8f; average = 0f; lastBass = 0f; lastAt = 0; lastKick = -1000; lastBurst = -5000
         shortAverage = 0f; longAverage = 0f; beatPeriod = 0f
@@ -109,7 +109,7 @@ class HardstyleAudio {
         beats.reset(); fluxAvg = 0f; lastCandidate = -1000
         frame = HardstyleFrame()
     }
-    @Synchronized fun accept(fft: ByteArray, sampleRate: Int, now: Long): HardstyleFrame {
+    @JvmSync fun accept(fft: ByteArray, sampleRate: Int, now: Long): HardstyleFrame {
         if (sampleRate <= 0 || fft.size < 4) return HardstyleFrame()
         var low = 0f; var bass = 0f; var high = 0f; var mid = 0f; var snareBand = 0f; var air = 0f; var scr = 0f
         var nl = 0; var nb = 0; var nh = 0; var nm = 0; var ns = 0; var na = 0; var nsc = 0

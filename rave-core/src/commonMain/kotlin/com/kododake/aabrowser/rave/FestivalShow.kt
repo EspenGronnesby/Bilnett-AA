@@ -61,7 +61,7 @@ class SyncTapper {
     fun tap(now: Long, f: HardstyleFrame): Int? {
         val p = f.beatPeriod
         if (f.beatConfidence < BEAT_CLOCK_MIN_CONFIDENCE || p <= 0f || f.beatAt <= 0L) return null
-        val raw = Math.floorMod(now - f.beatAt, p.toLong()).toFloat()
+        val raw = (now - f.beatAt).mod(p.toLong()).toFloat()
         errors += if (raw > p / 2f) raw - p else raw     // −p/2..p/2: heard beat vs our grid
         if (errors.size < SYNC_TAPS) return null
         val median = errors.sorted()[errors.size / 2]
