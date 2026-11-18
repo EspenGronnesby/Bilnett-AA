@@ -5,6 +5,27 @@
 
 ---
 
+### Ikke legg inn bevegelse/effekter eieren ikke har bedt om
+**Dato:** 2026-11-18
+**Kategori:** Party / UI
+**Berørte filer:** `rave/party/GenreRules.kt` (`look`, `swayX`/`swayRot`), `rave/RaveActivity.kt` (`sceneShake`), `rave/FestivalShow.kt` (`GENRE_SWAY_DP`/`GENRE_SWAY_DEG`)
+
+**Problem:** I Party-modus vugget hele scenen med albumcoveret fra side til side og vippet litt ved reggae. Eieren hadde ikke bedt om det. Han sa: «en ting jeg ikke liker er at coveret går side til side, ta dette vekk» og «jeg spurte aldri om dette».
+
+**Årsak:** En tidligere økt la inn bevegelsen som en del av «sjangerfølelse» (reggae svaier, reggaeton hopper). Den ble ikke foreslått først, bare implementert. Bevegelsen gikk via `swayX`/`swayRot` i `sceneShake`.
+
+**Løsning:** Fjernet `swayX`/`swayRot` fra `sceneShake` i `RaveActivity` (commit `7ac7831`). Reggaeton-hoppet (`bounceY`) og drop-rist ble beholdt. `GenreRules` beregner fortsatt `swayX` (tester avhenger av det), men det brukes ikke.
+
+**Forebygging:**
+- Bevegelse av cover, tekst, knapper eller hele scenen merkes straks. Eieren har tidligere sagt nei til spinning/spiral. Slike effekter legges bare inn når han har bedt om dem, eller etter at du har spurt konkret («skal coveret vugge til reggae?»).
+- Ved kreative tolkninger («sjangerfølelse» og lignende): foreslå, ikke implementer stille. Skriv i oppsummeringen hva som beveger seg.
+- Sjekk «Beslutninger» i `.claude/CLAUDE.md` og memory før du legger til visuelle effekter.
+- Hvis noe uønsket dukker opp: grep etter `translationX`/`rotationZ` i `sceneShake`, fjern bruken, og behold resten.
+
+**🟢 Enkelt forklart:** Appen fikk en egen bevegelse som eieren ikke ville ha. Den ble fjernet, og resten av effektene er like. Lærdommen er å spørre før man legger til noe som beveger seg på skjermen.
+
+---
+
 ### Rave krasjet ved ny sjanger: `getValue` på map nøklet på enum
 **Dato:** 2026-11-06
 **Kategori:** Android / Kotlin

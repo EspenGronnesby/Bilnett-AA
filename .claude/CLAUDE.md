@@ -120,6 +120,9 @@ Terskler er kvalifiserte gjetninger, ikke målt — juster etter Espens tilbakem
 - **Ingen fartssperre.** Rave, musikkvideo, strobe og shake skal virke under kjøring.
 - **Analytics av** (`UmamiTracker.ENABLED = false`). Ikke slå på igjen.
 - Rave har eget ikon; nettleseren beholder originalikonet.
+- **Ingen bevegelse Espen ikke har bedt om.** Coveret skal ikke vugge/vippe fra side til side
+  (reggae-sway fjernet 2026-11-18), ingen spinning/spiral, knapper og tekst står stille.
+  Nye bevegelser av cover/scene: spør først.
 
 ## Git
 
