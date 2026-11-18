@@ -11,6 +11,7 @@ import { useVideos } from './video/useVideos'
 import { VideoLayer } from './video/VideoLayer'
 import { Controls, playerProblemText } from './ui/Controls'
 import { useScreen } from './ui/scale'
+import { LydTest } from './party/LydTest'
 import { SettingsSheet } from './ui/Settings'
 import { useFullscreen } from './ui/useFullscreen'
 import { useIdle } from './ui/useIdle'
@@ -26,6 +27,8 @@ export default function App() {
     handleCallback().then(err => { setLoginError(err); setReady(true) })
   }, [])
 
+  // Party step P0: /?lydtest checks whether the page can hear the music (works on the live site).
+  if (new URLSearchParams(location.search).has('lydtest')) return <LydTestScreen />
   // Dev only: /?demo shows a made-up song, to check the layout without logging in.
   if (import.meta.env.DEV && new URLSearchParams(location.search).has('demo')) return <NowPlaying demo />
   if (!CLIENT_ID) {
@@ -36,6 +39,11 @@ export default function App() {
     return <Login error={loginError ?? (needsNewPermissions() ? 'Rave trenger ny tilgang for å kunne spille musikk. Logg inn én gang til.' : null)} />
   }
   return <NowPlaying />
+}
+
+function LydTestScreen() {
+  useScreen()
+  return <LydTest />
 }
 
 function Login({ error }: { error: string | null }) {
