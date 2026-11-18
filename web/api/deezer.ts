@@ -2,6 +2,8 @@
 // the beat, as in the app's DeezerLookup). Deezer sends no CORS headers. Fixed operations only:
 //   /api/deezer?op=search&q=<artist title>   → search results
 //   /api/deezer?op=track&id=<number>         → one track (bpm, gain, …)
+//   /api/deezer?op=artists&q=<name>          → artist search
+//   /api/deezer?op=related&id=<number>       → similar artists
 
 const MAX_QUERY = 200
 const TIMEOUT_MS = 4_000
@@ -24,6 +26,16 @@ export async function GET(request: Request): Promise<Response> {
     const q = (url.searchParams.get('q') ?? '').trim()
     if (!q || q.length > MAX_QUERY) return json('{"error":"bad query"}', 400)
     target = `https://api.deezer.com/search?limit=10&q=${encodeURIComponent(q)}`
+  } else if (op === 'artists') {
+    // Artist search (to find the right artist id for «similar artists»).
+    const q = (url.searchParams.get('q') ?? '').trim()
+    if (!q || q.length > MAX_QUERY) return json('{"error":"bad query"}', 400)
+    target = `https://api.deezer.com/search/artist?limit=10&q=${encodeURIComponent(q)}`
+  } else if (op === 'related') {
+    // Similar artists, used for «Vibe» videos when a song has none of its own.
+    const id = url.searchParams.get('id') ?? ''
+    if (!/^\d{1,15}$/.test(id)) return json('{"error":"bad id"}', 400)
+    target = `https://api.deezer.com/artist/${id}/related?limit=10`
   } else if (op === 'track') {
     const id = url.searchParams.get('id') ?? ''
     if (!/^\d{1,15}$/.test(id)) return json('{"error":"bad id"}', 400)

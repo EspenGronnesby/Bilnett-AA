@@ -22,6 +22,8 @@ export interface Settings {
   lyricsGlass: boolean
   /** Lyrics sync in ms per kind of device (the phone lags differently than this PC). */
   lyricsOffsets: Record<string, number>
+  /** Silent music video behind everything (the «Video» button). */
+  videoOn: boolean
 }
 
 export const LYRICS_STYLES = [
@@ -36,7 +38,7 @@ export type LyricsStyle = typeof LYRICS_STYLES[number]['id']
 const KEY = 'rave.settings'
 const DEFAULTS: Settings = {
   orientation: 'auto', keepAwake: true, autoHide: true, volume: 80, player: true,
-  showLyrics: true, lyricsStyle: 'scroll', lyricsGlass: true, lyricsOffsets: {},
+  showLyrics: true, lyricsStyle: 'scroll', lyricsGlass: true, lyricsOffsets: {}, videoOn: true,
 }
 
 function read(): Settings {

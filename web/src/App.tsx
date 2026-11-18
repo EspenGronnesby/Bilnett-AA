@@ -5,7 +5,10 @@ import type { Track } from './spotify/playback'
 import { LyricsPanel, ModeButtons } from './lyrics/LyricsPanel'
 import { useLyrics } from './lyrics/useLyrics'
 import { useSettings } from './settings'
-import { accentOf, useCoverColors } from './ui/colors'
+import { accentOf, css, useCoverColors, type Rgb } from './ui/colors'
+import { SOURCE_LABEL } from './video/apple'
+import { useVideos } from './video/useVideos'
+import { VideoLayer } from './video/VideoLayer'
 import { Controls, playerProblemText } from './ui/Controls'
 import { useScreen } from './ui/scale'
 import { SettingsSheet } from './ui/Settings'
@@ -69,7 +72,7 @@ const noop = () => {}
 const DEMO: Now = {
   source: 'remote',
   status: 'playing',
-  track: { id: 'demo', title: 'Blinding Lights', artist: 'The Weeknd', album: '', coverUrl: DEMO_COVER, durationMs: 200_040, kind: 'track' },
+  track: { id: 'demo', title: 'Blinding Lights', artist: 'The Weeknd', album: 'After Hours', coverUrl: DEMO_COVER, durationMs: 200_040, kind: 'track' },
   device: { id: 'phone', name: 'Pixel 9', type: 'Smartphone', volume: 70, supportsVolume: true },
   // Starts a minute into the song (or ?at=<seconds>) and runs in real time.
   positionMs: (() => { const t0 = performance.now(); const at = Number(new URLSearchParams(location.search).get('at') ?? 60) * 1000; return () => at + performance.now() - t0 })(),
@@ -95,7 +98,10 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
   const idle = useIdle(settings.autoHide && !settingsOpen)
   const problem = playerProblemText(now)
   const lyrics = useLyrics(track)
-  const accent = accentOf(useCoverColors(track?.coverUrl ?? null))
+  const coverColors = useCoverColors(track?.coverUrl ?? null)
+  const accent = accentOf(coverColors)
+  const videos = useVideos(track, status === 'playing', settings.videoOn)
+  const showVideo = settings.videoOn && videos.current !== null && videos.shown
 
   if (status === 'loggedOut') return <Login error="Innloggingen gikk ut. Logg inn igjen." />
   if (status === 'loading') return <div className="screen" />
@@ -103,7 +109,13 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
   // Everything below shares the settings button and sheet.
   const shell = (content: ReactNode, cover: string | null = null) => (
     <div className={idle ? 'screen idle' : 'screen'}>
-      <Backdrop url={cover} />
+      <Backdrop url={cover} colors={coverColors} covered={showVideo} />
+      {settings.videoOn && videos.current && (
+        <VideoLayer key={videos.current.url} url={videos.current.url} playing={status === 'playing'}
+          visible={videos.shown} onFrame={videos.onFrame} onFail={videos.onFail} />
+      )}
+      {/* Dark veil over the video so cover, lyrics and buttons stay readable (as in the app). */}
+      {showVideo && <div className="veil" aria-hidden />}
       {content}
       <button className="icon-pill corner hideable" aria-label="Innstillinger" title="Innstillinger" onClick={() => setSettingsOpen(true)}>
         <svg viewBox="0 0 24 24" aria-hidden><path d={GEAR} /></svg>
@@ -128,7 +140,18 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
   const offsetMs = settings.lyricsOffsets[deviceType] ?? 0
   const hasLyrics = lyrics.state === 'ok' && lyrics.lines.length > 0
   const lyricsOn = settings.showLyrics && track.kind === 'track'
-  const modes = <ModeButtons settings={settings} update={updateSettings} deviceType={deviceType} hasLyrics={hasLyrics} />
+  const modes = (
+    <ModeButtons settings={settings} update={updateSettings} deviceType={deviceType} hasLyrics={hasLyrics}>
+      {videos.current && (
+        <button className={settings.videoOn ? 'chip on' : 'chip'} onClick={() => updateSettings({ videoOn: !settings.videoOn })}>Video</button>
+      )}
+      {settings.videoOn && videos.clips.length > 1 && videos.current && (
+        <button className="chip" onClick={videos.next}>
+          Neste · {videos.index + 1}/{videos.clips.length} · {SOURCE_LABEL[videos.current.source]}
+        </button>
+      )}
+    </ModeButtons>
+  )
   // Lyrics have no real «hit» signal until Party listens to the sound (later phase).
   const noPulse = () => 0
   const panel = (align: 'center' | 'start', footer?: ReactNode) => (
@@ -175,12 +198,26 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
 
 const GEAR = 'M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z' // Material «settings» icon (Apache-2.0)
 
-/** Blurred, dimmed album cover behind everything (still, no drifting). */
-function Backdrop({ url }: { url: string | null }) {
-  if (!url) return null
+/**
+ * The background, as in the app: the blurred, dimmed album cover drifting slowly (Ken Burns,
+ * 32 s round), three soft lights in the cover's colours drifting on their own paths, and a
+ * vignette. All CSS animation, so it costs next to nothing to draw.
+ */
+function Backdrop({ url, colors, covered }: { url: string | null; colors: Rgb[]; covered: boolean }) {
+  // Under a playing video the background can't be seen: stop its animations (saves the GPU).
   return (
-    <div className="backdrop" aria-hidden>
-      <img src={url} alt="" />
+    <div className={`backdrop${url ? ' with-cover' : ''}${covered ? ' covered' : ''}`} aria-hidden>
+      {url && <img src={url} alt="" />}
+      <div className="lights">
+        {colors.slice(0, 3).map((c, i) => (
+          // Same phase offset per light as the app (a = t + i·2.1 over a 32 s round).
+          <div key={i} className="light-x" style={{ animationDelay: `${-(i * 2.1) / (2 * Math.PI) * 32}s` }}>
+            <div className="light-y" style={{ animationDelay: `${-(i * 2.1 * 1.3) / (2 * Math.PI) * 32}s` }}>
+              <div className="light" style={{ background: `radial-gradient(closest-side, ${css(c, 0.45)}, transparent)` }} />
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -193,11 +230,20 @@ function Cover({ url }: { url: string | null }) {
   )
 }
 
+/** The first song since the page opened gets no intro; a song gets it once (as in the app). */
+let firstTrackId: string | null = null
+let introPlayedFor: string | null = null
+
 function Info({ track, compact }: { track: Track; compact: boolean }) {
+  firstTrackId ??= track.id
+  // New song: title fades in and glides up, artist follows a moment later. Re-showing the same
+  // song (turning the screen, switching layout) does not play it again.
+  const [intro] = useState(() => track.id !== firstTrackId && track.id !== introPlayedFor)
+  useEffect(() => { introPlayedFor = track.id }, [track.id])
   return (
-    <div className={compact ? 'info compact' : 'info'}>
-      <h1 className="song">{track.title}</h1>
-      {track.artist && <p className="artist">{track.artist}</p>}
+    <div className={compact ? 'info compact' : 'info'} key={track.id}>
+      <h1 className={intro ? 'song intro' : 'song'}>{track.title}</h1>
+      {track.artist && <p className={intro ? 'artist intro late' : 'artist'}>{track.artist}</p>}
     </div>
   )
 }

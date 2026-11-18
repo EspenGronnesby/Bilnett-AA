@@ -56,19 +56,56 @@ body {
 }
 .pill:active { transform: scale(0.97); }
 
-/* Blurred cover behind everything, dark toning and vignette on top (as in the app, but still). */
-.backdrop { position: absolute; inset: 0; }
+/* Background as in the app: blurred cover with Ken Burns drift, coloured lights, vignette. */
+.backdrop { position: absolute; inset: 0; overflow: hidden; z-index: 0; isolation: isolate; } /* own layer: its lights never cover the content */
 .backdrop img {
   position: absolute; inset: 0; width: 100%; height: 100%;
-  object-fit: cover; transform: scale(1.2);
+  object-fit: cover;
   filter: blur(calc(40 * var(--u))) saturate(1.1);
   opacity: 0.6;
+  /* zoom 1.2 + .04·sin t, drift 3 % in a slow circle; one round = 32 s (the app's light cycle). */
+  animation: ken-burns 32s linear infinite;
 }
+@keyframes ken-burns {
+  0%    { transform: translate(3%, 0) scale(1.2); }
+  25%   { transform: translate(0, 3%) scale(1.24); }
+  50%   { transform: translate(-3%, 0) scale(1.2); }
+  75%   { transform: translate(0, -3%) scale(1.16); }
+  100%  { transform: translate(3%, 0) scale(1.2); }
+}
+/* Dark toning over the cover so cover, text and buttons stay on top. */
+.backdrop.with-cover::before { content: ''; position: absolute; inset: 0; background: hsl(0 0% 0% / 0.38); z-index: 1; }
 .backdrop::after {
-  content: ''; position: absolute; inset: 0;
-  background:
-    radial-gradient(ellipse at center, transparent 0%, hsl(0 0% 0% / 0.65) 80%),
-    hsl(0 0% 0% / 0.38);
+  content: ''; position: absolute; inset: 0; z-index: 3;
+  background: radial-gradient(ellipse at center, transparent 0%, hsl(0 0% 0% / 0.65) 80%);
+}
+/* Three lights: x follows cos t, y follows sin 1.3t (lightTravel .22 of the screen, as in the app). */
+.lights { position: absolute; inset: 0; z-index: 2; }
+.light-x { position: absolute; inset: 0; animation: light-x 16s ease-in-out infinite alternate; }
+.light-y { position: absolute; inset: 0; animation: light-y 12.3s ease-in-out infinite alternate; }
+@keyframes light-x { from { transform: translateX(-22%); } to { transform: translateX(22%); } }
+@keyframes light-y { from { transform: translateY(-19.8%); } to { transform: translateY(19.8%); } }
+.light {
+  position: absolute; left: 50%; top: 50%;
+  width: calc(min(100vw, 100vh) * 1.2); height: calc(min(100vw, 100vh) * 1.2);
+  transform: translate(-50%, -50%);
+}
+.backdrop.with-cover .light { opacity: 0.55; }
+.backdrop.covered img, .backdrop.covered .light-x, .backdrop.covered .light-y { animation-play-state: paused; }
+.backdrop.covered { visibility: hidden; }
+
+/* Music video behind everything (shown once its first frame is there), with a dark veil on top. */
+.clip { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; }
+.clip.shown { opacity: 1; }
+.veil { position: absolute; inset: 0; background: hsl(0 0% 0% / 0.55); }
+
+/* New song: title and artist fade in and glide up 12 dp (artist a moment later), as in the app. */
+.intro { animation: intro-in 720ms var(--ease-out) both; }
+.intro.late { animation-delay: 120ms; }
+@keyframes intro-in { from { opacity: 0; transform: translateY(calc(12 * var(--u))); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .backdrop img, .light-x, .light-y { animation: none; }
+  .intro { animation: fade-in 400ms linear both; }
 }
 
 .stage { position: absolute; inset: 0; padding: calc(24 * var(--u)); display: grid; place-items: center; }

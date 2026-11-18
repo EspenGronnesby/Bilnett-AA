@@ -106,11 +106,13 @@ export function LyricsPanel({ lyrics, positionMs, offsetMs, settings, update, ac
 }
 
 /** «Tekst» on/off and, while lyrics show, the sync buttons (− 0 ms +) for this kind of device. */
-export function ModeButtons({ settings, update, deviceType, hasLyrics }: {
+export function ModeButtons({ settings, update, deviceType, hasLyrics, children }: {
   settings: Settings
   update: (change: Partial<Settings>) => void
   deviceType: string
   hasLyrics: boolean
+  /** More buttons after these (the video buttons). */
+  children?: React.ReactNode
 }) {
   const offset = settings.lyricsOffsets[deviceType] ?? 0
   const nudge = (dir: number) => {
@@ -127,6 +129,7 @@ export function ModeButtons({ settings, update, deviceType, hasLyrics }: {
           <button aria-label="Tekst senere" onClick={() => nudge(1)}>+</button>
         </div>
       )}
+      {children}
     </div>
   )
 }
