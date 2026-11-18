@@ -1524,6 +1524,8 @@ class RaveActivity : ComponentActivity() {
                         center, coverRadius, audioIntensity, volume, particles = partyProfile.particles,
                         density = partyProfile.density, softness = partyProfile.softness)
                 }
+                // Koko the ghost drops by now and then and does his St. James Infirmary glide.
+                RaveDancer(Modifier.fillMaxSize(), { displayedFrame }, volume, playing)
             }
             // Same layout with or without video: cover, title and controls stay in place,
             // the music video just plays behind them with a dark veil for readability.
