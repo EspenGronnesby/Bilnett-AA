@@ -1,12 +1,11 @@
 package com.kododake.aabrowser.rave
 
-import android.util.Log
 import kotlin.math.exp
 import kotlin.math.log10
 import kotlin.math.max
 
 /** Party profiles. Hardstyle is the original tuning; the others reshape what the visuals react to. */
-internal enum class Genre(val label: String) {
+enum class Genre(val label: String) {
     HARDSTYLE("HARDSTYLE"), RAP("RAP"), ROCK("ROCK"), EDM("EDM"), STANDARD("ROLIG"),
     /** Pop: calm in the verses, a bit more push in the chorus (see [GenreDetector.chorus]). */
     POP("POP"),
@@ -16,13 +15,13 @@ internal enum class Genre(val label: String) {
 }
 
 /** How strong each effect is per genre (1 = original hardstyle strength). */
-internal data class PartyProfile(
+data class PartyProfile(
     val spike: Float, val particles: Float, val shake: Float, val strobe: Float,
     /** Particle count multiplier. */ val density: Float = 1f,
     /** 1 = sharp sparks (hardstyle); higher = bigger, softer, calmer bokeh. */ val softness: Float = 1f
 )
 
-internal fun Genre.profile(): PartyProfile = when (this) {
+fun Genre.profile(): PartyProfile = when (this) {
     // Hardstyle: maximum chaos on the raw drop (shake and spikes above the original strength).
     Genre.HARDSTYLE -> PartyProfile(spike = 1.15f, particles = 1.15f, shake = 1.35f, strobe = 1f)
     // Rap: no hardstyle sparks — a few big, slow, soft lights drifting out like smoke.
@@ -40,7 +39,7 @@ internal fun Genre.profile(): PartyProfile = when (this) {
  * each genre: `kick` drives pump, `heavy` drives big spikes/drop effects, and ripples fire on
  * `bass > .72 && grit > .35`. Hardstyle passes through untouched.
  */
-internal fun Genre.shape(f: HardstyleFrame): HardstyleFrame = when (this) {
+fun Genre.shape(f: HardstyleFrame): HardstyleFrame = when (this) {
     Genre.HARDSTYLE -> f
     // Rap: big, heavy pumping on 808 sub bass; ripples on 808 hits.
     // Rap: it should only hit now and then — on the strongest 808 hits, not every beat.
@@ -72,7 +71,7 @@ internal fun Genre.shape(f: HardstyleFrame): HardstyleFrame = when (this) {
 }
 
 /** Mixes two shaped frames for a soft (~1 s) change between profiles. */
-internal fun blendFrames(a: HardstyleFrame, b: HardstyleFrame, t: Float): HardstyleFrame {
+fun blendFrames(a: HardstyleFrame, b: HardstyleFrame, t: Float): HardstyleFrame {
     fun l(x: Float, y: Float) = x + (y - x) * t
     return b.copy(bass = l(a.bass, b.bass), kick = l(a.kick, b.kick), heavy = l(a.heavy, b.heavy), grit = l(a.grit, b.grit))
 }
@@ -81,7 +80,7 @@ internal fun blendFrames(a: HardstyleFrame, b: HardstyleFrame, t: Float): Hardst
 // 0 → ROLIG, .25 → RAP, .5 → EDM, 1 → HARD (hardstyle and rock fused, mixed by `rockness`).
 
 /** Where the auto mode puts the slider for a detected genre. */
-internal fun Genre.vibeTarget(): Float = when (this) {
+fun Genre.vibeTarget(): Float = when (this) {
     Genre.STANDARD -> 0f
     // Between calm and rap on the slider; drawn as «POP» while auto has found pop.
     Genre.POP, Genre.REGGAE, Genre.REGGAETON -> .1f
@@ -91,9 +90,9 @@ internal fun Genre.vibeTarget(): Float = when (this) {
 }
 
 /** 0..1: how far into the HARD part of the slider we are (0 at EDM, 1 at the top). */
-internal fun hardWeight(v: Float) = ((v - .5f) / .5f).coerceIn(0f, 1f)
+fun hardWeight(v: Float) = ((v - .5f) / .5f).coerceIn(0f, 1f)
 /** 0..1: how much song structure (calm intro, max on the drop) applies — off below RAP, full from EDM. */
-internal fun structureWeight(v: Float) = ((v - .25f) / .25f).coerceIn(0f, 1f)
+fun structureWeight(v: Float) = ((v - .25f) / .25f).coerceIn(0f, 1f)
 
 private fun lerpF(a: Float, b: Float, t: Float) = a + (b - a) * t
 private fun lerpProfile(a: PartyProfile, b: PartyProfile, t: Float) = PartyProfile(
@@ -107,7 +106,7 @@ private fun lerpProfile(a: PartyProfile, b: PartyProfile, t: Float) = PartyProfi
  * on hardstyle songs).
  */
 @Suppress("UNUSED_PARAMETER")
-internal fun hardFusion(f: HardstyleFrame, rockness: Float): HardstyleFrame {
+fun hardFusion(f: HardstyleFrame, rockness: Float): HardstyleFrame {
     val rock = Genre.ROCK.shape(f)
     val edm = Genre.EDM.shape(f)
     return f.copy(
@@ -119,7 +118,7 @@ internal fun hardFusion(f: HardstyleFrame, rockness: Float): HardstyleFrame {
 }
 
 /** The audio frame reshaped for slider value [v]. */
-internal fun vibeShape(f: HardstyleFrame, v: Float, rockness: Float): HardstyleFrame = when {
+fun vibeShape(f: HardstyleFrame, v: Float, rockness: Float): HardstyleFrame = when {
     v <= .25f -> blendFrames(Genre.STANDARD.shape(f), Genre.RAP.shape(f), v / .25f)
     v <= .5f -> blendFrames(Genre.RAP.shape(f), Genre.EDM.shape(f), (v - .25f) / .25f)
     else -> {
@@ -137,7 +136,7 @@ internal fun vibeShape(f: HardstyleFrame, v: Float, rockness: Float): HardstyleF
 }
 
 /** Effect strengths for slider value [v]. */
-internal fun vibeProfile(v: Float, rockness: Float): PartyProfile {
+fun vibeProfile(v: Float, rockness: Float): PartyProfile {
     // Strongest of both profiles per effect (in practice the hardstyle one, which is the bigger).
     val hs = Genre.HARDSTYLE.profile(); val rk = Genre.ROCK.profile()
     val hard = PartyProfile(max(hs.spike, rk.spike), max(hs.particles, rk.particles),
@@ -150,12 +149,12 @@ internal fun vibeProfile(v: Float, rockness: Float): PartyProfile {
 }
 
 /** Genres a sure metadata answer locks for the whole song (calm/no-drop genres). */
-internal val CALM_LOCK = setOf(Genre.POP, Genre.STANDARD, Genre.REGGAE, Genre.REGGAETON)
+val CALM_LOCK = setOf(Genre.POP, Genre.STANDARD, Genre.REGGAE, Genre.REGGAETON)
 /** Below this distortion (8 s average) a rap/pop song can't turn into hardstyle by its tempo alone. */
-internal const val GRITLESS_MAX = .12f
+const val GRITLESS_MAX = .12f
 
 /** Apple Music's genre name → profile, or null when it does not say enough. */
-internal fun genreFromApple(name: String?): Genre? {
+fun genreFromApple(name: String?): Genre? {
     val g = name?.lowercase() ?: return null
     return when {
         "hardstyle" in g || "hardcore" in g || "hard dance" in g -> Genre.HARDSTYLE
@@ -177,7 +176,7 @@ internal fun genreFromApple(name: String?): Genre? {
  * clear; otherwise the sound decides after ~8 s (tempo, distortion, sub bass, snare and kick
  * rates). A new profile is only adopted after the evidence holds for ~6 s.
  */
-internal class GenreDetector {
+class GenreDetector {
     var genre = Genre.HARDSTYLE
         private set
     var previous = Genre.HARDSTYLE
@@ -376,7 +375,7 @@ internal class GenreDetector {
 
         if (now - lastLog >= 5_000L) {
             lastLog = now
-            Log.d("RaveGenre", "nå=${genre.label} apple=$appleName bpm=%.0f grit=%.2f sub=%.2f kick/s=%.2f snare/s=%.2f rock=%.2f refreng=%.2f → lyd sier ${audioGuess(f.bpm).label}"
+            RaveLog.d("RaveGenre", "nå=${genre.label} apple=$appleName bpm=%.0f grit=%.2f sub=%.2f kick/s=%.2f snare/s=%.2f rock=%.2f refreng=%.2f → lyd sier ${audioGuess(f.bpm).label}"
                 .format(f.bpm, grit, sub, kickRate, snareRate, rockness, chorus))
         }
         manual?.let { if (it != genre) commit(it, now, "valgt"); return genre }
@@ -473,7 +472,7 @@ internal class GenreDetector {
         previous = genre; genre = g; changedAt = now; candidate = g; candidateSince = now
         announcedAt = now; reason = why
         if (g == Genre.HARDSTYLE && why != "valgt") hardstyleThisTrack = true
-        Log.d("RaveGenre", "→ ${g.label} ($why) apple=$appleName grit=%.2f sub=%.2f kick/s=%.2f snare/s=%.2f"
+        RaveLog.d("RaveGenre", "→ ${g.label} ($why) apple=$appleName grit=%.2f sub=%.2f kick/s=%.2f snare/s=%.2f"
             .format(grit, sub, kickRate, snareRate))
     }
 
@@ -490,7 +489,7 @@ internal class GenreDetector {
  * build-up → final drop → outro. Calm at the start, rising in the build-up, maximum chaos on
  * the drop — strongest right as it hits.
  */
-internal enum class SongPart(val label: String) {
+enum class SongPart(val label: String) {
     INTRO("intro"), VOCAL("synging"), BREAKDOWN("breakdown"), BUILDUP("build-up"),
     DROP("drop"), GROOVE("mellom drops"), OUTRO("avslutning"),
     /** Raw hardstyle: where a melodic climax would be, a dark, sparse part with screeches and kick rolls. */
@@ -499,10 +498,10 @@ internal enum class SongPart(val label: String) {
 
 /** Which drop this is: the first is strong, middle drops full, the last one (in the final part
  * of the song) the hardest. PENDING = the first 2 s, before we know it is not a fake drop. */
-internal enum class DropKind(val label: String) { NONE(""), PENDING("DROP"), FIRST("FØRSTE DROP"), MIDDLE("DROP"), LAST("SISTE DROP") }
+enum class DropKind(val label: String) { NONE(""), PENDING("DROP"), FIRST("FØRSTE DROP"), MIDDLE("DROP"), LAST("SISTE DROP") }
 
 /** What the analysis sees right now — shown live on screen (HUD) and logged once per bar. */
-internal data class StructureHud(
+data class StructureHud(
     val part: String = "INTRO", val barInPhrase: Int = 0, val phrase: Int = 0, val ready: Boolean = false,
     val subRelDb: Float = 0f, val airTrendDb: Float = 0f, val build: Float = 0f, val grit: Float = 0f,
     val screech: Float = 0f, val vocalHint: Boolean = false, val bpm: Float = 0f
@@ -519,24 +518,24 @@ internal data class StructureHud(
  *    (energy jumping between sub and mids every beat) can't flip the section by itself.
  */
 /** No new drop within this time of a confirmed one. */
-internal const val DROP_LOCKOUT_MS = 16_000L
+const val DROP_LOCKOUT_MS = 16_000L
 /** Analysis started this far into a song → it joined mid-song (no intro). */
-internal const val MID_SONG_JOIN_MS = 30_000L
+const val MID_SONG_JOIN_MS = 30_000L
 /** A pending drop is real if the sub is within this many dB of the song's loud level (subRef). */
-internal const val DROP_LOUD_MARGIN_DB = 3f
+const val DROP_LOUD_MARGIN_DB = 3f
 /** A correction from Espen holds the song part this many bars. */
-internal const val FORCE_HOLD_BARS = 8
+const val FORCE_HOLD_BARS = 8
 // «Fullness» (see HardstyleStructure.brightRel), fitted to Espen's labels 2026-11-06.
-internal const val FULL_EMA_S = 2f
-internal const val FULL_REF_FALL_DB_PER_S = 3f / 60f
-internal const val FULL_WARMUP_MS = 20_000L
+const val FULL_EMA_S = 2f
+const val FULL_REF_FALL_DB_PER_S = 3f / 60f
+const val FULL_WARMUP_MS = 20_000L
 /**
  * Song-part thresholds fitted to Espen's answers (PartyReplayTest searches them). Chosen 2026-11-06 on
  * 9 hardstyle songs he steered by hand: 48 % → 69 % agreement (drop 86 %, breakdown 2 → 65 %,
  * intro 86 %; build-up still ~15 % — needs its own riser/roll signal and more songs). `var` only so the
  * replay test can try other values; the app never changes them.
  */
-internal object PartyTuning {
+object PartyTuning {
     /** Leave a drop for BREAKDOWN when treble+presence stay this far under the song's peak … */
     var dullBrightDb = -2.5f
     /** … for this many bars. */
@@ -562,11 +561,11 @@ internal object PartyTuning {
     var usePrint = false
 }
 /** DROP corrected back to BUILD-UP within this time = a fake drop. */
-internal const val FAKE_DROP_WINDOW_MS = 10_000L
+const val FAKE_DROP_WINDOW_MS = 10_000L
 /** A corrected build-up holds this long at most (a real drop ends it earlier). */
-internal const val FORCE_HOLD_BUILDUP_BARS = 16
+const val FORCE_HOLD_BUILDUP_BARS = 16
 
-internal class HardstyleStructure {
+class HardstyleStructure {
     var part = SongPart.INTRO
         private set
     var dropKind = DropKind.NONE
@@ -678,7 +677,7 @@ internal class HardstyleStructure {
             boostNext = true
             lastFakeAt = now
             show("FAKE DROP", now, always = true)
-            Log.d("RaveGenre", "FAKE DROP (rettet: $why)")
+            RaveLog.d("RaveGenre", "FAKE DROP (rettet: $why)")
         }
         when (next) {
             SongPart.DROP -> {
@@ -705,7 +704,7 @@ internal class HardstyleStructure {
                     next == SongPart.VOCAL || next == SongPart.ANTI_CLIMAX
             }
         }
-        if (part != next) { Log.d("RaveGenre", "del: ${part.label} → ${next.label} (rettet: $why)"); part = next; partSince = now }
+        if (part != next) { RaveLog.d("RaveGenre", "del: ${part.label} → ${next.label} (rettet: $why)"); part = next; partSince = now }
         // A build-up lasts until its drop (8–16 bars); breakdown/intro/drop hold 8 bars. After Espen
         // said breakdown or intro, no «drop» may override him during the hold (log 2026-11-06,
         // «A Million Dreams»: four BREAKDOWN taps in a row, each overridden by a drop 1 s later).
@@ -725,7 +724,7 @@ internal class HardstyleStructure {
 
     private fun enter(next: SongPart, now: Long, why: String) {
         if (next == part) return
-        Log.d("RaveGenre", "del: ${part.label} → ${next.label} ($why)")
+        RaveLog.d("RaveGenre", "del: ${part.label} → ${next.label} ($why)")
         // Every way out of a drop starts the re-entry lockout; every new drop starts its exit timers fresh.
         if (part == SongPart.DROP) dropEndedAt = now
         if (next == SongPart.DROP) { dullSince = 0L; buildSigSince = 0L }
@@ -828,7 +827,7 @@ internal class HardstyleStructure {
                     val fullEnough = !warmedUp || (brightRel >= PartyTuning.confirmBrightDb && subFullRel >= PartyTuning.confirmSubDb)
                     if (!fullEnough) {
                         dropKind = DropKind.NONE; subMin = sub1
-                        Log.d("RaveGenre", "ikke drop: diskant/vokal %.1f dB under toppen".format(-brightRel))
+                        RaveLog.d("RaveGenre", "ikke drop: diskant/vokal %.1f dB under toppen".format(-brightRel))
                         enter(SongPart.BREAKDOWN, now, "ikke fullt nok for drop")
                     } else if (sub1 - dropBaseline >= 3f || atLoudLevel ||
                         (printOk && !kickGone && printLikeRel >= PartyTuning.printConfirm)) {
@@ -842,18 +841,18 @@ internal class HardstyleStructure {
                             else -> DropKind.MIDDLE
                         }
                         show(dropKind.label, now, always = true)
-                        Log.d("RaveGenre", "ekte drop #$realDrops → ${dropKind.label} (%.0f%% ut, sub +%.1f dB)".format(songFraction * 100f, sub1 - dropBaseline))
+                        RaveLog.d("RaveGenre", "ekte drop #$realDrops → ${dropKind.label} (%.0f%% ut, sub +%.1f dB)".format(songFraction * 100f, sub1 - dropBaseline))
                     } else {
                         boostNext = true
                         dropKind = DropKind.NONE
                         // Raw: screeches over a held-back low end is the anti-climax, not a failed drop.
                         if (f.screech > .35f && grit1 > .25f) {
-                            Log.d("RaveGenre", "ANTI-CLIMAX (sub bare +%.1f dB, screech %.2f)".format(sub1 - dropBaseline, f.screech))
+                            RaveLog.d("RaveGenre", "ANTI-CLIMAX (sub bare +%.1f dB, screech %.2f)".format(sub1 - dropBaseline, f.screech))
                             enter(SongPart.ANTI_CLIMAX, now, "anti-climax")
                         } else {
                             // One banner per fake series, not one every second.
                             show("FAKE DROP", now, always = now - lastFakeAt > 8_000L)
-                            Log.d("RaveGenre", "FAKE DROP (sub bare +%.1f dB etter 1 takt)".format(sub1 - dropBaseline))
+                            RaveLog.d("RaveGenre", "FAKE DROP (sub bare +%.1f dB etter 1 takt)".format(sub1 - dropBaseline))
                             enter(if (kickGone) SongPart.BREAKDOWN else SongPart.BUILDUP, now, "fake drop")
                         }
                         lastFakeAt = now
@@ -973,7 +972,7 @@ internal class HardstyleStructure {
         if (bar != lastBarLogged) {
             lastBarLogged = bar
             // Names go in as %s arguments: a name containing "%" must never be read as a format code.
-            Log.d("RaveGenre", "takt %d/8 frase %d | %s | sub %+.1f dB (treff %+.1f) diskant %+.1f dB build %.0f%% grit %.2f snare/s %.1f klar=%b"
+            RaveLog.d("RaveGenre", "takt %d/8 frase %d | %s | sub %+.1f dB (treff %+.1f) diskant %+.1f dB build %.0f%% grit %.2f snare/s %.1f klar=%b"
                 .format(barInPhrase, phrase, partName, subRel, subHitRel, airTrend, build * 100f, grit1, snareRate, primed))
         }
 
@@ -1004,7 +1003,7 @@ internal class HardstyleStructure {
 }
 
 /** Hardstyle sub-genres — each gets its own feel inside the hardstyle profile. */
-internal enum class HardSub(val label: String, val shake: Float, val strobe: Float, val spike: Float,
+enum class HardSub(val label: String, val shake: Float, val strobe: Float, val spike: Float,
                             val particles: Float, val screech: Float) {
     // Big melodies and vocals, clean kicks: bright and soaring, less shaking.
     EUPHORIC("EUFORISK", shake = .6f, strobe = .6f, spike = .9f, particles = 1f, screech = 0f),
@@ -1019,7 +1018,7 @@ internal enum class HardSub(val label: String, val shake: Float, val strobe: Flo
 }
 
 /** Picks the hardstyle sub-genre from tempo, distortion and screeches (stable per song). */
-internal class HardSubDetector {
+class HardSubDetector {
     var sub = HardSub.RAW
         private set
     var changedAt = 0L
@@ -1043,7 +1042,7 @@ internal class HardSubDetector {
     /** The teacher heard this song's mood: use it at once (live tempo jumps 117–235 BPM, mood doesn't). */
     fun setMoodHint(h: HardSub, now: Long) {
         moodHint = h; decidedThisTrack = true
-        if (sub != h) { sub = h; changedAt = now; Log.d("RaveGenre", "undersjanger → ${h.label} (stemning fra stil-lærer)") }
+        if (sub != h) { sub = h; changedAt = now; RaveLog.d("RaveGenre", "undersjanger → ${h.label} (stemning fra stil-lærer)") }
     }
 
     fun update(f: HardstyleFrame, now: Long): HardSub {
@@ -1077,7 +1076,7 @@ internal class HardSubDetector {
             decidedThisTrack = true
             if (candidate == sub) return sub
             sub = candidate; changedAt = now
-            Log.d("RaveGenre", "undersjanger → ${sub.label} (bpm=%.0f grit=%.2f screech=%.2f)".format(bpm, grit, screech))
+            RaveLog.d("RaveGenre", "undersjanger → ${sub.label} (bpm=%.0f grit=%.2f screech=%.2f)".format(bpm, grit, screech))
         }
         return sub
     }

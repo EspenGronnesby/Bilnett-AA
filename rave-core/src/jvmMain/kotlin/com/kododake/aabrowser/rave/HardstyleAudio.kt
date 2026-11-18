@@ -5,28 +5,28 @@ import kotlin.math.*
 // ---- Detection tunables (research 2026-11-04, see FestivalShow.kt for the show side) ----
 /** Song reference: the loudest bass of the last ~25 s (decays slowly), so a breakdown after a drop is
  *  NOT auto-gained back up to "loud" within 3 s (WLED/FastLED: slow AGC + noise gate). */
-internal const val SONG_REF_DECAY_S = 25f
+const val SONG_REF_DECAY_S = 25f
 /** Auto-gain never normalises against less than this share of the song reference. */
-internal const val SONG_REF_SHARE = .55f
+const val SONG_REF_SHARE = .55f
 /** Bass below this share of the song reference (≈ −20 dB) counts as silence (noise gate). */
-internal const val QUIET_GATE = .1f
+const val QUIET_GATE = .1f
 /** Zaag/distortion is measured in the kick's TAIL (research: tail = 50–250 ms after the hit), so pads,
  *  leads and vocals between kicks don't count as distortion. */
-internal const val GRIT_TAIL_FROM_MS = 50L
+const val GRIT_TAIL_FROM_MS = 50L
 /** Grit only counts when the bass is at least this share of the song's loud level (full from +range). */
-internal const val GRIT_BASS_FROM = .45f
-internal const val GRIT_BASS_RANGE = .3f
+const val GRIT_BASS_FROM = .45f
+const val GRIT_BASS_RANGE = .3f
 /** Bass this strong (norm) keeps the beat going through missed kicks (dense zaag drops). */
-internal const val FLYWHEEL_NORM = .55f
+const val FLYWHEEL_NORM = .55f
 /** The teacher's tempo wins when its spacing has at least this share of the strongest spacing's votes. */
-internal const val HINT_MIN_SHARE = .3f
+const val HINT_MIN_SHARE = .3f
 /** At most this many filled-in kicks in a row while the bass stays strong. */
-internal const val FLYWHEEL_BEATS = 8
+const val FLYWHEEL_BEATS = 8
 /** Kick value of a flywheel beat (under the .95 the song structure counts as a heard kick). */
-internal const val FLYWHEEL_KICK = .85f
-internal const val GRIT_TAIL_TO_MS = 250L
+const val FLYWHEEL_KICK = .85f
+const val GRIT_TAIL_TO_MS = 250L
 
-internal data class HardstyleFrame(val bass: Float = 0f, val kick: Float = 0f, val highs: Float = 0f,
+data class HardstyleFrame(val bass: Float = 0f, val kick: Float = 0f, val highs: Float = 0f,
     val energy: Float = 0f, val burst: Float = 0f, val build: Float = 0f,
     val spectrum: List<Float> = SILENT_SPECTRUM, val highMotion: Float = 0f,
     /** 0..1: heavy, distorted bass (zaag kicks, big drops). 0 for ordinary music. */
@@ -71,7 +71,7 @@ internal data class HardstyleFrame(val bass: Float = 0f, val kick: Float = 0f, v
     val vocalHit: Float = 0f)
 
 /** Independent from the original visualizer. Input sample rate is Hz, not Android's milliHz. */
-internal class HardstyleAudio {
+class HardstyleAudio {
     private val spectrumAnalyzer = HardstyleSpectrum()
     private var peak = 8f
     private var average = 0f
@@ -277,7 +277,7 @@ internal class HardstyleAudio {
  * hide the next kick's attack; Android only delivers ~20 FFT frames per second). Stops filling
  * in after a couple of missing kicks, so breakdowns stay kick-less.
  */
-internal class BeatTracker {
+class BeatTracker {
     // Onset times of the last ~6 s. Tempo = the most common spacing between ALL pairs of
     // onsets (not just neighbours), so extra hits from kick tails / reverse bass between the
     // kicks don't push the tempo up (log 2026-11-03: raw at ~155 BPM read as 170–195).

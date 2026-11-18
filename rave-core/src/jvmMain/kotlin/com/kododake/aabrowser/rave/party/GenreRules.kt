@@ -10,7 +10,7 @@ import kotlin.math.sin
  * for hardstyle: how the drop feels. Research 2026-11-06: house pumps on every beat, dubstep/future bass/
  * EDM-trap are felt at half tempo, DnB is fast small sparks over a slow sub glow.
  */
-internal enum class EdmSub(val label: String, val halfTime: Boolean, val particles: Float, val shake: Float,
+enum class EdmSub(val label: String, val halfTime: Boolean, val particles: Float, val shake: Float,
                            val spike: Float, val strobe: Float) {
     HOUSE("HOUSE", false, 1f, .8f, 1f, 1f),
     BIG_ROOM("BIG ROOM", false, 1.1f, 1f, 1.15f, 1f),
@@ -39,7 +39,7 @@ internal enum class EdmSub(val label: String, val halfTime: Boolean, val particl
  * What a genre adds on top of the shared Party visuals this frame. Multipliers are 1 = unchanged;
  * sway/bounce are -1..1 / 0..1 and turned into pixels by RaveActivity.
  */
-internal data class GenreLook(
+data class GenreLook(
     /** Replaces the pump (kick) when set: e.g. rap's slow 808 pulse at felt tempo. */
     val kick: Float? = null,
     val spike: Float = 1f, val particles: Float = 1f, val shake: Float = 1f, val strobe: Float = 1f,
@@ -51,7 +51,7 @@ internal data class GenreLook(
     val warmth: Float = 0f
 )
 
-internal object GenreRules {
+object GenreRules {
     /** Position in the current beat (0..1), or null without a steady beat grid. */
     fun beatPhase(f: HardstyleFrame, now: Long): Float? {
         val p = f.beatPeriod

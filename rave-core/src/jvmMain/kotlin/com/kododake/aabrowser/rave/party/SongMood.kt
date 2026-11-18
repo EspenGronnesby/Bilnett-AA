@@ -7,7 +7,7 @@ package com.kododake.aabrowser.rave.party
  * Calibrated on Espen's hardstyle (2026-11-10): raw tracks (Machinery, Eternal Pulse, Make You Mine)
  * scored «aggressive» .54–.60, euphoric/melodic ones (Cry for You, Daylight, Ocean) .12–.21.
  */
-internal data class SongMood(
+data class SongMood(
     val aggressive: Float = 0f, val happy: Float = 0f, val party: Float = 0f, val relaxed: Float = 0f,
     val sad: Float = 0f, val dance: Float = 0f, val voice: Float = 0f, val bright: Float = 0f,
     val themes: List<Pair<String, Float>> = emptyList()

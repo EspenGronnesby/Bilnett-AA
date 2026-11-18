@@ -25,4 +25,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "AABrowser"
 include(":app")
+// Shared Party analysis for the app (JVM) and the Rave website (JS).
+include(":rave-core")
  

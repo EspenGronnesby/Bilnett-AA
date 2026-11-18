@@ -27,3 +27,6 @@ web/dist/
 web/*.tsbuildinfo
 web/.env*.local
 .vercel
+
+# rave-core (shared Party analysis) build output
+/rave-core/build/

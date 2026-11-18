@@ -2,11 +2,11 @@ package com.kododake.aabrowser.rave
 
 import kotlin.math.*
 
-internal const val SPECTRUM_BANDS = 48
-internal val SILENT_SPECTRUM: List<Float> = List(SPECTRUM_BANDS) { 0f }
+const val SPECTRUM_BANDS = 48
+val SILENT_SPECTRUM: List<Float> = List(SPECTRUM_BANDS) { 0f }
 
 /** Logarithmic display bands, not 48 independent low-frequency FFT measurements. */
-internal class HardstyleSpectrum {
+class HardstyleSpectrum {
     private val levels = FloatArray(SPECTRUM_BANDS)
     private val raw = FloatArray(SPECTRUM_BANDS)
     private val previousRaw = FloatArray(SPECTRUM_BANDS)
@@ -64,7 +64,7 @@ internal class HardstyleSpectrum {
 }
 
 /** Bounded timestamped history. All buffers are reused by the drawing layer. */
-internal class SpectrumHistory {
+class SpectrumHistory {
     private val times = LongArray(64)
     private val values = Array(64) { FloatArray(SPECTRUM_BANDS) }
     private var count = 0
@@ -98,7 +98,7 @@ internal class SpectrumHistory {
 }
 
 /** Top -> right -> bottom -> left -> top, with a mirrored frequency arrangement. */
-internal fun mirroredSpectrumValue(spectrum: FloatArray, point: Int, segments: Int = 128): Float {
+fun mirroredSpectrumValue(spectrum: FloatArray, point: Int, segments: Int = 128): Float {
     val phase = (point % segments).toFloat() / segments
     val position = (if (phase <= .5f) phase * 2f else (1f - phase) * 2f) * (spectrum.size - 1)
     val index = floor(position).toInt()

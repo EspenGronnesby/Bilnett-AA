@@ -507,6 +507,8 @@ class RaveActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // The shared Party core (rave-core) logs through RaveLog; here it goes to logcat as before.
+        RaveLog.sink = { tag, message -> android.util.Log.d(tag, message) }
         super.onCreate(savedInstanceState)
         YouTubeLookup.init(applicationContext)
         // Open the video store off the main thread (disk + database work), so the first clip does not stutter.
