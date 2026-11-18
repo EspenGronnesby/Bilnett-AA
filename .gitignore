@@ -20,3 +20,10 @@ __pycache__/
 
 # Local handover notes (personal details; never in the public repo)
 .claude/docs/overlevering-*.md
+
+# Rave web (PC)
+web/node_modules/
+web/dist/
+web/*.tsbuildinfo
+web/.env*.local
+.vercel

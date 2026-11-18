@@ -1,0 +1,224 @@
+/* Rave on the PC. Sizes follow the app: N * var(--u) ≈ N dp at the app's scale (see ui/scale.ts). */
+@font-face {
+  font-family: 'Grenze Gotisch';
+  src: url('/grenze_gotisch.ttf') format('truetype');
+  font-display: swap;
+}
+
+:root {
+  --u: 1px;
+  --bg: hsl(0 0% 2%);
+  --fg: hsl(40 27% 94%);          /* #F5F2EC, the app's text colour */
+  --muted: hsl(40 27% 94% / 0.7);
+  --faint: hsl(40 27% 94% / 0.45);
+  --surface: hsl(0 0% 9%);
+  --on-pill: hsl(0 0% 4%);
+  --radius-cover: calc(20 * var(--u));
+  --ease-press: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --accent: hsl(40 27% 94%);           /* Rave's one accent (as in the app): selected / switched on */
+  --accent-fill: hsl(40 27% 94%);
+  --scrim: hsl(0 0% 0% / 0.6);
+  --panel: hsl(0 0% 9%);
+  --card: hsl(0 0% 100% / 0.05);
+  --control: hsl(0 0% 100% / 0.08);
+  --t-press: 120ms;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body, #root { height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+.screen { position: fixed; inset: 0; overflow: hidden; background: var(--bg); }
+.center { display: grid; place-items: center; padding: calc(24 * var(--u)); text-align: center; }
+.stack { display: grid; gap: calc(16 * var(--u)); justify-items: center; max-width: calc(520 * var(--u)); }
+
+.title { font-size: calc(36 * var(--u)); font-weight: 600; }
+.muted { color: var(--muted); font-size: calc(18 * var(--u)); line-height: 1.4; }
+
+.pill {
+  height: calc(48 * var(--u));
+  padding: 0 calc(24 * var(--u));
+  border: 0;
+  border-radius: 999px;
+  background: var(--fg);
+  color: var(--on-pill);
+  font: 600 calc(17 * var(--u)) / 1 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  cursor: pointer;
+  transition: transform var(--t-press) var(--ease-press);
+}
+.pill:active { transform: scale(0.97); }
+
+/* Blurred cover behind everything, dark toning and vignette on top (as in the app, but still). */
+.backdrop { position: absolute; inset: 0; }
+.backdrop img {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; transform: scale(1.2);
+  filter: blur(calc(40 * var(--u))) saturate(1.1);
+  opacity: 0.6;
+}
+.backdrop::after {
+  content: ''; position: absolute; inset: 0;
+  background:
+    radial-gradient(ellipse at center, transparent 0%, hsl(0 0% 0% / 0.65) 80%),
+    hsl(0 0% 0% / 0.38);
+}
+
+.stage { position: absolute; inset: 0; padding: calc(24 * var(--u)); display: grid; place-items: center; }
+
+/* Landscape: cover with title underneath, centered (lyrics come to the right in phase 2). */
+.stage.wide .hero { display: grid; justify-items: center; gap: calc(12 * var(--u)); }
+.stage.wide .cover {
+  --size: min(calc(100vh - 300 * var(--u)), 40vw, calc(300 * var(--u)));
+}
+
+/* Portrait: cover on top, title underneath. */
+.stage.tall .hero { display: grid; justify-items: center; gap: calc(32 * var(--u)); }
+.stage.tall .cover { --size: min(75vw, calc(340 * var(--u))); }
+
+.cover {
+  width: var(--size); height: var(--size);
+  border-radius: var(--radius-cover);
+  overflow: hidden;
+  background: var(--surface);
+  box-shadow: 0 calc(12 * var(--u)) calc(40 * var(--u)) hsl(0 0% 0% / 0.45);
+}
+.cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cover-empty { width: 100%; height: 100%; display: grid; place-items: center; color: var(--faint); font-size: calc(64 * var(--u)); }
+
+.info { text-align: center; max-width: min(90vw, calc(680 * var(--u))); }
+.song {
+  font-size: calc(36 * var(--u)); line-height: calc(40 * var(--u)); font-weight: 600;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.artist {
+  margin-top: calc(8 * var(--u));
+  font-family: 'Grenze Gotisch', serif; font-size: calc(20 * var(--u));
+  color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.device { margin-top: calc(10 * var(--u)); font-size: calc(13 * var(--u)); color: var(--faint); }
+
+.info.compact .song { font-size: calc(20 * var(--u)); line-height: calc(24 * var(--u)); -webkit-line-clamp: 1; }
+.info.compact .artist { font-size: calc(15 * var(--u)); }
+
+/* Controls under the title: transport, volume, where it plays. */
+.controls { display: grid; justify-items: center; gap: calc(14 * var(--u)); margin-top: calc(6 * var(--u)); }
+.transport { display: flex; align-items: center; gap: calc(14 * var(--u)); }
+.icon-pill {
+  width: calc(48 * var(--u)); height: calc(48 * var(--u));
+  display: grid; place-items: center;
+  border: 0; border-radius: 999px;
+  background: hsl(0 0% 100% / 0.12);
+  color: var(--fg);
+  cursor: pointer;
+  transition: transform var(--t-press) var(--ease-press), background-color 180ms var(--ease-press);
+}
+.icon-pill.big { width: calc(60 * var(--u)); height: calc(60 * var(--u)); background: var(--fg); color: var(--on-pill); }
+.icon-pill svg { width: 45%; height: 45%; fill: currentColor; }
+.icon-pill:active { transform: scale(0.97); }
+@media (hover: hover) and (pointer: fine) {
+  .icon-pill:not(.big):hover { background: hsl(0 0% 100% / 0.18); }
+}
+
+.volume { width: calc(220 * var(--u)); accent-color: var(--fg); cursor: pointer; }
+
+.where { display: flex; align-items: center; gap: calc(12 * var(--u)); font-size: calc(13 * var(--u)); color: var(--faint); }
+.pill.small { height: calc(34 * var(--u)); padding: 0 calc(16 * var(--u)); font-size: calc(14 * var(--u)); }
+
+.notice { max-width: calc(420 * var(--u)); text-align: center; font-size: calc(13 * var(--u)); color: var(--muted); }
+
+.banner {
+  position: absolute; left: 50%; bottom: calc(32 * var(--u));
+  transform: translateX(-50%);
+}
+.banner:active { transform: translateX(-50%) scale(0.97); }
+
+/* Shell: settings button in the corner, things that hide when the mouse rests. */
+.fill { position: absolute; inset: 0; }
+.corner { position: absolute; top: calc(16 * var(--u)); right: calc(16 * var(--u)); width: calc(40 * var(--u)); height: calc(40 * var(--u)); }
+.hideable { transition: opacity 250ms var(--ease-out); }
+.screen.idle { cursor: none; }
+.screen.idle .hideable { opacity: 0; pointer-events: none; }
+
+/* Settings sheet: dark scrim, one panel, sections with one title each (no subtitles). */
+.scrim {
+  position: absolute; inset: 0; z-index: 10;
+  background: var(--scrim);
+  display: grid; place-items: center;
+  padding: calc(24 * var(--u));
+  animation: fade-in 200ms var(--ease-out);
+}
+@keyframes fade-in { from { opacity: 0 } to { opacity: 1 } }
+.sheet {
+  width: min(100%, calc(520 * var(--u)));
+  max-height: 100%;
+  overflow-y: auto;
+  background: var(--panel);
+  border-radius: calc(20 * var(--u));
+  padding: calc(20 * var(--u));
+  box-shadow: 0 calc(20 * var(--u)) calc(60 * var(--u)) hsl(0 0% 0% / 0.5);
+  font-size: calc(15 * var(--u));
+}
+.sheet-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: calc(8 * var(--u)); }
+.sheet-head h2 { font-size: calc(22 * var(--u)); font-weight: 600; }
+.group { margin-top: calc(18 * var(--u)); }
+.group h3 { font-size: calc(13 * var(--u)); font-weight: 600; color: var(--muted); margin: 0 0 calc(8 * var(--u)) calc(4 * var(--u)); }
+.card { background: var(--card); border-radius: calc(16 * var(--u)); overflow: hidden; }
+.row {
+  display: flex; align-items: center; gap: calc(12 * var(--u));
+  min-height: calc(52 * var(--u)); padding: calc(8 * var(--u)) calc(16 * var(--u));
+  width: 100%; text-align: left; color: var(--fg); font: inherit; background: none; border: 0;
+}
+.divider { height: 1px; margin-left: calc(16 * var(--u)); background: hsl(0 0% 100% / 0.06); }
+.grow { flex: 1; min-width: 0; }
+.muted-row { color: var(--muted); }
+.hint { color: var(--faint); }
+.avatar { width: calc(32 * var(--u)); height: calc(32 * var(--u)); border-radius: 999px; background: var(--control); object-fit: cover; }
+.choice { cursor: pointer; transition: background-color 180ms var(--ease-press); }
+.choice:active { background: hsl(0 0% 100% / 0.12); }
+@media (hover: hover) and (pointer: fine) { .choice:hover { background: hsl(0 0% 100% / 0.06); } }
+.choice:disabled { opacity: 0.45; cursor: default; }
+.kind { color: var(--faint); font-size: calc(13 * var(--u)); }
+.check { width: calc(16 * var(--u)); color: var(--accent); font-weight: 700; }
+.choice.selected .grow { font-weight: 600; }
+
+.text-button {
+  background: none; border: 0; color: var(--accent); font: 600 calc(15 * var(--u)) / 1 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  cursor: pointer; padding: calc(6 * var(--u));
+}
+.text-button:active { transform: scale(0.97); }
+
+.segmented { display: flex; background: var(--control); border-radius: calc(10 * var(--u)); padding: calc(3 * var(--u)); }
+.seg {
+  border: 0; background: none; color: var(--muted); cursor: pointer;
+  font: 500 calc(13 * var(--u)) / 1 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  padding: calc(8 * var(--u)) calc(12 * var(--u)); border-radius: calc(8 * var(--u));
+  transition: background-color 180ms var(--ease-press), color 180ms var(--ease-press);
+}
+.seg.selected { background: var(--fg); color: var(--on-pill); }
+
+.switch {
+  width: calc(44 * var(--u)); height: calc(26 * var(--u)); flex: none;
+  border-radius: 999px; background: var(--control); position: relative;
+  transition: background-color 180ms var(--ease-press);
+}
+.switch span {
+  position: absolute; top: calc(3 * var(--u)); left: calc(3 * var(--u));
+  width: calc(20 * var(--u)); height: calc(20 * var(--u)); border-radius: 999px; background: var(--fg);
+  transition: transform 180ms var(--ease-press);
+}
+.switch.on { background: var(--accent-fill); }
+.switch.on span { transform: translateX(calc(18 * var(--u))); background: var(--on-pill); }
+
+@media (prefers-reduced-motion: reduce) {
+  .switch span, .hideable { transition-duration: 0ms; }
+  .scrim { animation: none; }
+}
