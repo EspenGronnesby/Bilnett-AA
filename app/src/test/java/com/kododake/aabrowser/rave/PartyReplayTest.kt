@@ -292,7 +292,7 @@ class PartyReplayTest {
      * The one evaluator (2026-11-19): replays songs through the automatic [HardstyleStructure] and scores
      * it against Espen's key — [clean] picks the cleaned key ([cleanKey]) instead of the raw one.
      */
-    private fun evaluate(songs: List<Song>, clean: Boolean = false): Score {
+    private fun evaluate(songs: List<Song>, clean: Boolean = false, listener: Boolean = false): Score {
         val total = HashMap<String, HashMap<String, Double>>()
         var trueDrops = 0; var found = 0; var extra = 0; var foundBar = 0; var extraBar = 0
         var buildSections = 0; var buildCaught = 0
@@ -300,12 +300,13 @@ class PartyReplayTest {
             val key = if (clean) sg.cleanKey else sg.key
             if (key.isEmpty()) continue
             val st = HardstyleStructure(); st.newTrack(sg.now[0]); st.dropPrint = sg.print
+            val ln = SongListener(); ln.newTrack(sg.now[0])
             var prev = sg.now[0]; var last = ""; val auto = ArrayList<Long>()
             val autoParts = ArrayList<Pair<Long, String>>()
             for (i in sg.frames.indices) {
-                st.update(sg.frames[i], sg.now[i], sg.pos[i], -1L)
+                if (listener) ln.update(sg.frames[i], sg.now[i], sg.pos[i], -1L) else st.update(sg.frames[i], sg.now[i], sg.pos[i], -1L)
                 val dt = (sg.now[i] - prev).coerceIn(0L, 200L) / 1000.0; prev = sg.now[i]
-                val a = norm(st.part.name)
+                val a = norm((if (listener) ln.part else st.part).name)
                 if (a == "DROP" && last != "DROP") auto.add(sg.pos[i]); last = a
                 val t = key.lastOrNull { it.first <= sg.pos[i] }?.second ?: continue
                 total.getOrPut(t) { HashMap() }.merge(a, dt, Double::plus)
@@ -554,6 +555,94 @@ class PartyReplayTest {
         val baseline = File(raw.parentFile, "baseline.txt")
         if (!baseline.exists()) baseline.writeText("Dagens system før ny lytter (" +
             java.time.LocalDate.now() + "):\n\n" + report)
+    }
+
+    /** Gammel hjerne mot ny lytter (SongListener) på samme sanger og renset fasit → listener.txt. */
+    @Test fun listenerAgainstEspensAnswers() {
+        assumeTrue("ingen opptak på denne maskinen", File(raw, "fft").isDirectory)
+        val all = songs(all = true)
+        assumeTrue("ingen sanger med fasit", all.isNotEmpty())
+        val drop = all.filter { it.structured }; val rest = all.filterNot { it.structured }
+        val sb = StringBuilder()
+        fun pct(x: Double) = "%3.0f %%".format(Locale.US, 100 * x)
+        fun line(name: String, sc: Score) = sb.append("%-8s enig %s · balansert %s · drop innen takt %d/%d · falske %.2f/min (%d) · build-up %d/%d · I %s B %s D %s Br %s\n"
+            .format(Locale.US, name, pct(sc.agree), pct(sc.balanced), sc.foundBar, sc.trueDrops, sc.falseDropsPerMin, sc.extraBar,
+                sc.buildCaught, sc.buildSections, pct(sc.perClass["INTRO"] ?: 0.0), pct(sc.perClass["BUILDUP"] ?: 0.0),
+                pct(sc.perClass["DROP"] ?: 0.0), pct(sc.perClass["BREAKDOWN"] ?: 0.0)))
+        sb.append("Drop-musikk (${drop.size} sanger), renset fasit:\n")
+        line("gammel", evaluate(drop, clean = true)); line("ny", evaluate(drop, clean = true, listener = true))
+        sb.append("\nPer sang:\n")
+        for (sg in drop) {
+            line("gammel", evaluate(listOf(sg), clean = true)); line("ny", evaluate(listOf(sg), clean = true, listener = true))
+            sb.append("   ↑ ${sg.name.take(70)}\n")
+        }
+        sb.append("\nAndre sjangre (${rest.size} sanger), renset fasit:\n")
+        line("gammel", evaluate(rest, clean = true)); line("ny", evaluate(rest, clean = true, listener = true))
+        // Falske drops per minutt i alle opptak (også uten fasit): rap/reggae skal ha nesten ingen.
+        var secs = 0.0; var drops = 0
+        for (sg in all) {
+            val ln = SongListener(); ln.newTrack(sg.now[0]); var last = 0
+            for (i in sg.frames.indices) { ln.update(sg.frames[i], sg.now[i], sg.pos[i], -1L); if (ln.drops > last) last = ln.drops }
+            secs += (sg.now.last() - sg.now.first()) / 1000.0; drops += last
+        }
+        sb.append("\nAlle %d sanger med fasit: %d drops på %.0f min (%.2f/min)\n".format(Locale.US, all.size, drops, secs / 60, drops / (secs / 60)))
+        // Tid per takt
+        val big = all.maxByOrNull { it.frames.size }!!
+        val ln = SongListener(); ln.newTrack(big.now[0]); val t0 = System.nanoTime()
+        for (i in big.frames.indices) ln.update(big.frames[i], big.now[i], big.pos[i], -1L)
+        val ms = (System.nanoTime() - t0) / 1e6
+        sb.append("Tid: %.1f ms for %d bilder (%.3f ms per bilde)\n".format(Locale.US, ms, big.frames.size, ms / big.frames.size))
+        println(sb)
+        File(raw.parentFile, "listener.txt").writeText(sb.toString())
+    }
+
+    /** Tidslinje per takt: Espens fasit mot ny lytter (for å se hvor den bommer) → listener-tidslinje.txt. */
+    @Test fun listenerTimeline() {
+        assumeTrue("ingen opptak på denne maskinen", File(raw, "fft").isDirectory)
+        val sb = StringBuilder()
+        for (sg in songs().filter { it.cleanKey.isNotEmpty() }) {
+            sb.append("\n## ${sg.name}\n  tid   fasit       lytter      nivå  pB   pD\n")
+            val ln = SongListener(); ln.newTrack(sg.now[0]); var nextAt = 0L
+            val td = sg.cleanKey.zipWithNext().filter { (x, y) -> x.second != "DROP" && y.second == "DROP" }.map { it.second.first / 1000 }
+            val lo = ArrayList<Long>(); var lp = ""
+            for (i in sg.frames.indices) { ln.update(sg.frames[i], sg.now[i], sg.pos[i], -1L); val a = norm(ln.part.name); if (a == "DROP" && lp != "DROP") lo.add(sg.pos[i] / 1000); lp = a }
+            sb.append("  sanne drops: $td\n  lytterens drops: $lo\n"); ln.newTrack(sg.now[0])
+            for (i in sg.frames.indices) {
+                ln.update(sg.frames[i], sg.now[i], sg.pos[i], -1L)
+                if (sg.pos[i] >= nextAt) {
+                    nextAt = sg.pos[i] + sg.barMs
+                    val t = sg.cleanKey.lastOrNull { it.first <= sg.pos[i] }?.second ?: "-"
+                    val l = norm(ln.part.name)
+                    sb.append("%5.0fs %-10s %-10s %s %.2f %.2f %.2f\n".format(Locale.US, sg.pos[i] / 1000.0, t, l, if (t == l) " " else "✗", ln.level, ln.pBuild, ln.pDrop))
+                }
+            }
+        }
+        File(raw.parentFile, "listener-tidslinje.txt").writeText(sb.toString())
+    }
+
+    /** Rå målinger per halv takt rundt Espens drops (for å se hva som faktisk skjer) → listener-signal.txt. */
+    @Test fun listenerSignal() {
+        assumeTrue("ingen opptak på denne maskinen", File(raw, "fft").isDirectory)
+        val sb = StringBuilder()
+        fun db(x: Double) = 20 * Math.log10(maxOf(x, 2.5))
+        for (sg in songs().filter { it.cleanKey.isNotEmpty() }) {
+            sb.append("\n## ${sg.name}  (takt ${sg.barMs} ms)\n  tid   fasit      sub   bass   air   pres  kick snare noise cent\n")
+            val step = sg.barMs / 2; var i = 0
+            while (i < sg.frames.size) {
+                val t0 = sg.pos[i]; var j = i; val fr = ArrayList<HardstyleFrame>()
+                while (j < sg.frames.size && sg.pos[j] < t0 + step) { fr.add(sg.frames[j]); j++ }
+                if (fr.isNotEmpty()) {
+                    val k = sg.cleanKey.lastOrNull { it.first <= t0 }?.second ?: "-"
+                    sb.append("%5.1fs %-9s %5.1f %5.1f %5.1f %5.1f %5.2f %5.2f %5.2f %5.0f\n".format(Locale.US, t0 / 1000.0, k,
+                        db(fr.map { it.subLevel.toDouble() }.average()), db(fr.map { it.bassLevel.toDouble() }.average()),
+                        db(fr.map { it.air.toDouble() }.average()), db(fr.map { it.presence.toDouble() }.average()),
+                        fr.map { it.kick.toDouble() }.average(), fr.map { it.snare.toDouble() }.average(),
+                        fr.map { it.noise.toDouble() }.average(), fr.map { it.centroid.toDouble() }.average()))
+                }
+                i = maxOf(j, i + 1)
+            }
+        }
+        File(raw.parentFile, "listener-signal.txt").writeText(sb.toString())
     }
 
     private companion object {

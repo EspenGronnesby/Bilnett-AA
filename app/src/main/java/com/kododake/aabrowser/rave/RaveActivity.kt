@@ -124,6 +124,8 @@ class RaveActivity : ComponentActivity() {
     private val songPhase = HardstyleStructure()
     /** Shadow analysis: what the automatic song-part detection would say (logged in manual mode). */
     private val autoPhase = HardstyleStructure()
+    /** «Lytt først»-analysen (steg 2) i skyggen: styrer ingenting, bare logges (new_part …) og måles mot fasit. */
+    private val listener = SongListener()
     /** What the app would say right now (shown in the feedback panel). */
     private var autoShownPart by mutableStateOf(SongPart.INTRO)
     /** Party analysis log on the phone (step 0 of the genre plan): one CSV line per bar. */
@@ -634,6 +636,7 @@ class RaveActivity : ComponentActivity() {
             genreDetector.newTrack(SystemClock.uptimeMillis())
             songPhase.newTrack(SystemClock.uptimeMillis())
             autoPhase.newTrack(SystemClock.uptimeMillis())
+            listener.newTrack(SystemClock.uptimeMillis())
             loudNoDropS = 0f
             beatClock.reset(); halfClock.reset(); dip = 0f; dropHit = 0f; lastPart = SongPart.INTRO; dropLook = 0
             dipStartedAt = 0L; dipSpent = false
@@ -1112,7 +1115,10 @@ class RaveActivity : ComponentActivity() {
                         // Switching manual on mid-song: start from what the automatic analysis says now.
                         if (manualParts && autoPhase.part != songPhase.part) songPhase.force(autoPhase.part, nowMs, "start manuell")
                     }
-                    if (playing && fresh) autoPhase.update(rawTarget, nowMs, positionMs(), if (songDurationMs > 0L) songDurationMs else -1L)
+                    if (playing && fresh) {
+                        autoPhase.update(rawTarget, nowMs, positionMs(), if (songDurationMs > 0L) songDurationMs else -1L)
+                        listener.update(rawTarget, nowMs, positionMs(), if (songDurationMs > 0L) songDurationMs else -1L)
+                    }
                     if (autoShownPart != autoPhase.part) autoShownPart = autoPhase.part
                     // Remembered corrections for this song: switch when playback passes one (a little
                     // early, since Espen tapped after hearing it). Only for normal playback, not seeks.
@@ -1342,6 +1348,7 @@ class RaveActivity : ComponentActivity() {
                         dropKind = songPhase.dropKind.name
                         autoPart = autoPhase.part.name
                         autoDrop = autoPhase.dropKind.name
+                        newPart = listener.part.name; newLevel = listener.level; pBuild = listener.pBuild; pDrop = listener.pDrop
                         partBy = when {
                             songPhase.manual -> "espen"
                             songPhase.correctionHolding -> "espen_hold"
