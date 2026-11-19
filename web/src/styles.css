@@ -508,3 +508,5 @@ select option { background: #211827; color: white; }
 .stage.tall:not([data-layout="original"]) { padding-bottom: calc(64 * var(--u)); grid-template-rows: auto minmax(0, 1fr); }
 .stage.tall[data-layout="party"] { grid-template-rows: minmax(0, 1.6fr) minmax(0, .6fr); }
 .stage.tall:not(.with-lyrics):not([data-layout="original"]) { grid-template-rows: minmax(0, 1fr); }
+
+.party-fullscreen-prompt { z-index: 6; display: flex; align-items: center; gap: 12px; max-width: 94vw; padding: 12px; border-radius: 18px; background: var(--bg); }

@@ -136,6 +136,11 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
     setSource: kind => updateSettings({ partySource: kind }),
     demoSound: demo,
   })
+  const [offerFullscreen, setOfferFullscreen] = useState(false)
+  useEffect(() => {
+    setOfferFullscreen(!!party.listening && party.listening.source !== 'mic' && !document.fullscreenElement)
+  }, [party.listening])
+  useEffect(() => { if (fullscreen) setOfferFullscreen(false) }, [fullscreen])
   // Demo only: let automated tests read the engine (window.__raveParty).
   if (demo) (window as unknown as { __raveParty?: unknown }).__raveParty = party.engine
   const hasCover = !!track?.coverUrl
@@ -160,6 +165,12 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
       {party.on && <PartyGrain />}
       {content}
       <PartyBanner party={party} />
+      {party.on && party.listening && offerFullscreen && !fullscreen && (
+        <div className="banner party-fullscreen-prompt">
+          <button className="pill" data-fullscreen onClick={toggleFullscreen}>Lyden er tilkoblet – gå til fullskjerm</button>
+          <button className="text-button" aria-label="Lukk fullskjermtips" onClick={() => setOfferFullscreen(false)}>Senere</button>
+        </div>
+      )}
       <Zone className="corner-zone">
       <div className="corner-buttons hideable">
         {!wide && <select className="portrait-picker chip" aria-label="Stående oppsett" value={settings.portraitLayout} onChange={e => updateSettings({ portraitLayout: e.target.value as typeof settings.portraitLayout })}>
