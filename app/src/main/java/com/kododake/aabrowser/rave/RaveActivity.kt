@@ -678,8 +678,9 @@ class RaveActivity : ComponentActivity() {
                         st.styles.take(3).joinToString { "%s %.2f".format(java.util.Locale.US, it.first.substringAfter("---"), it.second) },
                         st.bpm, st.bpmConf, st.genre?.let { "${it.first.label} %.2f".format(java.util.Locale.US, it.second) } ?: "usikker"))
             }
-            songMarks.migrate(a, t)
-            songKey = songMarks.key(a, t)
+            val durationMs = m?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L
+            songMarks.migrate(a, t, durationMs)
+            songKey = songMarks.key(a, t, durationMs)
             marksForSong = songMarks.marks(songKey)
             lastMarkCheckPos = -1L
             fftRecorder.startSong(t, a)

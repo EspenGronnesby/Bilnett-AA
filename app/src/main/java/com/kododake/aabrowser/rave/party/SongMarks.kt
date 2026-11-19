@@ -18,20 +18,32 @@ internal class SongMarks(private val file: File) {
     private val songs = LinkedHashMap<String, MutableList<Mark>>()
     private var loaded = false
 
-    /** The same key as the genre book and the style teacher ([com.kododake.aabrowser.rave.GenreBook.key]). */
-    fun key(artist: String, title: String) = com.kododake.aabrowser.rave.GenreBook.key(title, artist)
+    /**
+     * The genre book's song key ([com.kododake.aabrowser.rave.GenreBook.key], like the style teacher) plus the
+     * length in seconds: that key folds «(Radio Edit)», «(Extended)» … into one song, but the marks are positions
+     * in ms, so each version keeps its own.
+     */
+    fun key(artist: String, title: String, durationMs: Long): String {
+        val base = com.kododake.aabrowser.rave.GenreBook.key(title, artist)
+        return if (durationMs > 0L) "$base|${(durationMs + 500L) / 1000L}" else base
+    }
 
     /** The key used before 2026-11-19 (title not cleaned); only to move old marks over, see [migrate]. */
     fun legacyKey(artist: String, title: String) =
         "${(com.kododake.aabrowser.rave.cleanArtist(artist) ?: artist).trim().lowercase(Locale.ROOT)}|${title.trim().lowercase(Locale.ROOT)}"
 
-    /** Moves a song's marks from its old key to the new one the first time the song plays again. */
-    fun migrate(artist: String, title: String) {
+    /**
+     * Moves a song's marks from its old key to the new one the first time the song plays again. If the new key
+     * already has marks they are merged, and the newer mark wins within ±4 s (as in [add]).
+     */
+    fun migrate(artist: String, title: String, durationMs: Long) {
         load()
-        val old = legacyKey(artist, title); val new = key(artist, title)
-        if (old == new || new in songs) return
-        val list = songs.remove(old) ?: return
-        songs[new] = list
+        val old = legacyKey(artist, title); val new = key(artist, title, durationMs)
+        if (old == new) return
+        val moved = songs.remove(old) ?: return
+        val list = songs.getOrPut(new) { mutableListOf() }
+        moved.filter { m -> list.none { kotlin.math.abs(it.positionMs - m.positionMs) < SAME_MARK_MS } }.forEach { list.add(it) }
+        list.sortBy { it.positionMs }
         save()
     }
 

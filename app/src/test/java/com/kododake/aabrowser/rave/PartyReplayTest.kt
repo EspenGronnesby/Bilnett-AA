@@ -68,7 +68,8 @@ class PartyReplayTest {
         var k = key
         if (k.first().first > MID_SONG_START_MS) {
             val first = presses[csv.name]?.firstOrNull { it >= k.first().first - REACTION_MS }
-            k = if (first == null) emptyList() else k.filter { it.first >= first - REACTION_MS }
+            // No press logged for this play (older log): keep the key as it is rather than lose the song.
+            if (first != null) k = k.filter { it.first >= first - REACTION_MS }
         }
         val out = ArrayList<Pair<Long, String>>(k.size)
         for ((i, e) in k.withIndex()) {
@@ -312,11 +313,13 @@ class PartyReplayTest {
             }
             val td = key.zipWithNext().filter { (x, y) -> x.second != "DROP" && y.second == "DROP" }.map { it.second.first }
             trueDrops += td.size
+            // On the cleaned key, automatic drops before the key starts aren't scored (the raw key keeps the old rule).
+            val from = if (clean) key.first().first else Long.MIN_VALUE
             found += td.count { d -> auto.any { kotlin.math.abs(it - d) <= 3_000L } }
-            extra += auto.count { x -> td.none { kotlin.math.abs(it - x) <= 3_000L } }
+            extra += auto.count { x -> x >= from && td.none { kotlin.math.abs(it - x) <= 3_000L } }
             val bar = sg.barMs
             foundBar += td.count { d -> auto.any { kotlin.math.abs(it - d) <= bar } }
-            extraBar += auto.count { x -> x >= key.first().first && td.none { kotlin.math.abs(it - x) <= bar } }
+            extraBar += auto.count { x -> x >= from && td.none { kotlin.math.abs(it - x) <= bar } }
             // Build-up sections: [start, next change) in Espen's key.
             val changes = key.filterIndexed { i, e -> i == 0 || e.second != key[i - 1].second }
             for ((i, c) in changes.withIndex()) {

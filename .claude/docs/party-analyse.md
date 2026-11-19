@@ -87,8 +87,10 @@ i Espens drop (AUC 78–90 % i 4 av 4 sanger), men som ekstra bevis ga den ingen
 renset fasit (trykk flyttet 600 ms bakover; manuell modus startet midt i sang teller fra første trykk) og nye mål:
 drop innen én takt, falske drop per minutt, build-up fanget. `replayAgainstEspensAnswers` gir både gamle tall (rå fasit)
 og nye (renset, drop-musikk og andre sjangre); første kjøring skrev `baseline.txt` i assets.
-Baseline (9 drop-sanger): enig 69 %, drop innen én takt 8/14, falske drop 1,84/min, build-up fanget 2/14.
-Rettelser per sang (`SongMarks`) bruker nå samme nøkkel som `GenreBook`/stil-læreren (gamle merker flyttes ved neste avspilling).
+Baseline (9 drop-sanger): enig 69 %, drop innen én takt 10/16, falske drop 1,52/min, build-up fanget 2/16.
+`REACTION_MS` = 600 ms er en antakelse, ikke målt ennå.
+Rettelser per sang (`SongMarks`) bruker nå `GenreBook.key` + lengde i sekunder (versjoner holdes adskilt); gamle merker
+flyttes og slås sammen ved neste avspilling.
 Plan: `~/.claude/plans/lag-en-plan-for-fizzy-parasol.md` (steg 0–6).
 
 Gammel plan for trening:
