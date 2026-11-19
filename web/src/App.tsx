@@ -16,6 +16,7 @@ import { SettingsSheet } from './ui/Settings'
 import { useFullscreen } from './ui/useFullscreen'
 import { useIdle } from './ui/useIdle'
 import { useWakeLock } from './ui/useWakeLock'
+import { useReducedMotion } from './ui/useReducedMotion'
 import { PartyBanner, PartyControls, PartyCoverFx, PartyGrain, PartyParticles, PartyScene, PartyShaker } from './party/PartyLayers'
 import { useParty, type Party } from './party/useParty'
 import { Koko } from './party/Koko'
@@ -128,6 +129,7 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
   const showVideo = settings.videoOn && videos.current !== null && videos.shown
   // Party: the volume that drives it (Rave PC's own, or the playing device's), as the phone volume in the app.
   const partyVolume = now.source === 'local' ? settings.volume / 100 : (now.device?.volume ?? 100) / 100
+  const reduceMotion = useReducedMotion()
   const party = useParty({
     enabled: settings.party, source: settings.partySource, playing: status === 'playing', track,
     positionMs: now.positionMs, volume: partyVolume,
@@ -135,6 +137,7 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
     setEnabled: on => updateSettings({ party: on }),
     setSource: kind => updateSettings({ partySource: kind }),
     demoSound: demo,
+    calm: settings.noFlash || reduceMotion,
   })
   const zoneHeight = useZoneHeight()
   // The troubleshooting box (browser, full screen, sound) only with /?debug.

@@ -94,7 +94,7 @@ export class ParticleLayer {
   private lastSpawn = 0
 
   draw(ctx: CanvasRenderingContext2D, w: number, h: number, e: WebPartyEngine, colors: Rgb[], cx: number, cy: number,
-    coverRadius: number, volume: number, video: boolean, dp: number, now: number) {
+    coverRadius: number, volume: number, video: boolean, dp: number, now: number, calm = false) {
     const spectrum = e.spectrum
     const particles = e.particles, density = e.density, softness = e.softness
     const intensity = e.audioIntensity
@@ -173,7 +173,7 @@ export class ParticleLayer {
       const distance = coverRadius + span * phase * phase * travel
       const dx = Math.cos(angle), dy = Math.sin(angle)
       const px = cx + dx * distance, py = cy + dy * distance
-      if (newHit && (i * 0.618034 + this.seed * 0.381966) % 1 < 0.17) this.flashes[i] = Math.max(this.flashes[i], Math.max(twinkle, 0.7))
+      if (newHit && !calm && (i * 0.618034 + this.seed * 0.381966) % 1 < 0.17) this.flashes[i] = Math.max(this.flashes[i], Math.max(twinkle, 0.7))
       else this.flashes[i] *= flashDecay
       const flash = this.flashes[i]
       const musicalGlow = clamp(vocal * 0.45 + vocalHit * 0.3 + highs * 0.2 + band * 0.15 + flash * 0.6 + drop * 0.5 + e.energy * 0.2, 0, 1)
@@ -425,9 +425,12 @@ export function drawGlow(ctx: CanvasRenderingContext2D, size: number, shape: Orb
 }
 
 // ---------- Party background (RaveActivity background Canvas, Party part) ----------
-/** Lights that hit with the music, strobe, flashes, the drop hit, dip and vignette. [t]: 8 s cycle. */
+/**
+ * Lights that hit with the music, strobe, flashes, the drop hit, dip and vignette. [t]: 8 s cycle.
+ * [calm] («Ingen blinking»): no strobe, white flashes or drop hit, and the dark dip is softened.
+ */
 export function drawPartyBackground(ctx: CanvasRenderingContext2D, w: number, h: number, e: WebPartyEngine, palette: Rgb[],
-  hard: Rgb[], hasCover: boolean, t: number) {
+  hard: Rgb[], hasCover: boolean, t: number, calm = false) {
   ctx.globalCompositeOperation = 'source-over'
   ctx.globalAlpha = 1
   ctx.clearRect(0, 0, w, h)
@@ -455,13 +458,13 @@ export function drawPartyBackground(ctx: CanvasRenderingContext2D, w: number, h:
     ctx.fillStyle = grad
     ctx.fillRect(0, 0, w, h)
   }
-  if (e.dip > 0.01) { ctx.fillStyle = `rgb(0 0 0 / ${0.85 * e.dip})`; ctx.fillRect(0, 0, w, h) }
-  if (e.strobe > 0.03) {
+  if (e.dip > 0.01) { ctx.fillStyle = `rgb(0 0 0 / ${(calm ? 0.3 : 0.85) * e.dip})`; ctx.fillRect(0, 0, w, h) }
+  if (e.strobe > 0.03 && !calm) {
     const color = lerpRgb(hard[e.strobeColor % hard.length], WHITE, 0.45)
     ctx.fillStyle = css(color, Math.min(0.45 * e.strobe, 0.45)); ctx.fillRect(0, 0, w, h)
     radial(big * 0.6, [[0, `rgb(255 255 255 / ${0.35 * e.strobe})`], [1, 'rgb(255 255 255 / 0)']])
   }
-  if (e.heavyFlash > 0.02) radial(big * 0.9, [[0, `rgb(255 255 255 / ${0.25 * e.heavyFlash})`], [1, 'rgb(255 255 255 / 0)']])
+  if (e.heavyFlash > 0.02 && !calm) radial(big * 0.9, [[0, `rgb(255 255 255 / ${0.25 * e.heavyFlash})`], [1, 'rgb(255 255 255 / 0)']])
   const g = e.grade
   if (g > 0.05) {
     ctx.globalCompositeOperation = 'screen'
@@ -469,7 +472,7 @@ export function drawPartyBackground(ctx: CanvasRenderingContext2D, w: number, h:
     ctx.globalCompositeOperation = 'source-over'
   }
   const hit = e.dropHit
-  if (hit > 0.02) radial(big * 0.9, [[0, `rgb(255 255 255 / ${0.6 * hit})`], [0.5, css(hard[0], 0.3 * hit)], [1, css(hard[0], 0)]])
+  if (hit > 0.02 && !calm) radial(big * 0.9, [[0, `rgb(255 255 255 / ${0.6 * hit})`], [0.5, css(hard[0], 0.3 * hit)], [1, css(hard[0], 0)]])
   radial(big * 0.8, [[0, 'rgb(0 0 0 / 0)'], [1, `rgb(0 0 0 / ${clamp(0.65 - g * 0.12, 0.5, 0.8)})`]])
 }
 

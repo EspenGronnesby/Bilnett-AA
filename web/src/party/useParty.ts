@@ -9,6 +9,8 @@ import { startListening, type PartyListener, type PartySource } from './audio'
 
 export interface Party {
   paused: boolean
+  /** No strobe or white flashes: the layers skip them (ring, particles and shake stay). */
+  calm: boolean
   on: boolean
   engine: WebPartyEngine
   /** Where it listens now (null = not listening). */
@@ -37,6 +39,8 @@ interface Options {
   setSource: (kind: PartySource) => void
   /** Demo only: feed a made-up hardstyle track (build-up, then a distorted drop) instead of real sound. */
   demoSound?: boolean
+  /** No strobe or white flashes («Ingen blinking», or the system's «reduce motion»). */
+  calm?: boolean
 }
 
 let shared: WebPartyEngine | null = null
@@ -184,6 +188,7 @@ export function useParty(o: Options): Party {
   }, [])
 
   // Stable object: the layers subscribe once, and Koko keeps his place between Spotify polls.
-  return useMemo(() => ({ paused: !o.playing, on: o.enabled, engine, listening, error, connecting, toggle, listenTo, onFrame }),
-    [o.playing, o.enabled, engine, listening, error, connecting, toggle, listenTo, onFrame])
+  const calm = !!o.calm
+  return useMemo(() => ({ paused: !o.playing, calm, on: o.enabled, engine, listening, error, connecting, toggle, listenTo, onFrame }),
+    [o.playing, calm, o.enabled, engine, listening, error, connecting, toggle, listenTo, onFrame])
 }

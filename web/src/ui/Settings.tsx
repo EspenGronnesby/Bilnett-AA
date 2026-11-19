@@ -32,6 +32,7 @@ export function SettingsSheet({ now, settings, update, fullscreen, toggleFullscr
         </div>
         <Account now={now} settings={settings} update={update} />
         <Screen settings={settings} update={update} fullscreen={fullscreen} toggleFullscreen={toggleFullscreen} />
+        <PartySettings settings={settings} update={update} />
       </div>
     </div>
   )
@@ -122,6 +123,18 @@ function Screen({ settings, update, fullscreen, toggleFullscreen }: Pick<Props, 
         <div className="divider" />
         <Toggle label="Vis knappene bare når musa er over dem" on={settings.autoHide} onChange={autoHide => update({ autoHide })} />
       </div>
+    </section>
+  )
+}
+
+function PartySettings({ settings, update }: Pick<Props, 'settings' | 'update'>) {
+  return (
+    <section className="group">
+      <h3>Party</h3>
+      <div className="card">
+        <Toggle label="Ingen blinking (strobe og lysglimt av)" on={settings.noFlash} onChange={noFlash => update({ noFlash })} />
+      </div>
+      <p className="hint group-hint">Ringen, partiklene og ristingen er med. Slås også på av seg selv hvis Windows/Mac er satt til «reduser bevegelse».</p>
     </section>
   )
 }

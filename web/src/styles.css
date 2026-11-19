@@ -232,6 +232,7 @@ body {
 .grow { flex: 1; min-width: 0; }
 .muted-row { color: var(--muted); }
 .hint { color: var(--faint); }
+.group-hint { font-size: calc(12 * var(--u)); margin: calc(6 * var(--u)) calc(4 * var(--u)) 0; line-height: 1.4; }
 .avatar { width: calc(32 * var(--u)); height: calc(32 * var(--u)); border-radius: 999px; background: var(--control); object-fit: cover; }
 .choice { cursor: pointer; transition: background-color 180ms var(--ease-press); }
 .choice:active { background: hsl(0 0% 100% / 0.12); }

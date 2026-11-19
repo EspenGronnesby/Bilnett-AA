@@ -43,6 +43,8 @@ export interface Settings {
   partyStrength: Record<string, number>
   /** Koko the dancing ghost in Party (off by default, as in the app). */
   koko: boolean
+  /** Calm Party: no strobe or white flashes (ring, particles and shake stay). */
+  noFlash: boolean
 }
 
 export const LYRICS_STYLES = [
@@ -58,7 +60,7 @@ const KEY = 'rave.settings'
 const DEFAULTS: Settings = {
   portraitLayoutVersion: 1, portraitLayout: 'poster', orientation: 'auto', keepAwake: true, autoHide: true, autoFullscreen: false, volume: 80, player: true,
   showLyrics: true, lyricsStyle: 'scroll', lyricsGlass: true, lyricsOffsets: {}, videoOn: true,
-  party: false, partySource: 'system', partyStrength: {}, koko: false,
+  party: false, partySource: 'system', partyStrength: {}, koko: false, noFlash: false,
 }
 
 function read(): Settings {

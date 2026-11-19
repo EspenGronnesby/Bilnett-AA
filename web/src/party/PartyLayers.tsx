@@ -31,7 +31,7 @@ export function PartyScene({ party, palette, hasCover }: { party: Party; palette
     const e = party.engine
     const hard = hardPalette(pal.current.palette, !pal.current.hasCover, e.warmth)
     const t = ((now % 8000) / 8000) * Math.PI * 2 // the app's light cycle is 8 s in Party
-    drawPartyBackground(c.getContext('2d')!, c.width, c.height, e, pal.current.palette, hard, pal.current.hasCover, t)
+    drawPartyBackground(c.getContext('2d')!, c.width, c.height, e, pal.current.palette, hard, pal.current.hasCover, t, party.calm)
     // Colour grade on the blurred cover (muted in calm parts, vivid on the drop), as the app's gradeFilter.
     // Re-blurring a full-screen image is costly: only in 20 steps, and only when the step changes.
     const gr = graded.current
@@ -77,10 +77,10 @@ export function PartyParticles({ party, palette, hasCover, volume, video, dp }: 
     if (!w.r) return
     const e = party.engine
     const l = live.current
-    c.style.opacity = String(1 - 0.85 * e.dip)
+    c.style.opacity = String(1 - (party.calm ? 0.3 : 0.85) * e.dip)
     const colors = showPalette(hardPalette(l.palette, !l.hasCover, e.warmth), e.dropLook)
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0)
-    layer.draw(ctx, innerWidth, innerHeight, e, colors, w.x, w.y, w.r, l.volume, l.video, l.dp, now)
+    layer.draw(ctx, innerWidth, innerHeight, e, colors, w.x, w.y, w.r, l.volume, l.video, l.dp, now, party.calm)
   }), [party, layer])
   return <canvas ref={ref} className="party-layer" data-shake="" aria-hidden />
 }
@@ -132,7 +132,7 @@ export function PartyCoverFx({ party, palette, hasCover, volume, dp }: {
       cover.style.transform = `scale(${s})`
     }
     const edge = edgeRef.current
-    if (edge) edge.style.opacity = String(Math.min(0.55 * e.snare * structureWeight(e.vibe), 0.55))
+    if (edge) edge.style.opacity = party.calm ? '0' : String(Math.min(0.55 * e.snare * structureWeight(e.vibe), 0.55))
   }), [party, orb])
   useEffect(() => () => {
     const cover = document.querySelector('[data-party-cover] .cover') as HTMLElement | null
