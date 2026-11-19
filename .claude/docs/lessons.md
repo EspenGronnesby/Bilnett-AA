@@ -5,6 +5,34 @@
 
 ---
 
+### Rave web: knapper lå oppå hverandre, finn dem med elementFromPoint
+**Dato:** 2026-11-19
+**Kategori:** Web / UI
+**Berørte filer:** `web/src/App.tsx` (`useZoneHeight`, `HeroColumn`), `web/src/styles.css` (stående oppsett, `.corner-zone`, `.stage.wide`, `.lyrics-foot`, `.party-controls`), `web/src/party/PartyLayers.tsx` (`PartyControls`)
+
+**Problem:** Tekststil-knapper (Myk rulling, Ord for ord) og valget for stående oppsett i hjørnet kunne ikke trykkes i enkelte oppsett. Bygget og typesjekken var grønne, og skjermen så riktig ut.
+
+**Årsak:** (1) Knappeområdet i stående oppsett var `position: absolute` med z-index 4 oppå tekstpanelet, så tekstpanelets egne knapper fikk aldri klikk. (2) `.cover-wrap .cover` har z-index 1, og `.corner-zone` hadde ingen z-index, så coveret lå over hjørneknappene. (3) I liggende med Party ble venstre kolonne høyere enn skjermen, og `overflow-x: auto` på `.lyrics-foot` gjemte knappene sidelengs.
+
+**Løsning:**
+- Knappeområdet får egen grid-rad (`grid-row: -2 / -1`) i stedet for absolute.
+- Coveret krymper etter målt plass: ResizeObserver setter `--zone-h` og `--info-h`, og CSS bruker dem i `calc()`. Målingen følger gjeldende tittel via MutationObserver, fordi tittelen har `key={track.id}` og byttes ut for hver sang.
+- `.corner-zone { z-index: 6 }`.
+- I liggende brukes padding/negativ margin rundt kolonnen, så Party-ringen ikke klippes.
+- `.lyrics-foot` får `flex-wrap: wrap`, og Party-kontrollene blir mindre.
+
+**Forebygging:**
+- Grønt bygg betyr ikke klikkbart. Når noe ikke lar seg trykke: kjør `document.elementFromPoint` på midten og hjørnene av hver knapp, i alle oppsett og skjermstørrelser (Playwright). Gjett ikke ut fra skjermbilder.
+- Sett `autoHide: false` i innstillingene før testen, og vent til sangteksten er lastet, ellers blir målingene feil.
+- Unngå `position: absolute` for knapperader som deler plass med annet innhold. Bruk grid-rader.
+- Når et element har z-index, må overlegg som skal ligge over det også ha z-index.
+- `overflow` på én akse klipper begge. Gi plass med padding eller negativ margin hvis noe skal stikke ut.
+- Ved CSS-rydding: mål nøkkelelementer før og etter med samme skript og diff resultatet.
+
+**🟢 Enkelt forklart:** Knappene lå under andre elementer på siden, så fingeren (musen) traff noe annet. Vi fant det ved å la et program sjekke hva som ligger øverst på hver knapp, i stedet for å se på bildet. Etter fiksen er alle 1273 knappene tilgjengelige i alle testede oppsett.
+
+---
+
 ### Ikke legg inn bevegelse/effekter eieren ikke har bedt om
 **Dato:** 2026-11-18
 **Kategori:** Party / UI
