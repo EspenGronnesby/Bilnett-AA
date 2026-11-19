@@ -234,8 +234,8 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
       </Zone>
       {keysOpen && <ShortcutsSheet onClose={() => setKeysOpen(false)} />}
       {settingsOpen && (
-        <SettingsSheet now={now} settings={settings} update={updateSettings}
-          fullscreen={fullscreen} toggleFullscreen={toggleFullscreen} onClose={() => setSettingsOpen(false)} />
+        <SettingsSheet now={now} settings={settings} update={updateSettings} wide={wide}
+          onClose={() => setSettingsOpen(false)} />
       )}
     </div>
     </ZoneLinger.Provider>

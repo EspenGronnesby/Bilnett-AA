@@ -234,6 +234,16 @@ body {
 .grow { flex: 1; min-width: 0; }
 .muted-row { color: var(--muted); }
 .hint { color: var(--faint); }
+/* Settings overview (as in Timetracker): grey icon box, title, current value, ›. */
+.nav-row { min-height: calc(56 * var(--u)); gap: calc(12 * var(--u)); }
+.nav-icon {
+  flex: none; display: grid; place-items: center; width: calc(32 * var(--u)); height: calc(32 * var(--u));
+  border-radius: calc(8 * var(--u)); background: hsl(0 0% 100% / 0.09); color: var(--muted);
+}
+.nav-icon svg { width: calc(18 * var(--u)); height: calc(18 * var(--u)); fill: currentColor; }
+.nav-value { max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: calc(14 * var(--u)); }
+.nav-chevron { color: var(--faint); font-size: calc(22 * var(--u)); line-height: 1; }
+.sheet-back { padding-left: 0; margin-bottom: calc(6 * var(--u)); }
 .row.slider { cursor: default; }
 .text-button.danger, .choice.danger { color: var(--destructive); }
 .row.confirm { gap: calc(12 * var(--u)); }
@@ -511,7 +521,10 @@ button.chip:active, .chip.sync button:active { transform: scale(0.97); }
 
 /* Portrait layouts (Settings → «Stående oppsett»). «original» keeps the older rules above;
    landscape is untouched. Order matters: a layout's rules come after the shared ones. */
-select { color: var(--fg); background: var(--surface); border-radius: 12px; padding: 8px; max-width: 48vw; }
+select {
+  color: var(--fg); background: var(--surface); border-radius: calc(10 * var(--u)); max-width: 48vw;
+  padding: calc(6 * var(--u)) calc(10 * var(--u)); font: 500 calc(14 * var(--u)) / 1.2 system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
 select option { background: #211827; color: white; }
 
 /* Shared: title at the top, lyrics fill the middle, buttons in their own row at the bottom
