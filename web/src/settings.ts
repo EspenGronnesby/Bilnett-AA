@@ -71,7 +71,7 @@ export const LYRICS_STYLES = [
 export type LyricsStyle = typeof LYRICS_STYLES[number]['id']
 
 const KEY = 'rave.settings'
-const DEFAULTS: Settings = {
+export const DEFAULTS: Settings = {
   portraitLayoutVersion: 1, portraitLayout: 'poster', landscapeLayout: 'standard', orientation: 'auto', keepAwake: true, autoHide: true, autoFullscreen: false, volume: 80, player: true,
   showLyrics: true, lyricsStyle: 'scroll', lyricsGlass: true, lyricsOffsets: {}, videoOn: true,
   party: false, partySource: 'system', partyStrength: {}, koko: false, noFlash: false, lyricsScale: 100, dim: 50, hideAfter: 3, clean: false, clock: false, lyricsStyleByLayout: {},

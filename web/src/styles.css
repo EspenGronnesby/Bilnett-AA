@@ -23,6 +23,7 @@
   --card: hsl(0 0% 100% / 0.05);
   --control: hsl(0 0% 100% / 0.08);
   --t-press: 120ms;
+  --destructive: hsl(0 72% 62%);        /* red = something is deleted/reset (design profile) */
   color-scheme: dark;
 }
 
@@ -234,6 +235,8 @@ body {
 .muted-row { color: var(--muted); }
 .hint { color: var(--faint); }
 .row.slider { cursor: default; }
+.text-button.danger, .choice.danger { color: var(--destructive); }
+.row.confirm { gap: calc(12 * var(--u)); }
 .keys { display: flex; gap: calc(6 * var(--u)); }
 kbd {
   min-width: calc(28 * var(--u)); padding: calc(3 * var(--u)) calc(8 * var(--u)); border-radius: calc(8 * var(--u));

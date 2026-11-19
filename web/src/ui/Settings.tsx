@@ -3,7 +3,7 @@ import { getDevices, getMe, transfer, type DeviceInfo, type Me } from '../spotif
 import { logout } from '../spotify/auth'
 import type { NowPlaying } from '../spotify/nowPlaying'
 import { ShortcutList } from './Shortcuts'
-import { LANDSCAPE_LAYOUTS, PORTRAIT_LAYOUTS, type Settings as SettingsData } from '../settings'
+import { DEFAULTS, LANDSCAPE_LAYOUTS, PORTRAIT_LAYOUTS, type Settings as SettingsData } from '../settings'
 
 // Settings sheet: «Konto og enhet» and «Skjerm». Opens over a dark scrim (fade only),
 // closes with Esc or a click outside.
@@ -39,6 +39,7 @@ export function SettingsSheet({ now, settings, update, fullscreen, toggleFullscr
           <h3>Hurtigtaster</h3>
           <ShortcutList />
         </section>
+        <Reset settings={settings} update={update} />
       </div>
     </div>
   )
@@ -171,6 +172,24 @@ function PartySettings({ settings, update }: Pick<Props, 'settings' | 'update'>)
       <h3>Party</h3>
       <div className="card">
         <Toggle label="Ingen blinking (strobe og lysglimt av)" on={settings.noFlash} onChange={noFlash => update({ noFlash })} />
+      </div>
+    </section>
+  )
+}
+
+/** Everything back to the defaults, except the lyrics sync per device (measured for each device). */
+function Reset({ settings, update }: Pick<Props, 'settings' | 'update'>) {
+  const [asking, setAsking] = useState(false)
+  return (
+    <section className="group">
+      <div className="card">
+        {asking
+          ? <div className="row confirm">
+              <span className="grow">Er du sikker? Alle valg settes tilbake.</span>
+              <button className="text-button" onClick={() => setAsking(false)}>Avbryt</button>
+              <button className="text-button danger" onClick={() => { update({ ...DEFAULTS, lyricsOffsets: settings.lyricsOffsets }); setAsking(false) }}>Ja</button>
+            </div>
+          : <button className="row choice danger" onClick={() => setAsking(true)}><span className="grow">Tilbakestill innstillinger</span></button>}
       </div>
     </section>
   )
