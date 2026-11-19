@@ -509,4 +509,28 @@ select option { background: #211827; color: white; }
 .stage.tall[data-layout="party"] { grid-template-rows: minmax(0, 1.6fr) minmax(0, .6fr); }
 .stage.tall:not(.with-lyrics):not([data-layout="original"]) { grid-template-rows: minmax(0, 1fr); }
 
+/* Anchor the Party cover to the viewport, independently of text and controls. */
+.stage.tall[data-layout="party"] { --party-cover-size: min(55vw, 30dvh); }
+.stage.tall[data-layout="party"] > .hero:first-child { position: static; }
+.stage.tall[data-layout="party"] .cover-wrap {
+  position: absolute;
+  left: 50%; top: 50%;
+  translate: -50% -50%;
+}
+.stage.tall[data-layout="party"] .cover { --size: var(--party-cover-size); }
+.stage.tall[data-layout="party"] > .hero:first-child .info {
+  position: absolute;
+  top: calc(50% - var(--party-cover-size) / 2 - 24 * var(--u));
+  left: 50%;
+  translate: -50% -100%;
+  width: 90%;
+}
+.stage.tall[data-layout="party"] > .lyrics-panel {
+  position: absolute;
+  top: calc(50% + var(--party-cover-size) / 2 + 18 * var(--u));
+  bottom: calc(76 * var(--u));
+  left: calc(24 * var(--u)); right: calc(24 * var(--u));
+  width: auto; height: auto;
+}
+
 .party-fullscreen-prompt { z-index: 6; display: flex; align-items: center; gap: 12px; max-width: 94vw; padding: 12px; border-radius: 18px; background: var(--bg); }

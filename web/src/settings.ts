@@ -82,7 +82,10 @@ export function useSettings(): [Settings, (change: Partial<Settings>) => void] {
 
   const update = useCallback((change: Partial<Settings>) => {
     setSettings(prev => {
-      const next = { ...prev, ...change }
+      const preset: Partial<Settings> = change.portraitLayout === 'cinema'
+        ? { videoOn: true, showLyrics: true, lyricsGlass: false }
+        : change.portraitLayout === 'lyrics' ? { showLyrics: true } : {}
+      const next = { ...prev, ...preset, ...change }
       try { localStorage.setItem(KEY, JSON.stringify(next)) } catch { /* private mode: keep in memory */ }
       return next
     })

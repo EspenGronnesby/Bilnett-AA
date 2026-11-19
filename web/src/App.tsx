@@ -273,7 +273,7 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
         // Portrait: cover on top (smaller with lyrics), title, lyrics filling the middle, buttons.
         <main data-layout={settings.portraitLayout} className={lyricsOn ? 'stage tall with-lyrics' : 'stage tall'}>
           <section className="hero">
-            {cover}
+            {settings.portraitLayout !== 'cinema' && cover}
             <Info track={track} compact={false} />
           </section>
           {lyricsOn && panel('center')}
