@@ -5,6 +5,98 @@
 
 ---
 
+### Rave web: Vercel hoppet over utrullingen når siste commit ikke rørte web/
+**Dato:** 2026-11-19
+**Kategori:** Vercel / Build
+**Berørte filer:** `web/README.md` (endret for å tvinge ny bygging), Vercel-prosjektet (rotmappe `web/`)
+
+**Problem:** En opplasting med to commits: først en endring i `web/` (Party-ringen), så en commit som bare endret app, test og docs. Vercel-status ble CANCELED, og nettsiden sto på forrige versjon. «Redeploy» av samme commit via API ble også avbrutt.
+
+**Årsak:** Vercel-prosjektet har rotmappe `web/` og hopper over bygging når den siste commiten ikke endrer `web/`. Hele opplastingen ble derfor hoppet over, også web-endringen som kom først.
+
+**Løsning:** En ekte endring i `web/` (oppdatert `web/README.md`), ny commit. Da ble bygget READY.
+
+**Forebygging:**
+- Når en opplasting har web-endringer og siste commit ikke rører `web/`: sjekk utrullingen før du melder at den er ute.
+- Vurder å sette «Ignored Build Step» i Vercel → Settings → Git, slik at den sammenligner med forrige vellykkede utrulling i stedet for bare siste commit.
+- Sjekk status med Vercel-API-et (`list_deployments`: BUILDING / READY / CANCELED), ikke bare ved å se etter bundle-navnet.
+
+**🟢 Enkelt forklart:** Vercel bygger bare nettsiden når den siste endringen gjelder nettsidemappen. Har du sendt flere endringer i samme pakke og den siste ikke gjelder nettsiden, hoppes hele pakken over. Løsningen er å gjøre en liten, ekte endring i nettsidemappen og sende den på nytt.
+
+### Rave web: Vercel-sikkerhetssjekk (403) etter tett polling av nettsiden
+**Dato:** 2026-11-19
+**Kategori:** Vercel / Other
+**Berørte filer:** Ingen kodefiler. Gjelder hvordan deploy-status ble sjekket.
+
+**Problem:** En løkke som hentet forsiden med `curl` hvert 5. sekund i flere minutter, for å se om ny bundle var ute. Etter en stund fikk curl HTTP 403 med `x-vercel-mitigated: challenge` og siden «Vercel Security Checkpoint».
+
+**Årsak:** Vercels bot-beskyttelse oppdaget tett, automatisk polling. Vanlige nettlesere slipper gjennom, men `curl` fra maskinen ble blokkert en stund.
+
+**Løsning:** Stoppet polling. Brukte Vercel-API-et (`list_deployments`) for status. Én enkelt sjekk av bundle-navnet etterpå.
+
+**Forebygging:**
+- Ikke poll nettsiden tett. Bruk Vercel-API-et for status.
+- Gjør høyst én direkte sjekk av nettsiden når utrullingen er READY.
+
+**🟢 Enkelt forklart:** Vercel tror en robot banker på døra når den spør hver 5. sekund. Da stenges døra en stund. Spør heller Vercel om status, og kikk på nettsiden én gang når den er klar.
+
+### Rave web: Party-ringen lå inni coveret og coveret pulserte over den
+**Dato:** 2026-11-19
+**Kategori:** React / UI
+**Berørte filer:** `web/src/party/visuals.ts` (`OrbLayer.draw`), `web/src/party/PartyLayers.tsx`, `web/src/party/PartyCoverFx.tsx`
+
+**Problem:** Party-ringen rundt coveret så ut til å ligge inni coveret. Coveret pulserte også opptil ca. 15 % uten at ringen fulgte med, så coveret la seg over ringen.
+
+**Årsak:** Grunnradius var `side * 0.45` (ca. 0,52 × coveret), altså 2–3 % innenfor kanten og rett på de avrundede hjørnene (superellipse n=8). Pulsen (`scale`) ble regnet etter ringen, og det fantes i tillegg en dobbel «breath».
+
+**Løsning:**
+- Radius `side * 0.48` (ca. 0,56 × coveret), som klarer hjørnene.
+- Pulsen regnes før ringen tegnes og ganges inn i `size`, slik at ringen vokser med coveret.
+- Dobbel «breath» fjernet.
+
+Verifisert med nærbilder i rolig tilstand og med tvunget maks kick (`Object.defineProperty` på motoren med `get` og tom `set`). Commit `4278bf6`.
+
+**Forebygging:**
+- Når noe skal ligge rundt et element som pulserer: regn pulsen først og bruk den i størrelsen til begge.
+- Test hjørnene, ikke bare midten av kanten.
+- Test med tvunget maks verdi, ikke bare i det tilfeldige øyeblikket.
+
+**🟢 Enkelt forklart:** Ringen var lagt litt for tett inntil coveret, og coveret vokste mer enn ringen. Nå er ringen litt større, og den vokser i takt med coveret, så den alltid ligger rundt det.
+
+### Rave web: Party-kontrollene lagde et tomt hull og viste seg bare over en usynlig sone
+**Dato:** 2026-11-19
+**Kategori:** React / UI
+**Berørte filer:** `web/src/styles.css`, `web/src/party/PartyLayers.tsx` (`PartyControls`), bunnstripen i `web/src/App.tsx`
+
+**Problem:** Party-kontrollene lå i en egen skjult sone mellom sangtekst og bunnstripe. Plassen ble holdt av også når de var skjult, og kontrollene viste seg bare når musen var over den usynlige sonen.
+
+**Årsak:** Kontrollene var lagt i en egen `Zone` som kunne skjules, i stedet for å være del av den felles bunnstripen.
+
+**Løsning:** Flyttet inn øverst i bunnstripen, som vises og skjules sammen med resten. I liggende side ligger de side om side med visningsknappene i ¾ størrelse. Liggende Party-scene er bygd om til tittel | cover | tekst. Commits `cdc8f43`, `16c9181`.
+
+**Forebygging:**
+- Kontroller som skal vises og skjules sammen med andre, legges i samme felles stripe, ikke i egen skjult sone.
+- En skjult sone skal ikke reservere plass.
+
+**🟢 Enkelt forklart:** Knappene lå i en egen boks som var usynlig, men tok likevel plass. Nå ligger de i samme felt som resten av knappene nederst, og forsvinner sammen med dem.
+
+### adb-tilkoblingen falt ut midt i bygging
+**Dato:** 2026-11-19
+**Kategori:** Other
+**Berørte filer:** Ingen kodefiler. Gjelder installasjon på telefon.
+
+**Problem:** Telefonen var `device` før `assembleDebug`, men `adb install` svarte «no devices» etter bygget.
+
+**Årsak:** Tilkoblingen til telefonen ble borte under bygging (trolig USB-kabel, skjermlås eller ADB-forbindelsen som brøt).
+
+**Løsning:** Sjekk `adb get-state` rett før `adb install`. Prøv igjen etter noen sekunder når den viser `device`.
+
+**Forebygging:**
+- Kjør `adb get-state` rett før install, ikke bare i starten av økten.
+- Hvis den mister tilkoblingen: koble til på nytt og godkjenn USB-feilsøking på telefonen.
+
+**🟢 Enkelt forklart:** Telefonen var koblet til, men falt av mens appen ble bygget. Før du installerer, sjekk at telefonen fortsatt er der. Hvis ikke, koble til igjen og prøv på nytt.
+
 ### Rave web: knapper lå oppå hverandre, finn dem med elementFromPoint
 **Dato:** 2026-11-19
 **Kategori:** Web / UI
