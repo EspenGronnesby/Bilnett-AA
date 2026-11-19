@@ -338,7 +338,6 @@ kbd {
   overflow-x: auto; scrollbar-width: none;
 }
 .lyrics-foot::-webkit-scrollbar { display: none; }
-.lyrics-foot .mode-buttons { flex-wrap: wrap; flex: 0 1 auto; justify-content: flex-start; }
 .lyrics-foot .style-dots { flex: none; }
 .lyrics-foot .chip { white-space: nowrap; flex: none; }
 .lyrics-foot:empty { display: none; }
@@ -625,7 +624,7 @@ select option { background: #211827; color: white; }
 .stage.wide[data-layout="party"] .party-center > .lyrics-panel { width: max(var(--land-cover), 40vw); height: var(--land-lyrics); flex: none; }
 .stage.wide[data-layout="party"] .side { max-height: 100%; min-width: 0; }
 /* The buttons in the lyrics band at ¾ size, so they fit in one row under the lyrics. */
-.stage.wide[data-layout="party"] .party-center .lyrics-foot, .stage.wide[data-layout="party"] .party-modes { --u: calc(var(--u-page) * .75); }
+.stage.wide[data-layout="party"] .party-center .lyrics-foot { --u: calc(var(--u-page) * .75); }
 .stage.wide[data-layout="party"] .side-info .info { text-align: center; }
 .stage.wide[data-layout="party"] .side-zone {
   display: grid; justify-items: center; align-content: safe center; gap: calc(12 * var(--u));

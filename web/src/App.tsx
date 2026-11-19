@@ -6,7 +6,6 @@ import { LyricsPanel, ModeButtons } from './lyrics/LyricsPanel'
 import { useLyrics } from './lyrics/useLyrics'
 import { LANDSCAPE_LAYOUTS, PORTRAIT_LAYOUTS, useSettings } from './settings'
 import { accentOf, css, useCoverColors, type Rgb } from './ui/colors'
-import { SOURCE_LABEL } from './video/apple'
 import { useVideos } from './video/useVideos'
 import { VideoLayer } from './video/VideoLayer'
 import { Controls, playerProblemText } from './ui/Controls'
@@ -263,16 +262,16 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
       )}
       {settings.videoOn && videos.clips.length > 1 && videos.current && (
         <button className="chip" onClick={videos.next}>
-          Neste · {videos.index + 1}/{videos.clips.length} · {SOURCE_LABEL[videos.current.source]}
+          Neste · {videos.index + 1}/{videos.clips.length}
         </button>
       )}
     </ModeButtons>
   )
   // «Bass-puls» and the word hits follow the music while Party listens (as the app's lyricsPulse).
   const pulse = () => (party.on ? Math.max(party.engine.kick, party.engine.bass * 0.6) : 0)
-  const panel = (align: 'center' | 'start', footer?: ReactNode) => (
+  const panel = (align: 'center' | 'start') => (
     <LyricsPanel lyrics={lyrics} positionMs={now.positionMs} offsetMs={offsetMs} settings={settings}
-      update={updateFromLyrics} accent={accent} pulse={pulse} align={align} footer={footer} />
+      update={updateFromLyrics} accent={accent} pulse={pulse} align={align} />
   )
   const partyControls = party.on && (
     <div className="hideable">
@@ -470,7 +469,8 @@ function HeroColumn({ autoHide, clean, top, rest }: { autoHide: boolean; clean: 
   }, [])
   // The gap between the two parts counts too (it disappears with the buttons).
   const gap = restRef.current ? parseFloat(getComputedStyle(restRef.current.parentElement!).rowGap) || 0 : 0
-  const normal = autoHide && !awake ? (restHeight + gap) / 2 : 0
+  // Nothing under the cover (Party off, no notice): nothing to make room for, so no glide either.
+  const normal = autoHide && !awake && restHeight > 0 ? (restHeight + gap) / 2 : 0
   // «Ren visning» keeps the cover exactly where it was when it was switched on: it doesn't glide
   // when H is pressed, nor when the mouse passes.
   const frozen = useRef<number | null>(null)

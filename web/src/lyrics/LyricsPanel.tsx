@@ -28,10 +28,9 @@ interface PanelProps {
   pulse: () => number
   align: 'center' | 'start'
   /** Extra content under the lyrics (the mode buttons in landscape). */
-  footer?: React.ReactNode
 }
 
-export function LyricsPanel({ lyrics, positionMs, offsetMs, settings, update, accent, pulse, align, footer }: PanelProps) {
+export function LyricsPanel({ lyrics, positionMs, offsetMs, settings, update, accent, pulse, align }: PanelProps) {
   const [toast, setToast] = useState<string | null>(null)
   // The buttons under the lyrics show while the mouse is over the panel.
   const [awake, zone] = useZone()
@@ -105,7 +104,6 @@ export function LyricsPanel({ lyrics, positionMs, offsetMs, settings, update, ac
       {toast && <div className="ly-toast">{toast}</div>}
       <div className="lyrics-foot hideable">
         {lyrics.state === 'ok' && lyrics.lines.length > 0 && <StyleDots current={settings.lyricsStyle} onPick={pick} />}
-        {footer}
       </div>
     </div>
   )
