@@ -247,6 +247,7 @@ export function PartyControls({ party, strength, setStrength, koko, setKoko }: {
         </div>
         <button className={koko ? 'chip on' : 'chip'} onClick={() => setKoko(!koko)}>Koko</button>
         <span className="chip info">{party.connecting ? 'Kobler til …' : party.listening ? party.paused ? 'Pause' : party.listening.status() : 'Ikke tilkoblet'}</span>
+        {party.listening && e.hearing && <span className="chip info">{e.genreLabel}</span>}
       </div>
       {party.listening && <span className="chip info">{party.listening.label}</span>}
       <div className="vibe">

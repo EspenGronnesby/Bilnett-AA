@@ -136,6 +136,8 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
     setSource: kind => updateSettings({ partySource: kind }),
     demoSound: demo,
   })
+  // The troubleshooting box (browser, full screen, sound) only with /?debug.
+  const [debug] = useState(() => new URLSearchParams(location.search).has('debug'))
   const [fullscreenError, setFullscreenError] = useState('')
   useEffect(() => {
     const onError = (e: Event) => setFullscreenError((e as CustomEvent<string>).detail)
@@ -171,7 +173,7 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
       {party.on && <PartyGrain />}
       {content}
       <PartyBanner party={party} />
-      {settingsOpen && <details style={{ position: 'fixed', bottom: 8, left: 8, zIndex: 20, background: '#111', maxWidth: '90vw' }}><summary>Feilsøking</summary>
+      {settingsOpen && debug && <details style={{ position: 'fixed', bottom: 8, left: 8, zIndex: 20, background: '#111', maxWidth: '90vw' }}><summary>Feilsøking</summary>
         <pre style={{ whiteSpace: 'pre-wrap' }}>{JSON.stringify({ browser: navigator.userAgent, fullscreen: !!document.fullscreenElement, window: [innerWidth, innerHeight], screen: [screen.width, screen.height], audio: party.listening?.diagnostics(), error: party.error, fullscreenError }, null, 2)}</pre>
       </details>}
       {fullscreenError && <div className="banner" style={{ zIndex: 8, background: '#111', padding: 12 }}>Fullskjerm ble avvist. Prøv F11 i Chrome. <button onClick={() => setFullscreenError('')}>Lukk</button></div>}

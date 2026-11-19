@@ -61,7 +61,6 @@ function read(): Settings {
     if (!raw) return DEFAULTS
     const saved = JSON.parse(raw) as Partial<Settings>
     const next = { ...DEFAULTS, ...saved }
-    if (next.partySource === 'mic') next.partySource = 'system'
     if (saved.portraitLayoutVersion !== 1) {
       if (!saved.portraitLayout || saved.portraitLayout === 'original') next.portraitLayout = 'poster'
       next.portraitLayoutVersion = 1

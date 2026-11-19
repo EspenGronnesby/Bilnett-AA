@@ -86,19 +86,30 @@ export function useParty(o: Options): Party {
       return true
     }
     const lost = () => { if (activeListener.current?.status() === 'Deling avsluttet') { activeListener.current = null; setListening(null); setError('Deling avsluttet') } }
+    // The choice Espen makes is remembered. The automatic microphone fallback is not: next time
+    // Party tries the PC's sound again.
     startListening(kind, engine, lost)
-      .then(l => { if (keep(l) && kind !== 'mic') live.current.setSource(kind) })
+      .then(l => { if (keep(l)) live.current.setSource(kind) })
       .catch(e => {
         if (mine !== request.current) return
-        setConnecting(false)
-        setError(explain(e, kind))
+        // Cancelled in the sharing dialog: respect that, don't ask for the microphone instead.
+        const cancelled = e instanceof DOMException && e.name === 'NotAllowedError'
+        if (kind === 'mic' || cancelled) { setConnecting(false); setError(explain(e, kind)); return }
+        setError(`${explain(e, kind)} Bruker mikrofonen.`)
+        startListening('mic', engine, lost)
+          .then(keep)
+          .catch(e2 => {
+            if (mine !== request.current) return
+            setConnecting(false)
+            setError(explain(e2, 'mic'))
+          })
       })
-  }, [engine, stopListening])
+  }, [engine])
 
   const toggle = useCallback(() => {
     const on = !live.current.enabled
     live.current.setEnabled(on)
-    if (on && !live.current.demoSound) listenTo(live.current.source === 'mic' ? 'system' : live.current.source)
+    if (on && !live.current.demoSound) listenTo(live.current.source)
     else { stopListening(); setError(null) }
   }, [listenTo, stopListening])
 
