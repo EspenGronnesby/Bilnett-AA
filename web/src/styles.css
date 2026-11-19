@@ -589,7 +589,7 @@ select option { background: #211827; color: white; }
 /* «Ren visning»: title, buttons, lyrics and banners hidden in place (nothing moves); cover, visuals,
    video and Koko stay. The corner buttons (with «Vis alt») come back while the mouse moves. */
 .screen.clean main .info, .screen.clean main > .hero:last-child:not(:first-child), .screen.clean .hero-rest,
-.screen.clean .lyrics-panel, .screen.clean .banner, .screen.clean .party-banner, .screen.clean .side-zone {
+.screen.clean .lyrics-panel, .screen.clean .banner, .screen.clean .party-banner {
   visibility: hidden; pointer-events: none;
 }
 .screen.clean:not(.idle) .corner-zone .hideable { opacity: 1; pointer-events: auto; }
@@ -611,27 +611,21 @@ select option { background: #211827; color: white; }
 .stage.wide.split[data-layout="lyrics"] .cover { --size: max(calc(80 * var(--u)), min(calc(100dvh - var(--rest-h, 0px) - var(--dock-h, 0px) - 175 * var(--u)), 18vw, calc(200 * var(--u)))); }
 /* Filmvisning: no cover (App.tsx), the lyrics low on the screen over the video. */
 .stage.wide.split[data-layout="cinema"] > .lyrics-panel { align-self: end; height: min(40vh, calc(420 * var(--u))); text-shadow: 0 2px 8px #000; }
-/* Party-scene: title | cover (in the middle of the screen) + lyrics band | buttons. */
+/* Party-scene: title | the cover, big, in the middle of the screen | lyrics. */
 .stage.wide[data-layout="party"] {
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: calc(32 * var(--u));
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: calc(40 * var(--u));
   padding: calc(40 * var(--u)) calc(32 * var(--u)) calc(24 * var(--u));
-  --land-cover: min(36vw, calc(100dvh - var(--dock-h, 0px) - 108 * var(--u)));
-  --land-lyrics: min(28dvh, calc(300 * var(--u)));
+  --land-cover: min(34vw, calc(100dvh - var(--dock-h, 0px) - 108 * var(--u)));
 }
-.stage.wide[data-layout="party"].with-lyrics { --land-cover: min(32vw, calc(100dvh - var(--dock-h, 0px) - 132 * var(--u) - var(--land-lyrics))); }
-.stage.wide[data-layout="party"] .party-center { display: flex; flex-direction: column; align-items: center; gap: calc(24 * var(--u)); }
+.stage.wide[data-layout="party"] .party-center { display: grid; place-items: center; }
 .stage.wide[data-layout="party"] .cover { --size: var(--land-cover); }
-.stage.wide[data-layout="party"] .party-center > .lyrics-panel { width: max(var(--land-cover), 40vw); height: var(--land-lyrics); flex: none; }
-.stage.wide[data-layout="party"] .side { max-height: 100%; min-width: 0; }
-/* The buttons in the lyrics band at ¾ size, so they fit in one row under the lyrics. */
-.stage.wide[data-layout="party"] .party-center .lyrics-foot { --u: calc(var(--u-page) * .75); }
+.stage.wide[data-layout="party"] .side { max-height: 100%; min-width: 0; width: 100%; }
+.stage.wide[data-layout="party"] .side-info { display: grid; justify-items: center; gap: calc(12 * var(--u)); }
 .stage.wide[data-layout="party"] .side-info .info { text-align: center; }
-.stage.wide[data-layout="party"] .side-zone {
-  display: grid; justify-items: center; align-content: safe center; gap: calc(12 * var(--u));
-  align-self: stretch; padding-top: calc(56 * var(--u)); /* below the corner buttons */
-  overflow-y: auto; scrollbar-width: none;
+.stage.wide[data-layout="party"] .side-lyrics {
+  align-self: stretch; display: grid; align-items: center; padding-top: calc(56 * var(--u)); /* below the corner buttons */
 }
-.stage.wide[data-layout="party"] .side-zone::-webkit-scrollbar { display: none; }
+.stage.wide[data-layout="party"] .side-lyrics > .lyrics-panel { width: 100%; height: min(var(--land-cover), 100%); }
 
 /* ---------- The bar at the bottom (every layout): view buttons, then where | ⏮ ⏯ ⏭ | volume ----------
    The layouts keep its measured height (--dock-h, App.tsx) free, so nothing ends up under it. */
@@ -655,6 +649,13 @@ select option { background: #211827; color: white; }
 .dock .where span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .dock .where .pill { flex: none; }
 .screen.clean .dock { visibility: hidden; pointer-events: none; }
+/* Landscape has the width: Party's controls and the view buttons side by side in one row at ¾ size,
+   the play controls in the row under — so the bar stays low and the cover keeps its room. */
+.screen[class*="landscape-"] .dock-zone { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; column-gap: calc(32 * var(--u)); }
+.screen[class*="landscape-"] .dock-zone > .hideable { width: auto; }
+.screen[class*="landscape-"] .dock-zone > .dock-controls { flex-basis: 100%; }
+.screen[class*="landscape-"] .dock-party, .screen[class*="landscape-"] .dock-modes { --u: calc(var(--u-page) * .75); }
+.screen[class*="landscape-"] .dock .party-controls { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: calc(16 * var(--u)); margin: 0; }
 /* Portrait and narrow screens: the play buttons on their own row, where it plays and the volume under them. */
 .screen[class*="portrait-"] .dock .controls {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "transport transport" "where volume"; gap: calc(10 * var(--u)) calc(16 * var(--u));

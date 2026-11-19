@@ -274,7 +274,7 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
       update={updateFromLyrics} accent={accent} pulse={pulse} align={align} />
   )
   const partyControls = party.on && (
-    <div className="hideable">
+    <div className="hideable dock-party">
       <PartyControls party={party} strength={settings.partyStrength[party.engine.genre]}
         koko={settings.koko} setKoko={koko => updateSettings({ koko })}
         setStrength={v => {
@@ -293,18 +293,14 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
   return shell(
     <>
       {wide && settings.landscapeLayout === 'party' ? (
-        // Landscape Party-scene: title on the left, the cover in the middle of the screen with a band of
-        // lyrics under it, the buttons on the right.
+        // Landscape Party-scene: title | the cover, big, in the middle of the screen | lyrics.
         <main data-layout="party" className={lyricsOn ? 'stage wide with-lyrics' : 'stage wide'}>
-          <section className="side side-info"><Info track={track} compact={false} /></section>
-          <section className="party-center">
-            {cover}
-            {lyricsOn && panel('center')}
+          <section className="side side-info">
+            <Info track={track} compact={false} />
+            {problem && <p className="notice">{problem}</p>}
           </section>
-          <Zone className="side side-zone">
-            {partyControls}
-            {problem && <p className="notice hideable">{problem}</p>}
-          </Zone>
+          <section className="party-center">{cover}</section>
+          <section className="side side-lyrics">{lyricsOn && panel('start')}</section>
         </main>
       ) : wide ? (
         // Landscape: cover with title and buttons; lyrics in a panel on the right (as in the car).
@@ -312,10 +308,7 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
         <main data-layout={settings.landscapeLayout} className={lyricsOn ? 'stage wide split' : 'stage wide'}>
           <HeroColumn autoHide={autoHide} clean={settings.clean}
             top={<>{settings.landscapeLayout !== 'cinema' && cover}<Info track={track} compact /></>}
-            rest={<>
-              {partyControls}
-              {problem && <p className="notice hideable">{problem}</p>}
-            </>} />
+            rest={problem && <p className="notice hideable">{problem}</p>} />
           {lyricsOn && panel('start')}
         </main>
       ) : (
@@ -327,17 +320,18 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
           </section>
           {lyricsOn && panel('center')}
           <Zone className="hero">
-            {partyControls}
             {problem && <p className="notice hideable">{problem}</p>}
           </Zone>
         </main>
       )}
-      {/* Every layout: the view buttons (Tekst, sync, Ren, Video) and the play controls in the same place at
-          the bottom of the screen. Its height (--dock-h) is kept free by the layouts. */}
+      {/* Every layout: Party's controls (when on), the view buttons (Tekst, sync, Ren, Video) and the play
+          controls in the same place at the bottom of the screen; they show and hide together. Its height
+          (--dock-h) is kept free by the layouts. */}
       <div ref={dockHeight} className="dock">
         <Zone className="dock-zone">
-          <div className="hideable">{modes}</div>
-          <div className="hideable"><Controls now={now} /></div>
+          {partyControls}
+          <div className="hideable dock-modes">{modes}</div>
+          <div className="hideable dock-controls"><Controls now={now} /></div>
         </Zone>
       </div>
       {now.playerProblem === 'autoplay' && (
