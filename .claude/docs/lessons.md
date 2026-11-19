@@ -400,3 +400,32 @@ rekke bilder som spilles av etter hverandre, og bare en liten del lastes om gang
 - Kjør overlapp-testen (`elementFromPoint`) for alle nye oppsett.
 
 **🟢 Enkelt forklart:** Flere innstillinger så ut til å fungere, men testene var feil oppsatt, og noen effekter kom ikke fram før lyden var høy nok. Det viktigste er å tvinge verdiene i testen, lagre bare det brukeren må ha, og måle at ting faktisk står stille.
+
+### Rave web: innstillingsarket ble for fullt — kort oversikt med undersider, som Timetracker
+**Dato:** 2026-11-19
+**Kategori:** React / UI
+**Berørte filer:** `web/src/ui/Settings.tsx`, `web/src/styles.css`, `web/src/ui/useShortcut.ts`
+
+**Problem:** Etter ti nye innstillinger ble innstillingsarket på Rave-nettsiden én lang side: Konto og enhet, Skjerm (10 rader), Tekst og bakgrunn, Party, Hurtigtaster og Tilbakestill. Det føltes for mye.
+
+**Årsak:** Hver ny innstilling fikk en ny rad eller seksjon i samme ark. Det fantes ingen gruppering og ingen nivåer.
+
+**Løsning:** Mønster hentet fra Timetracker (`EstimationSettingsDialog.tsx`, «Rolig oversikt» i `design.md`):
+- Toppnivå er en kort, gruppert liste: grå ikonboks, tittel, nåverdi til høyre og ›. Rave: Konto og enhet, Skjerm, Utseende, Hurtigtaster, og Tilbakestill (rød, uten ›).
+- Trykk bytter innholdet i samme ark (`section`-state), med «‹ Innstillinger» og ny tittel. Ark legges aldri oppå ark. Ingen «Lagre», fordi Rave lagrer med en gang.
+- Fjernet overflødige valg: bryter for ren visning og «Fullskjerm – Slå på» (finnes allerede som knapp og tast). Små seksjoner er slått sammen (Party med én bryter ble «Utseende»).
+- Ingen ikonbibliotek: inline Material-ikoner (Apache-2.0) som SVG-paths.
+
+Fallgruver som måtte fikses:
+1. Data oversikten viser (kontonavn fra `getMe()`) ble hentet inne i undersiden og fantes ikke på oversikten. Hentingen ble løftet til arket og sendt ned som prop.
+2. Esc-lytteren på `window` må ha `section` i avhengighetene. Den skal ignorere Esc når fokus er i en `<select>`, ellers lukkes arket ved et uhell.
+3. Når raden med fokus fjernes ved bytte av del, havner fokus på `body`. Arket fikk `tabIndex={-1}` og `focus({ preventScroll: true })` etter bytte, og `.sheet:focus { outline: none }`.
+4. Globale `select`-stiler må bruke `--u`, ellers blir nedtrekkslistene bittesmå på store skjermer.
+
+Verifisert med Playwright: alle 12 innstillinger endret fra sine undersider og lagret, navigering og Esc fungerer, og 87 knapper i arket ble sjekket i tre skjermstørrelser (ingen dekket, ingen sideveis rulling).
+
+**Forebygging:**
+- Når en innstillingsside passerer 6–8 rader eller får mer enn 3 seksjoner: bytt til oversikt med undersider.
+- Spør «finnes valget allerede som knapp eller tast der det brukes?» før en ny innstilling legges til.
+
+**🟢 Enkelt forklart:** Innstillingene var blitt som en lang kassalapp. Nå er det en kort meny. Trykker du på en linje, åpnes bare den delen du trenger, og du kommer tilbake med «‹ Innstillinger». Det er færre valg på første side, og ingenting blir borte.
