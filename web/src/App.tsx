@@ -275,10 +275,6 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
           </Zone>
         </main>
       )}
-      {/* Party on after a reload: sharing the sound needs a click, so ask for it clearly. */}
-      {party.on && !party.listening && !party.error && !demo && (
-        <button className="pill banner" onClick={() => party.listenTo(settings.partySource)}>Trykk for å lytte til musikken (Party)</button>
-      )}
       {now.playerProblem === 'autoplay' && (
         <button className="pill banner" onClick={now.controls.unlock}>Trykk for å starte lyden</button>
       )}
