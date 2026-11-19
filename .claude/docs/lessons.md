@@ -365,3 +365,38 @@ referansevideo, og dyre verktøy betales per sekund. Små klipp blir dyrere per 
 **🟢 Enkelt forklart:** I stedet for å be en AI tegne dansen på nytt, klipte vi ut den ekte dansen fra
 filmen og fjernet bakgrunnen. Det ble billigere, og det ser mer ekte ut. Figuren er lagt inn som en
 rekke bilder som spilles av etter hverandre, og bare en liten del lastes om gangen så appen ikke blir for stor i minnet.
+
+### Rave web: ti nye innstillinger — fallgruver ved testing og CSS-variabler
+**Dato:** 2026-11-19
+**Kategori:** React / CSS / Testing
+**Berørte filer:** `web/src/settings.ts`, `web/src/App.tsx` (HeroColumn, layoutKey, useShortcut), `web/src/party/visuals.ts`, `web/src/party/PartyLayers.tsx`, `web/src/styles.css`, `web/src/ui/useZone.ts`
+
+**Problem:** Ti nye innstillinger i Rave-nettsiden (commits 03ed4f9..349d8b8) ga flere stille feil: blink-test viste ingen forskjell, tekststørrelse ble NaN, øktvalg ble lagret, og coveret bevegde seg selv om det bare skulle skjules.
+
+**Årsak:**
+1. Demoen (`/?demo&party`) spiller på 70 % volum, men strobe/flash starter først fra ~85 %. Testen målte derfor null forskjell.
+2. `LyricsView` leser `--u` med `parseFloat`. `calc(...)` gir teksten «calc(…)» → NaN → stille fallback.
+3. `process.env` finnes ikke i nettleseren. Init-scriptet i Playwright døde stille, og testen kjørte med standardinnstillinger.
+4. «Ren visning» gikk via samme `update()` som andre innstillinger og ble lagret i localStorage.
+5. `HeroColumn` forskyver coveret når knapper skjules, også i ren visning.
+6. Stående stablet struktur passer ikke liggende Party-scene (knappesonen ~500 px ved u=2.2).
+7. `.danger` ble overstyrt av `.text-button` (samme spesifisitet, senere regel vinner).
+
+**Løsning:**
+1. Tving motorverdier i testen: `Object.defineProperty(engine, 'strobe', { get, set() {}, configurable: true })` på `window.__raveParty`. Settet må være med, fordi motoren skriver til feltene i `tick`. En ren getter stopper tegnesløyfen.
+2. Regn ut px i JS (`--u-lyrics: ${u*scale}px` på `.screen`) og bruk `.lyrics-body { --u: var(--u-lyrics) }`.
+3. Send verdier inn som `arg` til `page.addInitScript(fn, arg)`. Les `process.env` i Node-delen.
+4. Fjern `clean` før `setItem` (`const { clean: _c, ...saved } = next`), sett `clean = false` i `read()`, og behold egen verdi ved `storage`-event.
+5. Frys forskyvningen med `useRef` så lenge ren visning er på.
+6. Liggende Party-scene: tre kolonner (tittel | cover + tekstbånd | knapper). Chips får `white-space: nowrap`.
+7. Bruk `.text-button.danger`.
+
+**Forebygging:**
+- Test visuelle effekter med tvungne motorverdier, ikke demo-lyd.
+- CSS-variabler som JS leser skal være ferdige px-verdier, ikke `calc()`.
+- Init-script-argumenter sendes fra Node, ikke leses i nettleseren.
+- Øktvalg (som ren visning) lagres aldri.
+- For alt som «bare skjuler»: mål posisjon før/etter. Coveret skal ikke bevege seg.
+- Kjør overlapp-testen (`elementFromPoint`) for alle nye oppsett.
+
+**🟢 Enkelt forklart:** Flere innstillinger så ut til å fungere, men testene var feil oppsatt, og noen effekter kom ikke fram før lyden var høy nok. Det viktigste er å tvinge verdiene i testen, lagre bare det brukeren må ha, og måle at ting faktisk står stille.
