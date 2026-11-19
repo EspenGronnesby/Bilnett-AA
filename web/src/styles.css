@@ -232,6 +232,9 @@ body {
 .grow { flex: 1; min-width: 0; }
 .muted-row { color: var(--muted); }
 .hint { color: var(--faint); }
+.row.slider { cursor: default; }
+.row.slider input { width: calc(150 * var(--u)); accent-color: var(--fg); }
+.slider-value { min-width: calc(48 * var(--u)); text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
 .group-hint { font-size: calc(12 * var(--u)); margin: calc(6 * var(--u)) calc(4 * var(--u)) 0; line-height: 1.4; }
 .avatar { width: calc(32 * var(--u)); height: calc(32 * var(--u)); border-radius: 999px; background: var(--control); object-fit: cover; }
 .choice { cursor: pointer; transition: background-color 180ms var(--ease-press); }
@@ -301,6 +304,9 @@ body {
   border: 1px solid hsl(0 0% 100% / 0.16);
 }
 .lyrics-body { flex: 1; min-height: 0; display: flex; }
+/* «Tekststørrelse»: only the lyrics grow, not the buttons under them. --u-lyrics is a ready px value
+   (set in App.tsx), so code that reads --u here (the karaoke ball) gets a number, not calc(). */
+.lyrics-body { --u: var(--u-lyrics); }
 /* The buttons under the lyrics: one row when they fit, otherwise a second row (hiding them
    sideways made «Video» and the timing buttons hard to reach with a mouse). */
 .lyrics-foot {
@@ -512,7 +518,7 @@ select option { background: #211827; color: white; }
 .stage.tall:not([data-layout="original"]) > .hero:last-child { grid-row: -2 / -1; width: 100%; gap: calc(8 * var(--u)); }
 .stage.tall:not([data-layout="original"]) .lyrics-panel { width: 100%; min-height: 0; }
 .stage.tall:not([data-layout="original"]) > .lyrics-panel { align-self: stretch; height: 100%; overflow: hidden; }
-.stage.tall:not([data-layout="original"]) .ly-big-line { font-size: clamp(24px, 4.5vw, 64px); line-height: 1.2; }
+.stage.tall:not([data-layout="original"]) .ly-big-line { font-size: calc(clamp(24px, 4.5vw, 64px) * var(--lyrics-scale, 1)); line-height: 1.2; }
 /* «Tidligere original»: if it doesn't fit (Party controls), scroll instead of hiding buttons below the edge. */
 .stage.tall[data-layout="original"] { overflow-y: auto; }
 

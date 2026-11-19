@@ -32,6 +32,7 @@ export function SettingsSheet({ now, settings, update, fullscreen, toggleFullscr
         </div>
         <Account now={now} settings={settings} update={update} />
         <Screen settings={settings} update={update} fullscreen={fullscreen} toggleFullscreen={toggleFullscreen} />
+        <TextSettings settings={settings} update={update} />
         <PartySettings settings={settings} update={update} />
       </div>
     </div>
@@ -127,6 +128,18 @@ function Screen({ settings, update, fullscreen, toggleFullscreen }: Pick<Props, 
   )
 }
 
+function TextSettings({ settings, update }: Pick<Props, 'settings' | 'update'>) {
+  return (
+    <section className="group">
+      <h3>Tekst og bakgrunn</h3>
+      <div className="card">
+        <Slider label="Tekststørrelse" value={settings.lyricsScale} min={80} max={150} step={5}
+          format={v => `${v} %`} onChange={lyricsScale => update({ lyricsScale })} />
+      </div>
+    </section>
+  )
+}
+
 function PartySettings({ settings, update }: Pick<Props, 'settings' | 'update'>) {
   return (
     <section className="group">
@@ -136,6 +149,20 @@ function PartySettings({ settings, update }: Pick<Props, 'settings' | 'update'>)
       </div>
       <p className="hint group-hint">Ringen, partiklene og ristingen er med. Slås også på av seg selv hvis Windows/Mac er satt til «reduser bevegelse».</p>
     </section>
+  )
+}
+
+function Slider({ label, value, min, max, step, format, onChange }: {
+  label: string; value: number; min: number; max: number; step: number
+  format: (value: number) => string; onChange: (value: number) => void
+}) {
+  return (
+    <label className="row slider">
+      <span className="grow">{label}</span>
+      <input type="range" min={min} max={max} step={step} value={value} aria-label={label}
+        onChange={e => onChange(Number(e.currentTarget.value))} />
+      <span className="slider-value">{format(value)}</span>
+    </label>
   )
 }
 

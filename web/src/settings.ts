@@ -45,6 +45,8 @@ export interface Settings {
   koko: boolean
   /** Calm Party: no strobe or white flashes (ring, particles and shake stay). */
   noFlash: boolean
+  /** Size of the lyrics text in % (80–150); the buttons under the lyrics keep their size. */
+  lyricsScale: number
 }
 
 export const LYRICS_STYLES = [
@@ -60,7 +62,7 @@ const KEY = 'rave.settings'
 const DEFAULTS: Settings = {
   portraitLayoutVersion: 1, portraitLayout: 'poster', orientation: 'auto', keepAwake: true, autoHide: true, autoFullscreen: false, volume: 80, player: true,
   showLyrics: true, lyricsStyle: 'scroll', lyricsGlass: true, lyricsOffsets: {}, videoOn: true,
-  party: false, partySource: 'system', partyStrength: {}, koko: false, noFlash: false,
+  party: false, partySource: 'system', partyStrength: {}, koko: false, noFlash: false, lyricsScale: 100,
 }
 
 function read(): Settings {
