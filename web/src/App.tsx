@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { CLIENT_ID, handleCallback, isLoggedIn, login, needsNewPermissions } from './spotify/auth'
 import { useNowPlaying, type NowPlaying as Now } from './spotify/nowPlaying'
 import type { Track } from './spotify/playback'
@@ -136,6 +136,7 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
     setSource: kind => updateSettings({ partySource: kind }),
     demoSound: demo,
   })
+  const zoneHeight = useZoneHeight()
   // The troubleshooting box (browser, full screen, sound) only with /?debug.
   const [debug] = useState(() => new URLSearchParams(location.search).has('debug'))
   const [fullscreenError, setFullscreenError] = useState('')
@@ -273,7 +274,7 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
         </main>
       ) : (
         // Portrait: cover on top (smaller with lyrics), title, lyrics filling the middle, buttons.
-        <main data-layout={settings.portraitLayout} className={lyricsOn ? 'stage tall with-lyrics' : 'stage tall'}>
+        <main ref={zoneHeight} data-layout={settings.portraitLayout} className={lyricsOn ? 'stage tall with-lyrics' : 'stage tall'}>
           <section className="hero">
             {settings.portraitLayout !== 'cinema' && cover}
             <Info track={track} compact={false} />
@@ -345,6 +346,40 @@ function Cover({ url, party, fx }: { url: string | null; party?: Party; fx?: Rea
   )
 }
 
+/**
+ * Portrait: keeps the height of the button area (--zone-h, <main>'s last child) and of the title
+ * (--info-h) on <main>, so the cover can shrink when they need the room instead of the lyrics
+ * or the buttons ending up underneath it.
+ */
+function useZoneHeight() {
+  const stop = useRef<(() => void) | null>(null)
+  return useCallback((main: HTMLElement | null) => {
+    stop.current?.()
+    stop.current = null
+    const zone = main?.lastElementChild as HTMLElement | null
+    const hero = main?.firstElementChild as HTMLElement | null
+    if (!main || !zone || !hero) return
+    // The title is a new element for every song (key = track id): follow the current one.
+    let info: HTMLElement | null = null
+    const measure = () => {
+      main.style.setProperty('--zone-h', `${zone.offsetHeight}px`)
+      const now = hero.querySelector<HTMLElement>('.info')
+      if (now !== info) {
+        if (info) sizes.unobserve(info)
+        if (now) sizes.observe(now)
+        info = now
+      }
+      if (info) main.style.setProperty('--info-h', `${info.offsetHeight}px`)
+    }
+    const sizes = new ResizeObserver(measure)
+    const swaps = new MutationObserver(measure)
+    sizes.observe(zone)
+    swaps.observe(hero, { childList: true, subtree: true })
+    measure()
+    stop.current = () => { sizes.disconnect(); swaps.disconnect() }
+  }, [])
+}
+
 /** An area whose buttons only show while the mouse is over it (see useZone). */
 function Zone({ className, children }: { className: string; children: ReactNode }) {
   const [awake, zone] = useZone()
@@ -371,7 +406,8 @@ function HeroColumn({ autoHide, top, rest }: { autoHide: boolean; top: ReactNode
   const gap = restRef.current ? parseFloat(getComputedStyle(restRef.current.parentElement!).rowGap) || 0 : 0
   const shift = autoHide && !awake ? (restHeight + gap) / 2 : 0
   return (
-    <section className={awake ? 'hero zone awake' : 'hero zone'} {...zone}>
+    <section className={awake ? 'hero zone awake' : 'hero zone'} {...zone}
+      style={{ '--rest-h': `${restHeight}px` } as CSSProperties}>
       <div className="hero-top" style={{ transform: shift ? `translateY(${shift}px)` : undefined }}>{top}</div>
       <div className="hero-rest" ref={restRef}>{rest}</div>
     </section>

@@ -113,8 +113,18 @@ body {
 /* Landscape: cover with title underneath, centered (lyrics come to the right in phase 2). */
 .stage.wide .hero { display: grid; justify-items: center; gap: calc(12 * var(--u)); }
 .stage.wide .cover {
-  --size: min(calc(100vh - 300 * var(--u)), 40vw, calc(300 * var(--u)));
+  --size: max(calc(80 * var(--u)), min(calc(100dvh - var(--rest-h, 0px) - 130 * var(--u)), 40vw, calc(300 * var(--u))));
 }
+/* Never taller than the screen: if cover, title and buttons still don't fit, the column scrolls.
+   The extra padding (into the page margin and the gap, never over the lyrics) keeps room for the
+   Party ring around the cover, which would be cut off otherwise. */
+.stage.wide { grid-template-rows: minmax(0, 1fr); }
+.stage.wide > .hero {
+  max-height: calc(100% + 80 * var(--u)); margin-block: calc(-40 * var(--u)); padding-block: calc(40 * var(--u));
+  margin-inline: calc(-24 * var(--u)); padding-inline: calc(24 * var(--u));
+  overflow-y: auto; scrollbar-width: none;
+}
+.stage.wide > .hero::-webkit-scrollbar { display: none; }
 
 /* Portrait: cover on top, title underneath. */
 .stage.tall .hero { display: grid; justify-items: center; gap: calc(32 * var(--u)); }
@@ -181,7 +191,7 @@ body {
 /* Shell: settings button in the corner, things that hide when the mouse rests. */
 .fill { position: absolute; inset: 0; }
 /* Top-right corner: a generous area around the buttons, so they show as the mouse comes near. */
-.corner-zone { position: absolute; top: 0; right: 0; padding: calc(16 * var(--u)) calc(16 * var(--u)) calc(32 * var(--u)) calc(48 * var(--u)); }
+.corner-zone { position: absolute; top: 0; right: 0; z-index: 6; padding: calc(16 * var(--u)) calc(16 * var(--u)) calc(32 * var(--u)) calc(48 * var(--u)); }
 .corner-buttons { display: flex; gap: calc(10 * var(--u)); }
 .icon-pill.small-icon { width: calc(40 * var(--u)); height: calc(40 * var(--u)); }
 .hideable { transition: opacity 250ms var(--ease-out); }
@@ -266,11 +276,11 @@ body {
 
 /* ---------- Lyrics: layout ---------- */
 /* Landscape with lyrics: cover column (44 %) and the lyrics panel (56 %), as in the app. */
-.stage.wide.split { display: grid; grid-template-columns: 44fr 56fr; gap: calc(24 * var(--u)); place-items: stretch; }
+.stage.wide.split { display: grid; grid-template-columns: 44fr 56fr; grid-template-rows: minmax(0, 1fr); gap: calc(24 * var(--u)); place-items: stretch; }
 /* Room for the settings button above the panel. */
 .stage.wide.split { padding-top: calc(72 * var(--u)); }
 .stage.wide.split .hero { align-self: center; }
-.stage.wide.split .cover { --size: min(calc(100vh - 300 * var(--u)), 36vw, calc(300 * var(--u))); }
+.stage.wide.split .cover { --size: max(calc(80 * var(--u)), min(calc(100dvh - var(--rest-h, 0px) - 175 * var(--u)), 36vw, calc(300 * var(--u)))); }
 /* Portrait: cover, title, lyrics filling the middle, buttons at the bottom. */
 .stage.tall { display: flex; flex-direction: column; align-items: center; justify-content: safe center; gap: calc(24 * var(--u)); }
 /* «safe»: if everything doesn't fit, start at the top (never cut the cover off above). */
@@ -290,10 +300,10 @@ body {
   border: 1px solid hsl(0 0% 100% / 0.16);
 }
 .lyrics-body { flex: 1; min-height: 0; display: flex; }
-/* The buttons under the lyrics stay on one row (wrapping rows would take the lyrics' room);
-   if they don't fit they scroll sideways instead. */
+/* The buttons under the lyrics: one row when they fit, otherwise a second row (hiding them
+   sideways made «Video» and the timing buttons hard to reach with a mouse). */
 .lyrics-foot {
-  display: flex; align-items: center; justify-content: space-between; gap: calc(12 * var(--u));
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: calc(12 * var(--u));
   margin-top: calc(12 * var(--u)); flex: none;
   overflow-x: auto; scrollbar-width: none;
 }
@@ -469,8 +479,12 @@ button.chip:active, .chip.sync button:active { transform: scale(0.97); }
 @keyframes banner { 0% { opacity: 0 } 12% { opacity: 1 } 75% { opacity: 1 } 100% { opacity: 0 } }
 
 .party-controls { display: grid; justify-items: center; gap: calc(10 * var(--u)); margin-top: calc(6 * var(--u)); }
-.party-controls .vibe { display: flex; align-items: center; gap: calc(10 * var(--u)); }
-.party-controls .vibe input { width: calc(200 * var(--u)); accent-color: var(--fg); }
+.party-controls .vibe { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: calc(10 * var(--u)); }
+.party-controls .vibe input { width: calc(160 * var(--u)); accent-color: var(--fg); }
+/* Small chips (the same size as «Auto»), so cover, buttons and Party fit on a 1080 px tall screen. */
+.party-controls { gap: calc(8 * var(--u)); }
+.party-controls .chip { height: calc(32 * var(--u)); padding: 0 calc(12 * var(--u)); font-size: calc(13 * var(--u)); }
+.party-controls [data-audio-choice] { display: flex; gap: calc(6 * var(--u)); }
 .chip.info { background: none; color: var(--muted); cursor: default; }
 .chip.small { height: calc(32 * var(--u)); padding: 0 calc(12 * var(--u)); font-size: calc(13 * var(--u)); }
 .icon-pill.small-icon.on { background: var(--fg); color: var(--on-pill); }
@@ -481,22 +495,28 @@ button.chip:active, .chip.sync button:active { transform: scale(0.97); }
 select { color: var(--fg); background: var(--surface); border-radius: 12px; padding: 8px; max-width: 48vw; }
 select option { background: #211827; color: white; }
 
-/* Shared: title at the top, lyrics fill the rest, buttons pinned to the bottom. */
+/* Shared: title at the top, lyrics fill the middle, buttons in their own row at the bottom
+   (never on top of the lyrics, so the lyrics' own buttons stay clickable). */
 .stage.tall:not([data-layout="original"]) {
-  display: grid; grid-template-rows: auto minmax(0, 1fr); gap: calc(18 * var(--u));
-  padding-top: calc(76 * var(--u)); padding-bottom: calc(64 * var(--u));
+  display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: calc(18 * var(--u));
+  padding-top: calc(76 * var(--u)); padding-bottom: calc(16 * var(--u));
 }
-.stage.tall:not(.with-lyrics):not([data-layout="original"]) { grid-template-rows: minmax(0, 1fr); }
+.stage.tall:not([data-layout="original"]) {
+  /* What is left for the cover after buttons, title, a minimum of lyrics, paddings and gaps. */
+  --lyrics-min: calc(150 * var(--u));
+  --cover-room: calc(100dvh - var(--zone-h, 0px) - var(--info-h, 0px) - var(--lyrics-min) - 160 * var(--u));
+}
+.stage.tall:not(.with-lyrics):not([data-layout="original"]) { grid-template-rows: minmax(0, 1fr) auto; --lyrics-min: 0px; }
 .stage.tall:not([data-layout="original"]) > .hero { min-height: 0; }
-.stage.tall:not([data-layout="original"]) > .hero:last-child {
-  position: absolute; bottom: calc(12 * var(--u)); left: 0; width: 100%; z-index: 4; gap: calc(8 * var(--u));
-}
+.stage.tall:not([data-layout="original"]) > .hero:last-child { grid-row: -2 / -1; width: 100%; gap: calc(8 * var(--u)); }
 .stage.tall:not([data-layout="original"]) .lyrics-panel { width: 100%; min-height: 0; }
 .stage.tall:not([data-layout="original"]) > .lyrics-panel { align-self: stretch; height: 100%; overflow: hidden; }
 .stage.tall:not([data-layout="original"]) .ly-big-line { font-size: clamp(24px, 4.5vw, 64px); line-height: 1.2; }
+/* «Tidligere original»: if it doesn't fit (Party controls), scroll instead of hiding buttons below the edge. */
+.stage.tall[data-layout="original"] { overflow-y: auto; }
 
 /* Musikkplakat: big cover. */
-.stage.tall[data-layout="poster"] .cover { --size: min(62vw, 36vh); }
+.stage.tall[data-layout="poster"] .cover { --size: max(calc(80 * var(--u)), min(62vw, 36vh, var(--cover-room))); }
 .stage.tall[data-layout="poster"] .song { font-size: calc(28 * var(--u)); }
 
 /* Tekstfokus: small cover beside the title. */
@@ -511,25 +531,27 @@ select option { background: #211827; color: white; }
 .stage.tall[data-layout="cinema"] .song { font-size: calc(22 * var(--u)); line-height: 1.2; }
 .stage.tall[data-layout="cinema"] > .lyrics-panel { align-self: end; height: min(26vh, 360px); text-shadow: 0 2px 8px #000; }
 
-/* Party-scene: the cover is anchored to the middle of the screen, independently of text and controls. */
-.stage.tall[data-layout="party"] { --party-cover-size: min(55vw, 30dvh); grid-template-rows: minmax(0, 1.6fr) minmax(0, .6fr); }
+/* Party-scene: the cover sits in the middle of the screen. When the buttons (--zone-h, measured in
+   App.tsx) and a minimum of lyrics need the room, it moves up and then shrinks instead of ending
+   up under them; it never goes so high that the title above it (--info-h) hits the top. */
+.stage.tall[data-layout="party"] {
+  --party-top: calc(var(--info-h, 80px) + 100 * var(--u));
+  --party-below: calc(var(--zone-h, 0px) + var(--lyrics-min) + 52 * var(--u));
+  --party-cover-size: max(calc(80 * var(--u)), min(55vw, 30dvh, calc(100dvh - var(--party-top) - var(--party-below))));
+  --party-mid: max(calc(var(--party-top) + var(--party-cover-size) / 2),
+    min(50dvh, calc(100dvh - var(--party-below) - var(--party-cover-size) / 2)));
+  grid-template-rows: calc(var(--party-mid) + var(--party-cover-size) / 2 - 58 * var(--u)) minmax(0, 1fr) auto;
+}
 .stage.tall[data-layout="party"] > .hero:first-child {
   position: static; display: flex; flex-direction: column-reverse; justify-content: space-around; height: 100%;
 }
-.stage.tall[data-layout="party"] .cover-wrap { position: absolute; left: 50%; top: 50%; translate: -50% -50%; }
+.stage.tall[data-layout="party"] .cover-wrap { position: absolute; left: 50%; top: var(--party-mid); translate: -50% -50%; }
 .stage.tall[data-layout="party"] .cover { --size: var(--party-cover-size); }
 .stage.tall[data-layout="party"] .song { font-size: calc(25 * var(--u)); }
 .stage.tall[data-layout="party"] > .hero:first-child .info {
   position: absolute;
-  top: calc(50% - var(--party-cover-size) / 2 - 24 * var(--u));
+  top: calc(var(--party-mid) - var(--party-cover-size) / 2 - 24 * var(--u));
   left: 50%; translate: -50% -100%; width: 90%;
-}
-.stage.tall[data-layout="party"] > .lyrics-panel {
-  position: absolute;
-  top: calc(50% + var(--party-cover-size) / 2 + 18 * var(--u));
-  bottom: calc(76 * var(--u));
-  left: calc(24 * var(--u)); right: calc(24 * var(--u));
-  width: auto; height: auto;
 }
 
 .party-fullscreen-prompt { z-index: 6; display: flex; align-items: center; gap: 12px; max-width: 94vw; padding: 12px; border-radius: 18px; background: var(--bg); }

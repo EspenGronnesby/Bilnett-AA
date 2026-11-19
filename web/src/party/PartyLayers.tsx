@@ -246,15 +246,15 @@ export function PartyControls({ party, strength, setStrength, koko, setKoko }: {
           {(['system', 'tab', 'mic'] as PartySource[]).map(source => <button key={source} className={party.listening?.source === source ? 'chip on' : 'chip'} onClick={() => party.listenTo(source)}>{SOURCE_LABEL[source]}</button>)}
         </div>
         <button className={koko ? 'chip on' : 'chip'} onClick={() => setKoko(!koko)}>Koko</button>
-        <span className="chip info">{party.connecting ? 'Kobler til …' : party.listening ? party.paused ? 'Pause' : party.listening.status() : 'Ikke tilkoblet'}</span>
-        {party.listening && e.hearing && <span className="chip info">{e.genreLabel}</span>}
       </div>
-      {party.listening && <span className="chip info">{party.listening.label}</span>}
+      {/* Vibe, connection and genre on one row (the name of the shared sound shows on hover). */}
       <div className="vibe">
         <button className={strength === undefined ? 'chip small on' : 'chip small'} onClick={() => setStrength(undefined)}>Auto</button>
         <input type="range" min={0} max={100} step={1} aria-label="Vibe-styrke"
           value={Math.round(shown * 100)}
           onChange={ev => setStrength(Number(ev.currentTarget.value) / 100)} />
+        <span className="chip info" title={party.listening?.label}>{party.connecting ? 'Kobler til …' : party.listening ? party.paused ? 'Pause' : party.listening.status() : 'Ikke tilkoblet'}</span>
+        {party.listening && e.hearing && <span className="chip info">{e.genreLabel}</span>}
       </div>
       {party.error && <p className="notice">{party.error}</p>}
     </div>
