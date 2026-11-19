@@ -429,3 +429,34 @@ Verifisert med Playwright: alle 12 innstillinger endret fra sine undersider og l
 - Spør «finnes valget allerede som knapp eller tast der det brukes?» før en ny innstilling legges til.
 
 **🟢 Enkelt forklart:** Innstillingene var blitt som en lang kassalapp. Nå er det en kort meny. Trykker du på en linje, åpnes bare den delen du trenger, og du kommer tilbake med «‹ Innstillinger». Det er færre valg på første side, og ingenting blir borte.
+
+### Rave web: avspillingsknappene på samme sted i alle oppsett — én bunnstripe med målt høyde
+**Dato:** 2026-11-19
+**Kategori:** React / UI
+**Berørte filer:** `web/src/App.tsx`, `web/src/styles.css`, `web/src/lyrics/LyricsPanel.tsx`
+
+**Problem:** Liggende oppsett føltes litt dårligere enn stående. Forrige/pause/neste lå et nytt sted i hvert oppsett (venstre kolonne, høyre kolonne, under tekst). Tekst/synk/Ren/Video lå i tekstpanelets fot i liggende, men i knappesonen i stående. Ønsket var samme sted nederst i alle oppsett, med litt mindre knapper.
+
+**Årsak:** Hvert oppsett plasserte kontrollene selv. Det fantes ingen felles plass for det man bruker oftest.
+
+**Løsning:**
+- Én `.dock` nederst i alle oppsett, som direkte barn av `.screen`. Øverst visningsknappene (Tekst · synk · Ren · Video), under forrige/pause/neste (40u/52u).
+- Liggende: én rad med «Spiller på …» | knapper (midt) | volum (`grid-template-columns: 1fr auto 1fr`). Stående og under 720 px: knappene på egen rad, enhet og volum under. Uten dette ble «Spiller på …» kuttet til «Spi…».
+- Stripens høyde måles med ResizeObserver (`useDockHeight` som callback-ref) og settes som `--dock-h` på `.screen`. Den brukes i `padding-bottom` på `.stage` og i alle coverformlene. Da kan ingenting havne under stripen, uansett høyde.
+- Gamle plasseringer fjernet: kontroller fra kolonnene og knappesonen, moduser fra tekstpanelets fot (`footer`-prop ryddet bort).
+- `.screen.clean .dock { visibility: hidden }`. Plassen beholdes, så coveret flytter seg ikke.
+
+Fallgruver:
+1. Liggende kolonne med `margin-block: -40u` (plass til Party-ringen) stakk ned i stripen og dekket «Auto». Bruk negativ margin bare oppover (`margin-block: -40u 0`).
+2. Liggende Party-scene: høyre kolonne med `align-content: safe center` startet øverst ved overløp og kolliderte med hjørneknappene. Gi kolonnen egen `padding-top` under hjørneknappene.
+3. Når innholdet under coveret forsvant, ble coveret «glidet» 6 px fordi glidet bare var `row-gap`. Hopp over glidet når høyden er 0.
+4. Lange chips (f.eks. «Neste · 2/5 · Apple Music») kan bryte raden og gjøre stripen høyere, slik at coveret krymper når video slås på. Hold chips korte.
+
+Verifisert med overlapp-test (`elementFromPoint`) på 2040 knapper i 6 størrelser og alle oppsett. Eneste unntak: «Tidligere original» og bærbar liggende 1366×768 med Party, som krever rulling (testet).
+
+**Forebygging:**
+- Det man bruker oftest (avspilling) skal ha én fast plass i alle oppsett.
+- Når et felles element ligger oppå eller utenfor layouten: mål høyden og reserver plassen med en CSS-variabel, ikke med faste tall.
+- Kjør overlapp-testen for alle nye oppsett.
+
+**🟢 Enkelt forklart:** Knappene for å spille av musikken lå flere steder, avhengig av hvordan skjermen var vendt. Nå ligger de på samme sted nederst i alle oppsett. Stripen måler seg selv, så coveret og teksten vet hvor mye plass som trengs og havner aldri under knappene.
