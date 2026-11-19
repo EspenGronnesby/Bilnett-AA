@@ -83,6 +83,14 @@ totalt (59 % mot 69 %), men er mye bedre på build-up (47 % mot 13 %). Ikke i ap
 gjennom den ekte analysen; den fulleste 8 s-biten blir sangens «drop-profil» (48 bånd). Live-lyden ligner mest på profilen
 i Espens drop (AUC 78–90 % i 4 av 4 sanger), men som ekstra bevis ga den ingen bedring over fylde-reglene. Ligger klar, av.
 
+**Ny «lytt først»-analyse, steg 0 (2026-11-19):** én samlet evaluator i `PartyReplayTest` (`evaluate(songs, clean)`),
+renset fasit (trykk flyttet 600 ms bakover; manuell modus startet midt i sang teller fra første trykk) og nye mål:
+drop innen én takt, falske drop per minutt, build-up fanget. `replayAgainstEspensAnswers` gir både gamle tall (rå fasit)
+og nye (renset, drop-musikk og andre sjangre); første kjøring skrev `baseline.txt` i assets.
+Baseline (9 drop-sanger): enig 69 %, drop innen én takt 8/14, falske drop 1,84/min, build-up fanget 2/14.
+Rettelser per sang (`SongMarks`) bruker nå samme nøkkel som `GenreBook`/stil-læreren (gamle merker flyttes ved neste avspilling).
+Plan: `~/.claude/plans/lag-en-plan-for-fizzy-parasol.md` (steg 0–6).
+
 Gammel plan for trening:
 
 1. Hent loggene og lydopptakene (sync).

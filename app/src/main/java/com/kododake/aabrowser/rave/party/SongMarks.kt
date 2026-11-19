@@ -18,8 +18,22 @@ internal class SongMarks(private val file: File) {
     private val songs = LinkedHashMap<String, MutableList<Mark>>()
     private var loaded = false
 
-    fun key(artist: String, title: String) =
+    /** The same key as the genre book and the style teacher ([com.kododake.aabrowser.rave.GenreBook.key]). */
+    fun key(artist: String, title: String) = com.kododake.aabrowser.rave.GenreBook.key(title, artist)
+
+    /** The key used before 2026-11-19 (title not cleaned); only to move old marks over, see [migrate]. */
+    fun legacyKey(artist: String, title: String) =
         "${(com.kododake.aabrowser.rave.cleanArtist(artist) ?: artist).trim().lowercase(Locale.ROOT)}|${title.trim().lowercase(Locale.ROOT)}"
+
+    /** Moves a song's marks from its old key to the new one the first time the song plays again. */
+    fun migrate(artist: String, title: String) {
+        load()
+        val old = legacyKey(artist, title); val new = key(artist, title)
+        if (old == new || new in songs) return
+        val list = songs.remove(old) ?: return
+        songs[new] = list
+        save()
+    }
 
     fun marks(key: String): List<Mark> { load(); return songs[key].orEmpty() }
 

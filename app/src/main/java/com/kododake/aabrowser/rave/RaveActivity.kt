@@ -678,6 +678,7 @@ class RaveActivity : ComponentActivity() {
                         st.styles.take(3).joinToString { "%s %.2f".format(java.util.Locale.US, it.first.substringAfter("---"), it.second) },
                         st.bpm, st.bpmConf, st.genre?.let { "${it.first.label} %.2f".format(java.util.Locale.US, it.second) } ?: "usikker"))
             }
+            songMarks.migrate(a, t)
             songKey = songMarks.key(a, t)
             marksForSong = songMarks.marks(songKey)
             lastMarkCheckPos = -1L

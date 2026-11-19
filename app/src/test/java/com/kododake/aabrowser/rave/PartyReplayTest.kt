@@ -42,6 +42,43 @@ class PartyReplayTest {
         }
     }
 
+    /** Espen's «it is X now» presses per song CSV (song position ms), from feedback.csv. */
+    private val presses: Map<String, List<Long>> by lazy {
+        val f = File(raw, "feedback.csv")
+        if (!f.exists()) return@lazy emptyMap()
+        val lines = f.readLines().filter { it.isNotBlank() }
+        val head = lines.firstOrNull()?.split(",") ?: return@lazy emptyMap()
+        val iPos = head.indexOf("pos_s"); val iFb = head.indexOf("feedback"); val iFile = head.indexOf("fil")
+        if (iPos < 0 || iFb < 0 || iFile < 0) return@lazy emptyMap()
+        lines.drop(1).mapNotNull { l ->
+            val c = l.split(","); if (c.size <= maxOf(iPos, iFb, iFile)) return@mapNotNull null
+            if (!c[iFb].startsWith("rett_")) return@mapNotNull null
+            c[iPos].toFloatOrNull()?.let { c[iFile] to (it * 1000).toLong() }
+        }.groupBy({ it.first }, { it.second }).mapValues { (_, v) -> v.sorted() }
+    }
+
+    /**
+     * The answer key with two known skews removed (2026-11-19):
+     *  - Espen presses a little after the change he hears: every change is moved [REACTION_MS] back.
+     *  - Manual mode switched on mid-song starts on the app's own guess: bars before his first press
+     *    are dropped (only when the key doesn't start at the beginning of the song).
+     */
+    private fun cleanKey(key: List<Pair<Long, String>>, csv: File): List<Pair<Long, String>> {
+        if (key.isEmpty()) return key
+        var k = key
+        if (k.first().first > MID_SONG_START_MS) {
+            val first = presses[csv.name]?.firstOrNull { it >= k.first().first - REACTION_MS }
+            k = if (first == null) emptyList() else k.filter { it.first >= first - REACTION_MS }
+        }
+        val out = ArrayList<Pair<Long, String>>(k.size)
+        for ((i, e) in k.withIndex()) {
+            val changed = i > 0 && e.second != k[i - 1].second
+            val pos = if (changed) maxOf(e.first - REACTION_MS, out.last().first + 1) else e.first
+            out.add(pos to e.second)
+        }
+        return out
+    }
+
     private class Frame(val now: Long, val pos: Long, val rate: Int, val fft: ByteArray)
 
     private fun frames(fft: File): List<Frame> {
@@ -170,7 +207,12 @@ class PartyReplayTest {
     }
 
     private class Song(val name: String, val key: List<Pair<Long, String>>, val now: LongArray, val pos: LongArray,
-                       val frames: List<HardstyleFrame>, val print: FloatArray? = null)
+                       val frames: List<HardstyleFrame>, val print: FloatArray? = null,
+                       val cleanKey: List<Pair<Long, String>> = key, val structured: Boolean = true) {
+        /** One bar at the song's typical tempo (the median of the frames' BPM; 1.6 s when unknown). */
+        val barMs: Long = frames.map { it.bpm }.filter { it in 100f..260f }.sorted()
+            .let { if (it.isEmpty()) 1600L else (240_000f / it[it.size / 2]).toLong() }
+    }
 
     /** The preview's drop fingerprint for a song: its fullest 8 s, 48-band profile through the real analysis. */
     private fun fingerprint(csv: File): FloatArray? {
@@ -219,48 +261,78 @@ class PartyReplayTest {
     private var useTeacherTempo = false
 
     /** Decodes every song with an answer key once (the audio analysis doesn't depend on PartyTuning). */
-    private fun songs(): List<Song> {
+    private fun songs(all: Boolean = false): List<Song> {
         val fftDir = File(raw, "fft")
         val csvs = raw.listFiles { f -> f.name.endsWith(".csv") && f.name != "feedback.csv" }?.toList().orEmpty()
         return fftDir.listFiles { f -> f.name.endsWith(".fft.gz") }.orEmpty().sortedBy { it.name }.mapNotNull { fft ->
             val csv = csvFor(fft, csvs) ?: return@mapNotNull null
-            val key = truth(csv); if (key.size < 8 || !structured(csv, fft.name)) return@mapNotNull null
+            val key = truth(csv); val dropMusic = structured(csv, fft.name)
+            if (key.size < 8 || (!all && !dropMusic)) return@mapNotNull null
             val fs = frames(fft); if (fs.size < 200) return@mapNotNull null
             val audio = HardstyleAudio()
             if (useTeacherTempo) audio.setTempoHint(teacher(csv)?.trustedBpm ?: 0f)
             Song(fft.name.drop(16), key, LongArray(fs.size) { fs[it].now }, LongArray(fs.size) { fs[it].pos },
-                fs.map { audio.accept(it.fft, it.rate, it.now) }, fingerprint(csv))
+                fs.map { audio.accept(it.fft, it.rate, it.now) }, fingerprint(csv), cleanKey(key, csv), dropMusic)
         }
     }
 
-    private class Score(val agree: Double, val perClass: Map<String, Double>, val found: Int, val trueDrops: Int, val extra: Int) {
+    private class Score(val agree: Double, val perClass: Map<String, Double>, val found: Int, val trueDrops: Int, val extra: Int,
+                        val matrix: Map<String, Map<String, Double>> = emptyMap(), val seconds: Double = 0.0,
+                        /** Drops found within one bar, and automatic drops with no true drop within one bar. */
+                        val foundBar: Int = 0, val extraBar: Int = 0,
+                        /** Espen's build-ups where the app said BUILDUP for ≥ 2 s inside it. */
+                        val buildSections: Int = 0, val buildCaught: Int = 0) {
         val balanced get() = listOf("INTRO", "BUILDUP", "DROP", "BREAKDOWN").map { perClass[it] ?: 0.0 }.average()
         val objective get() = balanced + .15 * found / trueDrops.coerceAtLeast(1) - .004 * extra
+        val falseDropsPerMin get() = if (seconds > 0) extraBar / (seconds / 60) else 0.0
     }
 
-    private fun evaluate(songs: List<Song>): Score {
+    /**
+     * The one evaluator (2026-11-19): replays songs through the automatic [HardstyleStructure] and scores
+     * it against Espen's key — [clean] picks the cleaned key ([cleanKey]) instead of the raw one.
+     */
+    private fun evaluate(songs: List<Song>, clean: Boolean = false): Score {
         val total = HashMap<String, HashMap<String, Double>>()
-        var trueDrops = 0; var found = 0; var extra = 0
+        var trueDrops = 0; var found = 0; var extra = 0; var foundBar = 0; var extraBar = 0
+        var buildSections = 0; var buildCaught = 0
         for (sg in songs) {
+            val key = if (clean) sg.cleanKey else sg.key
+            if (key.isEmpty()) continue
             val st = HardstyleStructure(); st.newTrack(sg.now[0]); st.dropPrint = sg.print
             var prev = sg.now[0]; var last = ""; val auto = ArrayList<Long>()
+            val autoParts = ArrayList<Pair<Long, String>>()
             for (i in sg.frames.indices) {
                 st.update(sg.frames[i], sg.now[i], sg.pos[i], -1L)
                 val dt = (sg.now[i] - prev).coerceIn(0L, 200L) / 1000.0; prev = sg.now[i]
                 val a = norm(st.part.name)
                 if (a == "DROP" && last != "DROP") auto.add(sg.pos[i]); last = a
-                val t = sg.key.lastOrNull { it.first <= sg.pos[i] }?.second ?: continue
+                val t = key.lastOrNull { it.first <= sg.pos[i] }?.second ?: continue
                 total.getOrPut(t) { HashMap() }.merge(a, dt, Double::plus)
+                autoParts.add(sg.pos[i] to a)
             }
-            val td = sg.key.zipWithNext().filter { (x, y) -> x.second != "DROP" && y.second == "DROP" }.map { it.second.first }
+            val td = key.zipWithNext().filter { (x, y) -> x.second != "DROP" && y.second == "DROP" }.map { it.second.first }
             trueDrops += td.size
             found += td.count { d -> auto.any { kotlin.math.abs(it - d) <= 3_000L } }
             extra += auto.count { x -> td.none { kotlin.math.abs(it - x) <= 3_000L } }
+            val bar = sg.barMs
+            foundBar += td.count { d -> auto.any { kotlin.math.abs(it - d) <= bar } }
+            extraBar += auto.count { x -> x >= key.first().first && td.none { kotlin.math.abs(it - x) <= bar } }
+            // Build-up sections: [start, next change) in Espen's key.
+            val changes = key.filterIndexed { i, e -> i == 0 || e.second != key[i - 1].second }
+            for ((i, c) in changes.withIndex()) {
+                if (c.second != "BUILDUP") continue
+                val end = changes.getOrNull(i + 1)?.first ?: Long.MAX_VALUE
+                buildSections++
+                val said = autoParts.zipWithNext().sumOf { (x, y) ->
+                    if (x.second == "BUILDUP" && x.first >= c.first && x.first < end) (y.first - x.first).coerceIn(0L, 200L) else 0L }
+                if (said >= 2_000L) buildCaught++
+            }
         }
         val secs = total.values.sumOf { it.values.sum() }
         val ok = total.entries.sumOf { (t, m) -> m[t] ?: 0.0 }
         val per = total.mapValues { (t, m) -> (m[t] ?: 0.0) / m.values.sum() }
-        return Score(ok / secs, per, found, trueDrops, extra)
+        return Score(if (secs > 0) ok / secs else 0.0, per, found, trueDrops, extra, total, secs,
+            foundBar, extraBar, buildSections, buildCaught)
     }
 
     /** Searches PartyTuning against Espen's answers; prints the best settings (only with -Dparty.sweep=true). */
@@ -431,64 +503,60 @@ class PartyReplayTest {
         File(raw.parentFile, "drop-fingerprint.txt").writeText(sb.toString())
     }
 
+    /**
+     * The main check (also the «analyser» step): the old numbers on the raw key (same as before, so they can
+     * be compared with older replay.txt), and the new metrics on the cleaned key for drop music and the rest.
+     * Writes replay.txt, and baseline.txt the first time (the system as it was before the new listener).
+     */
     @Test fun replayAgainstEspensAnswers() {
-        val fftDir = File(raw, "fft")
-        assumeTrue("ingen opptak på denne maskinen", fftDir.isDirectory)
-        val csvs = raw.listFiles { f -> f.name.endsWith(".csv") && f.name != "feedback.csv" }?.toList().orEmpty()
-        val total = HashMap<String, HashMap<String, Double>>()   // truth → auto → seconds
+        assumeTrue("ingen opptak på denne maskinen", File(raw, "fft").isDirectory)
+        val all = songs(all = true)
+        assumeTrue("ingen sanger med fasit", all.isNotEmpty())
+        val drop = all.filter { it.structured }; val rest = all.filterNot { it.structured }
         val report = StringBuilder()
-        var dropsTrue = 0; var dropsFound = 0; var dropsExtra = 0
-        for (fft in fftDir.listFiles { f -> f.name.endsWith(".fft.gz") }.orEmpty().sortedBy { it.name }) {
-            val csv = csvFor(fft, csvs) ?: continue
-            if (!structured(csv, fft.name)) continue
-            val key = truth(csv)
-            if (key.size < 8) continue
-            val fs = frames(fft)
-            if (fs.size < 200) continue
-            val audio = HardstyleAudio()
-            val structure = HardstyleStructure()
-            structure.newTrack(fs.first().now)
-            val song = HashMap<String, HashMap<String, Double>>()
-            var prevNow = fs.first().now
-            var lastAuto = ""
-            val autoDrops = ArrayList<Long>()
-            for (fr in fs) {
-                val f = audio.accept(fr.fft, fr.rate, fr.now)
-                structure.update(f, fr.now, fr.pos, -1L)
-                val dt = (fr.now - prevNow).coerceIn(0L, 200L) / 1000.0
-                prevNow = fr.now
-                val auto = norm(structure.part.name)
-                if (auto == "DROP" && lastAuto != "DROP") autoDrops.add(fr.pos)
-                lastAuto = auto
-                // Espen's part at this position (the last bar start at or before it).
-                val t = key.lastOrNull { it.first <= fr.pos }?.second ?: continue
-                song.getOrPut(t) { HashMap() }.merge(auto, dt, Double::plus)
-                total.getOrPut(t) { HashMap() }.merge(auto, dt, Double::plus)
-            }
-            // Drops: Espen's drop starts vs automatic drop starts (±3 s).
-            val trueDrops = key.zipWithNext().filter { (a, b) -> a.second != "DROP" && b.second == "DROP" }.map { it.second.first }
-            val found = trueDrops.count { d -> autoDrops.any { kotlin.math.abs(it - d) <= 3_000L } }
-            val extra = autoDrops.count { a -> trueDrops.none { kotlin.math.abs(it - a) <= 3_000L } }
-            dropsTrue += trueDrops.size; dropsFound += found; dropsExtra += extra
-            val secs = song.values.sumOf { it.values.sum() }
-            val ok = song.entries.sumOf { (t, m) -> m[t] ?: 0.0 }
-            report.append("%-58s enig %3.0f %%  drop %d/%d  ekstra %d\n".format(Locale.US,
-                fft.name.drop(16).take(58), 100 * ok / secs.coerceAtLeast(1e-9), found, trueDrops.size, extra))
+        fun pct(x: Double) = "%3.0f %%".format(Locale.US, 100 * x)
+
+        report.append("Drop-musikk (hardstyle/EDM), rå fasit — som før:\n")
+        for (sg in drop) {
+            val sc = evaluate(listOf(sg))
+            report.append("%-58s enig %s  drop %d/%d  ekstra %d\n".format(Locale.US, sg.name.take(58), pct(sc.agree), sc.found, sc.trueDrops, sc.extra))
         }
-        assumeTrue("ingen sanger med fasit", total.isNotEmpty())
-        val secs = total.values.sumOf { it.values.sum() }
-        val ok = total.entries.sumOf { (t, m) -> m[t] ?: 0.0 }
+        val old = evaluate(drop)
         report.append("\nTOTALT enig %.0f %% (%.0f s med fasit), drop funnet %d/%d, ekstra drop %d\n"
-            .format(Locale.US, 100 * ok / secs, secs, dropsFound, dropsTrue, dropsExtra))
+            .format(Locale.US, 100 * old.agree, old.seconds, old.found, old.trueDrops, old.extra))
         val cols = listOf("INTRO", "BUILDUP", "DROP", "BREAKDOWN", "GROOVE", "OUTRO", "ANTI_CLIMAX")
         report.append("\nDu sa \\ appen    " + cols.joinToString("") { "%11s".format(it.take(10)) } + "     treff\n")
         for (t in classes) {
-            val m = total[t] ?: continue
+            val m = old.matrix[t] ?: continue
             val n = m.values.sum()
             report.append("%-16s".format(t) + cols.joinToString("") { "%10.0fs".format(Locale.US, m[it] ?: 0.0) } +
                 "  %5.0f %%\n".format(Locale.US, 100 * (m[t] ?: 0.0) / n))
         }
+
+        fun newMetrics(title: String, songs: List<Song>) {
+            val sc = evaluate(songs, clean = true)
+            report.append("\n$title, renset fasit (${songs.size} sanger, %.0f s):\n".format(Locale.US, sc.seconds))
+            if (sc.seconds <= 0) { report.append("  ingen fasit\n"); return }
+            report.append("  enig %s · balansert %s\n".format(Locale.US, pct(sc.agree), pct(sc.balanced)))
+            report.append("  drop innen én takt %d/%d · falske drop %.2f per min (%d)\n"
+                .format(Locale.US, sc.foundBar, sc.trueDrops, sc.falseDropsPerMin, sc.extraBar))
+            report.append("  build-up fanget %d/%d · per del: I %s B %s D %s Br %s\n".format(Locale.US,
+                sc.buildCaught, sc.buildSections, pct(sc.perClass["INTRO"] ?: 0.0), pct(sc.perClass["BUILDUP"] ?: 0.0),
+                pct(sc.perClass["DROP"] ?: 0.0), pct(sc.perClass["BREAKDOWN"] ?: 0.0)))
+        }
+        newMetrics("Drop-musikk", drop)
+        newMetrics("Andre sjangre", rest)
         println(report)
         File(raw.parentFile, "replay.txt").writeText(report.toString())
+        val baseline = File(raw.parentFile, "baseline.txt")
+        if (!baseline.exists()) baseline.writeText("Dagens system før ny lytter (" +
+            java.time.LocalDate.now() + "):\n\n" + report)
+    }
+
+    private companion object {
+        /** How long after a change Espen typically presses (moved back in the cleaned key). */
+        const val REACTION_MS = 600L
+        /** A key that starts later than this was switched on mid-song (starts on the app's own guess). */
+        const val MID_SONG_START_MS = 5_000L
     }
 }
