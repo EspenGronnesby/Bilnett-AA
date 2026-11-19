@@ -97,7 +97,7 @@ export declare class WebPartyEngine {
     get vocalHit(): number;
     get bpm(): number;
     get spectrum(): Float32Array;
-    pushPcm(samples: Float32Array, rateHz: number, nowMs: number): void;
+    pushPcm(samples: Float32Array, rateHz: number, nowMs: number): Int8Array;
     newTrack(nowMs: number): void;
     setMetadata(appleGenre: Nullable<string>, appleExact: boolean, deezerGenres: Array<string>, nowMs: number): void;
     setStrength(value: Nullable<number>): void;

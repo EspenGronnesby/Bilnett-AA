@@ -513,6 +513,7 @@ button.chip:active, .chip.sync button:active { transform: scale(0.97); }
 /* Small chips (the same size as «Auto»), so cover, buttons and Party fit on a 1080 px tall screen. */
 .party-controls { gap: calc(8 * var(--u)); }
 .party-controls .chip { height: calc(32 * var(--u)); padding: 0 calc(12 * var(--u)); font-size: calc(13 * var(--u)); white-space: nowrap; }
+.party-controls .analysis { display: flex; flex-wrap: wrap; justify-content: center; gap: calc(6 * var(--u)); }
 .party-controls [data-audio-choice] { display: flex; gap: calc(6 * var(--u)); }
 .chip.info { background: none; color: var(--muted); cursor: default; }
 .chip.small { height: calc(32 * var(--u)); padding: 0 calc(12 * var(--u)); font-size: calc(13 * var(--u)); }

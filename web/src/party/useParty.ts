@@ -3,6 +3,7 @@ import { WebPartyEngine } from '../core/generated/rave-core.mjs'
 import type { Track } from '../spotify/playback'
 import { appleGenreInfo } from '../video/apple'
 import { startListening, type PartyListener, type PartySource } from './audio'
+import { analysis } from './analysis'
 
 // Party on the website: one shared engine (rave-core), the sound input, and one animation-frame
 // loop that ticks the engine and then lets every Party layer draw from its outputs.
@@ -62,6 +63,10 @@ export function useParty(o: Options): Party {
   const listeners = useRef(new Set<(now: number) => void>())
   const live = useRef(o)
   live.current = o
+  // Analyse-opptaket (steg 5) spør etter posisjon, sjanger og hva appen selv tror.
+  analysis.positionMs = () => live.current.positionMs()
+  analysis.genre = () => engine.genre
+  analysis.autoPart = () => engine.partName
 
   // Each request gets a number: an answer that arrives after Party was switched off (or a newer
   // request) is closed at once instead of being left open in the background.
@@ -126,6 +131,7 @@ export function useParty(o: Options): Party {
   useEffect(() => {
     if (!trackKey || !o.track) return
     engine.newTrack(performance.now())
+    analysis.startSong(o.track.artist, o.track.title)
     let stale = false
     const { title, artist } = o.track
     appleGenreInfo(title, artist).then(g => {
@@ -176,7 +182,8 @@ export function useParty(o: Options): Party {
           const hats = (s % (60 / 300)) < 0.01 ? (Math.random() - 0.5) * 0.4 : 0
           buf[k] = raw + lead + hats + 0.02 * (Math.random() - 0.5)
         }
-        engine.pushPcm(buf, rate, performance.now())
+        const at = performance.now()
+        analysis.frame(engine.pushPcm(buf, rate, at), rate, at)
       }
     }, 50)
     return () => clearInterval(id)

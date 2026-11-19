@@ -128,10 +128,13 @@ class WebPartyEngine(fftSize: Int = 2048) {
     val spectrum: FloatArray get() = smoothSpectrum
 
     /** [samples]: [hop] new mono samples (−1..1) at [rateHz]. */
-    fun pushPcm(samples: FloatArray, rateHz: Int, nowMs: Double) {
+    /** Returns the FFT frame (Visualizer bytes) the analysis just used, so the page can record it. */
+    fun pushPcm(samples: FloatArray, rateHz: Int, nowMs: Double): ByteArray {
         val now = nowMs.toLong()
-        frame = audio.accept(pcm.push(samples, rateHz), rateHz, now)
+        val fft = pcm.push(samples, rateHz)
+        frame = audio.accept(fft, rateHz, now)
         frameAt = now
+        return fft
     }
 
     /** A new song (as in the app's updateMeta). */

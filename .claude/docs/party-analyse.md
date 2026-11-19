@@ -104,6 +104,13 @@ I skyggen i appen fra 2026-11-20: `BuildUpModel.kt` (generert av `train_listener
 Tren på nytt etter mer fasit: `exportListenerFeatures` → `train_listener.py --save` → bygg. `hybrid.txt` i assets har tallene.
 Lytteren: samme lydbilde telles bare én gang (live mater det flere ganger), og pause/spoling starter vinduene på nytt.
 
+**Steg 5 (2026-11-19): opptak og merking på nettsiden.** Party-panelet har **Analyse av/på**; på: Intro / Build-up / Drop /
+Breakdown / Outro, og lyden tas opp (`web/src/party/analysis.ts`, samme BNFFT1-format som appen). Lagres i nettleseren
+(IndexedDB, maks 40 sanger, ikke i git) til **Eksporter (N)** laster ned `<stamp>-<navn>.fft.gz` + `.csv` (en rad per sekund,
+`part_by=espen` fra første trykk). Legg filene i `…/party-analyse/raw/` (csv) og `raw/fft/` (fft.gz) så leser `PartyReplayTest`
+dem som appens. Testet i Chrome med demo-lyden (format og rader stemmer); ikke testet med ekte PC-lyd ennå, og `sync.py` henter
+ikke fra Nedlastinger ennå. Nettsiden har ikke `feedback.csv`, så «midt i sang»-rensen (første trykk) bruker bare første merke.
+
 Gammel plan for trening:
 
 1. Hent loggene og lydopptakene (sync).

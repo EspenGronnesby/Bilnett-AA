@@ -1,4 +1,5 @@
 import type { WebPartyEngine } from '../core/generated/rave-core.mjs'
+import { analysis } from './analysis'
 
 // Party's ears on the website (step P4). Spotify's own player in the page is copy-protected, so
 // Party listens through screen sharing (the PC's system sound, or this tab) or a microphone.
@@ -117,7 +118,7 @@ export async function startListening(kind: PartySource, engine: WebPartyEngine, 
         if (!loudSince) loudSince = now
         if (now - loudSince >= 200) lastLoud = now
       } else loudSince = 0
-      if (active) engine.pushPcm(e.data, rate, now)
+      if (active) analysis.frame(engine.pushPcm(e.data, rate, now), rate, now)
     }
     source.connect(tap)
     track.addEventListener('ended', () => { stop(); onEnded() }, { once: true })

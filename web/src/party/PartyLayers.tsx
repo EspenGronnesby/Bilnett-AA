@@ -1,3 +1,4 @@
+import { analysis, MARK_LABEL, type MarkPart } from './analysis'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Rgb } from '../ui/colors'
 import { SOURCE_LABEL, type PartySource } from './audio'
@@ -257,6 +258,31 @@ export function PartyControls({ party, strength, setStrength, koko, setKoko }: {
         {party.listening && e.hearing && <span className="chip info">{e.genreLabel}</span>}
       </div>
       {party.error && <p className="notice">{party.error}</p>}
+      <AnalysisPanel />
+    </div>
+  )
+}
+
+/** Analyse (steg 5): ta opp og merk hvor i sangen vi er; merkene brukes til å trene lytteren (eksporteres til Mac-en). */
+function AnalysisPanel() {
+  const [, redraw] = useState(0)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    analysis.onChange = () => redraw(n => n + 1)
+    void analysis.refreshCount()
+    return () => { analysis.onChange = () => {} }
+  }, [])
+  const on = analysis.enabled
+  return (
+    <div className="analysis">
+      <button className={on ? 'chip small on' : 'chip small'} onClick={() => analysis.setEnabled(!on)}
+        title="Tar opp lyden og lar deg merke sangdelene. Lagres i nettleseren til du eksporterer.">Analyse {on ? 'på' : 'av'}</button>
+      {on && (Object.keys(MARK_LABEL) as MarkPart[]).map(p =>
+        <button key={p} className={analysis.mark === p ? 'chip small on' : 'chip small'} onClick={() => analysis.setMark(p)}>{MARK_LABEL[p]}</button>)}
+      {analysis.savedCount > 0 && (
+        <button className="chip small" disabled={busy} onClick={async () => { setBusy(true); try { await analysis.exportAll() } finally { setBusy(false) } }}>
+          Eksporter ({analysis.savedCount})</button>)}
+      {on && analysis.note && <span className="chip info">{analysis.note}</span>}
     </div>
   )
 }
