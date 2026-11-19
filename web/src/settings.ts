@@ -57,6 +57,8 @@ export interface Settings {
   clean: boolean
   /** A small clock in the top-left corner. */
   clock: boolean
+  /** The lyrics style last used in each layout («p:poster», «l:party» …), restored when switching. */
+  lyricsStyleByLayout: Record<string, LyricsStyle>
 }
 
 export const LYRICS_STYLES = [
@@ -72,7 +74,7 @@ const KEY = 'rave.settings'
 const DEFAULTS: Settings = {
   portraitLayoutVersion: 1, portraitLayout: 'poster', landscapeLayout: 'standard', orientation: 'auto', keepAwake: true, autoHide: true, autoFullscreen: false, volume: 80, player: true,
   showLyrics: true, lyricsStyle: 'scroll', lyricsGlass: true, lyricsOffsets: {}, videoOn: true,
-  party: false, partySource: 'system', partyStrength: {}, koko: false, noFlash: false, lyricsScale: 100, dim: 50, hideAfter: 3, clean: false, clock: false,
+  party: false, partySource: 'system', partyStrength: {}, koko: false, noFlash: false, lyricsScale: 100, dim: 50, hideAfter: 3, clean: false, clock: false, lyricsStyleByLayout: {},
 }
 
 function read(): Settings {

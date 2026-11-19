@@ -142,6 +142,17 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
     calm: settings.noFlash || reduceMotion,
   })
   const zoneHeight = useZoneHeight()
+  // Each layout remembers its lyrics style: saved when it changes, restored when the layout changes
+  // (choosing another layout or turning the screen).
+  const layoutKey = wide ? `l:${settings.landscapeLayout}` : `p:${settings.portraitLayout}`
+  const updateFromLyrics = (change: Partial<typeof settings>) => updateSettings(change.lyricsStyle
+    ? { ...change, lyricsStyleByLayout: { ...settings.lyricsStyleByLayout, [layoutKey]: change.lyricsStyle } }
+    : change)
+  useEffect(() => {
+    const saved = settings.lyricsStyleByLayout[layoutKey]
+    if (saved && saved !== settings.lyricsStyle) updateSettings({ lyricsStyle: saved })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layoutKey])
   // «Ren visning»: H switches it, Esc leaves it.
   useShortcut(['h'], () => updateSettings({ clean: !settings.clean }))
   useShortcut(['Escape'], () => updateSettings({ clean: false }), settings.clean)
@@ -256,7 +267,7 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
   const pulse = () => (party.on ? Math.max(party.engine.kick, party.engine.bass * 0.6) : 0)
   const panel = (align: 'center' | 'start', footer?: ReactNode) => (
     <LyricsPanel lyrics={lyrics} positionMs={now.positionMs} offsetMs={offsetMs} settings={settings}
-      update={updateSettings} accent={accent} pulse={pulse} align={align} footer={footer} />
+      update={updateFromLyrics} accent={accent} pulse={pulse} align={align} footer={footer} />
   )
   const partyControls = party.on && (
     <div className="hideable">
