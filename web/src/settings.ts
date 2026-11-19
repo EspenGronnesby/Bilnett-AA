@@ -4,6 +4,12 @@ import { useCallback, useEffect, useState } from 'react'
 // tab shows up in the others through the «storage» event.
 
 export const PORTRAIT_LAYOUTS = { poster: 'Original (musikkplakat)', original: 'Tidligere original', lyrics: 'Tekstfokus', party: 'Party-scene', cinema: 'Filmvisning' } as const
+/** What choosing a portrait layout switches on/off (can be changed afterwards as usual). */
+const LAYOUT_PRESETS: Partial<Record<keyof typeof PORTRAIT_LAYOUTS, Partial<Settings>>> = {
+  cinema: { videoOn: true, showLyrics: true, lyricsGlass: false },
+  lyrics: { showLyrics: true },
+  party: { videoOn: false },
+}
 export interface Settings {
   portraitLayout: keyof typeof PORTRAIT_LAYOUTS
   portraitLayoutVersion: number
@@ -81,9 +87,7 @@ export function useSettings(): [Settings, (change: Partial<Settings>) => void] {
 
   const update = useCallback((change: Partial<Settings>) => {
     setSettings(prev => {
-      const preset: Partial<Settings> = change.portraitLayout === 'cinema'
-        ? { videoOn: true, showLyrics: true, lyricsGlass: false }
-        : change.portraitLayout === 'lyrics' ? { showLyrics: true } : {}
+      const preset = change.portraitLayout ? LAYOUT_PRESETS[change.portraitLayout] ?? {} : {}
       const next = { ...prev, ...preset, ...change }
       try { localStorage.setItem(KEY, JSON.stringify(next)) } catch { /* private mode: keep in memory */ }
       return next
