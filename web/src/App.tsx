@@ -20,7 +20,7 @@ import { useReducedMotion } from './ui/useReducedMotion'
 import { PartyBanner, PartyControls, PartyCoverFx, PartyGrain, PartyParticles, PartyScene, PartyShaker } from './party/PartyLayers'
 import { useParty, type Party } from './party/useParty'
 import { Koko } from './party/Koko'
-import { useZone } from './ui/useZone'
+import { useZone, ZoneLinger } from './ui/useZone'
 
 export default function App() {
   const [ready, setReady] = useState(false)
@@ -119,7 +119,7 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
   const [settingsOpen, setSettingsOpen] = useState(() => demo && new URLSearchParams(location.search).has('settings'))
   useWakeLock(settings.keepAwake)
   // The mouse pointer hides after 3 s still; the buttons only show over their own area.
-  const idle = useIdle(settings.autoHide && !settingsOpen)
+  const idle = useIdle(settings.autoHide && !settingsOpen, settings.hideAfter * 1000)
   const autoHide = settings.autoHide && !settingsOpen
   const problem = playerProblemText(now)
   const lyrics = useLyrics(track)
@@ -162,6 +162,7 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
 
   // Everything below shares the settings button and sheet.
   const shell = (content: ReactNode, cover: string | null = null) => (
+    <ZoneLinger.Provider value={Math.max(1_500, settings.hideAfter * 500)}>
     <div className={`screen${!wide ? ` portrait-${settings.portraitLayout}` : ''}${idle ? ' idle' : ''}${autoHide ? ' autohide' : ''}`}
       style={{ '--u-lyrics': `${dp * settings.lyricsScale / 100}px`, '--lyrics-scale': settings.lyricsScale / 100, '--dim': settings.dim / 50 } as CSSProperties}>
       <Backdrop url={cover} colors={coverColors} covered={showVideo} party={party.on} />
@@ -211,6 +212,7 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
           fullscreen={fullscreen} toggleFullscreen={toggleFullscreen} onClose={() => setSettingsOpen(false)} />
       )}
     </div>
+    </ZoneLinger.Provider>
   )
 
   if (status === 'error' && !track) {

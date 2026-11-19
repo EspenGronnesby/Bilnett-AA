@@ -123,6 +123,13 @@ function Screen({ settings, update, fullscreen, toggleFullscreen }: Pick<Props, 
         <Toggle label="Hold skjermen våken" on={settings.keepAwake} onChange={keepAwake => update({ keepAwake })} />
         <div className="divider" />
         <Toggle label="Vis knappene bare når musa er over dem" on={settings.autoHide} onChange={autoHide => update({ autoHide })} />
+        <div className="divider" />
+        <div className={settings.autoHide ? 'row' : 'row disabled'}><span className="grow">Skjul knapper og musepeker etter</span>
+          <select aria-label="Skjul knapper og musepeker etter" value={settings.hideAfter} disabled={!settings.autoHide}
+            onChange={e => { update({ hideAfter: Number(e.target.value) }); e.currentTarget.blur() }}>
+            {[3, 6, 10].map(s => <option key={s} value={s}>{s} sekunder</option>)}
+          </select>
+        </div>
       </div>
     </section>
   )

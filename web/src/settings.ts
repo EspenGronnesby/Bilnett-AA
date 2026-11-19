@@ -49,6 +49,8 @@ export interface Settings {
   lyricsScale: number
   /** How dark the background behind the text is, 0–100 (50 = the original look). */
   dim: number
+  /** Seconds before the mouse pointer hides (3, 6 or 10); the buttons stay half that after the mouse leaves. */
+  hideAfter: number
 }
 
 export const LYRICS_STYLES = [
@@ -64,7 +66,7 @@ const KEY = 'rave.settings'
 const DEFAULTS: Settings = {
   portraitLayoutVersion: 1, portraitLayout: 'poster', orientation: 'auto', keepAwake: true, autoHide: true, autoFullscreen: false, volume: 80, player: true,
   showLyrics: true, lyricsStyle: 'scroll', lyricsGlass: true, lyricsOffsets: {}, videoOn: true,
-  party: false, partySource: 'system', partyStrength: {}, koko: false, noFlash: false, lyricsScale: 100, dim: 50,
+  party: false, partySource: 'system', partyStrength: {}, koko: false, noFlash: false, lyricsScale: 100, dim: 50, hideAfter: 3,
 }
 
 function read(): Settings {

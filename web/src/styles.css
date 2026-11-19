@@ -234,6 +234,7 @@ body {
 .muted-row { color: var(--muted); }
 .hint { color: var(--faint); }
 .row.slider { cursor: default; }
+.row.disabled { opacity: .45; }
 .row.slider input { width: calc(150 * var(--u)); accent-color: var(--fg); }
 .slider-value { min-width: calc(48 * var(--u)); text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
 .group-hint { font-size: calc(12 * var(--u)); margin: calc(6 * var(--u)) calc(4 * var(--u)) 0; line-height: 1.4; }
