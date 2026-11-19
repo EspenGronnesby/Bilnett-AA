@@ -97,10 +97,13 @@ export function PartyCoverFx({ party, palette, hasCover, volume, dp }: {
   live.current = { palette, hasCover, volume, dp }
   useEffect(() => party.onFrame(now => {
     const host = orbRef.current?.parentElement
-    // In the app the cover is 86 % of the box the ring lives in (Cover(size * .86f)).
-    const l = { ...live.current, size: (host?.offsetWidth ?? 0) / 0.86 }
-    if (!l.size) return
     const e = party.engine
+    // The cover pulses with the kick and breathes with the bass; the ring grows with it, so the cover
+    // never swells over the ring.
+    const pulse = 1 + e.breath * 0.05 + e.kick * (0.045 + e.heavy * 0.09) * volumeGain(live.current.volume) * (0.4 + 0.6 * e.phaseLevel)
+    // In the app the cover is 86 % of the box the ring lives in (Cover(size * .86f)).
+    const l = { ...live.current, size: (host?.offsetWidth ?? 0) / 0.86 * pulse }
+    if (!l.size) return
     const colors = showPalette(hardPalette(l.palette, !l.hasCover, e.warmth), e.dropLook)
     const ratio = Math.min(devicePixelRatio || 1, 2)
     // The ring's spikes reach ~1.1 × the cover from the centre: the canvas is 2.4 × the cover.
@@ -127,10 +130,7 @@ export function PartyCoverFx({ party, palette, hasCover, volume, dp }: {
     }
     // The cover pulses with the kick and breathes with the bass.
     const cover = document.querySelector('[data-party-cover] .cover') as HTMLElement | null
-    if (cover) {
-      const s = 1 + e.breath * 0.05 + e.kick * (0.045 + e.heavy * 0.09) * volumeGain(l.volume) * (0.4 + 0.6 * e.phaseLevel)
-      cover.style.transform = `scale(${s})`
-    }
+    if (cover) cover.style.transform = `scale(${pulse})`
     const edge = edgeRef.current
     if (edge) edge.style.opacity = party.calm ? '0' : String(Math.min(0.55 * e.snare * structureWeight(e.vibe), 0.55))
   }), [party, orb])

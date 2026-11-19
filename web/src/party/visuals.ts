@@ -289,7 +289,9 @@ export class OrbLayer {
     }
     const a = colors[0], b = colors[1 % colors.length], c = colors[2 % colors.length]
     const layerColors = [lerpRgb(a, WHITE, 0.55), a, b, c, lerpRgb(a, b, 0.5)]
-    const base = side * 0.45
+    // Just outside the cover all the way round: 0.48 × the box = 0.56 × the cover, so the rounded-square
+    // contour clears the cover's rounded corners too (0.45 put the ring on the corners).
+    const base = side * 0.48
     const kick = e.kick, heavy = e.heavy
     const gain = volumeGain(volume)
     const drive = heavy * (0.7 + 0.3 * loudness(volume))
@@ -298,7 +300,7 @@ export class OrbLayer {
     const maxDisplacement = Math.min(36 * dp + drive * 70 * dp, side * (0.12 + drive * 0.22)) * gain * boost * e.spike
     const cap = side * 0.38 * boost
     const spikeCurve = 1 - drive * 0.5
-    const radius = base * (1 + kickExpansion) * (1 + e.breath * 0.05)
+    const radius = base * (1 + kickExpansion)
     const pts = this.points
     const spike = (values: Float32Array, i: number, extra: number, exponent: number) => {
       let v = clamp(mirrored(values, i), 0, 1)
