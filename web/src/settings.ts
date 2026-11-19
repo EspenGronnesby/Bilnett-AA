@@ -53,6 +53,8 @@ export interface Settings {
   hideAfter: number
   /** «Ren visning»: only the cover and the visuals (title, buttons and lyrics hidden). Key H. */
   clean: boolean
+  /** A small clock in the top-left corner. */
+  clock: boolean
 }
 
 export const LYRICS_STYLES = [
@@ -68,7 +70,7 @@ const KEY = 'rave.settings'
 const DEFAULTS: Settings = {
   portraitLayoutVersion: 1, portraitLayout: 'poster', orientation: 'auto', keepAwake: true, autoHide: true, autoFullscreen: false, volume: 80, player: true,
   showLyrics: true, lyricsStyle: 'scroll', lyricsGlass: true, lyricsOffsets: {}, videoOn: true,
-  party: false, partySource: 'system', partyStrength: {}, koko: false, noFlash: false, lyricsScale: 100, dim: 50, hideAfter: 3, clean: false,
+  party: false, partySource: 'system', partyStrength: {}, koko: false, noFlash: false, lyricsScale: 100, dim: 50, hideAfter: 3, clean: false, clock: false,
 }
 
 function read(): Settings {

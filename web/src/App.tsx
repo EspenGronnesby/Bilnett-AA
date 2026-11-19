@@ -18,6 +18,7 @@ import { useIdle } from './ui/useIdle'
 import { useWakeLock } from './ui/useWakeLock'
 import { useReducedMotion } from './ui/useReducedMotion'
 import { useShortcut } from './ui/useShortcut'
+import { Clock } from './ui/Clock'
 import { PartyBanner, PartyControls, PartyCoverFx, PartyGrain, PartyParticles, PartyScene, PartyShaker } from './party/PartyLayers'
 import { useParty, type Party } from './party/useParty'
 import { Koko } from './party/Koko'
@@ -167,7 +168,7 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
   // Everything below shares the settings button and sheet.
   const shell = (content: ReactNode, cover: string | null = null) => (
     <ZoneLinger.Provider value={Math.max(1_500, settings.hideAfter * 500)}>
-    <div className={`screen${!wide ? ` portrait-${settings.portraitLayout}` : ''}${idle ? ' idle' : ''}${autoHide ? ' autohide' : ''}${settings.clean ? ' clean' : ''}`}
+    <div className={`screen${!wide ? ` portrait-${settings.portraitLayout}` : ''}${idle ? ' idle' : ''}${autoHide ? ' autohide' : ''}${settings.clean ? ' clean' : ''}${settings.clock ? ' with-clock' : ''}`}
       style={{ '--u-lyrics': `${dp * settings.lyricsScale / 100}px`, '--lyrics-scale': settings.lyricsScale / 100, '--dim': settings.dim / 50 } as CSSProperties}>
       <Backdrop url={cover} colors={coverColors} covered={showVideo} party={party.on} />
       {party.on && <PartyScene party={party} palette={coverColors} hasCover={hasCover} />}
@@ -183,6 +184,7 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
       {party.on && <PartyGrain />}
       {content}
       <PartyBanner party={party} />
+      {settings.clock && <Clock />}
       {settingsOpen && debug && <details style={{ position: 'fixed', bottom: 8, left: 8, zIndex: 20, background: '#111', maxWidth: '90vw' }}><summary>Feilsøking</summary>
         <pre style={{ whiteSpace: 'pre-wrap' }}>{JSON.stringify({ browser: navigator.userAgent, fullscreen: !!document.fullscreenElement, window: [innerWidth, innerHeight], screen: [screen.width, screen.height], audio: party.listening?.diagnostics(), error: party.error, fullscreenError }, null, 2)}</pre>
       </details>}

@@ -571,4 +571,15 @@ select option { background: #211827; color: white; }
 }
 .screen.clean:not(.idle) .corner-zone .hideable { opacity: 1; pointer-events: auto; }
 
+/* Clock: top-left, the corner opposite the buttons; level with them. Stays in «Ren visning». */
+.clock {
+  position: absolute; top: calc(24 * var(--u)); left: calc(24 * var(--u)); z-index: 6; pointer-events: none;
+  font-size: calc(20 * var(--u)); font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px calc(6 * var(--u)) hsl(0 0% 0% / .5);
+}
+/* Room for the clock: the layout picker gets narrower on narrow screens, and «Tidligere original»
+   (which starts at the top when it doesn't fit) moves down below it. */
+.screen.with-clock .portrait-picker { max-width: min(48vw, calc(100vw - 300 * var(--u))); }
+.screen.with-clock .stage.tall[data-layout="original"] { padding-top: calc(64 * var(--u)); }
+
 .party-fullscreen-prompt { z-index: 6; display: flex; align-items: center; gap: 12px; max-width: 94vw; padding: 12px; border-radius: 18px; background: var(--bg); }

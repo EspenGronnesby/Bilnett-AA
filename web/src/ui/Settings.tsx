@@ -122,6 +122,8 @@ function Screen({ settings, update, fullscreen, toggleFullscreen }: Pick<Props, 
         <div className="divider" />
         <Toggle label="Ren visning: bare cover og visualisering (tast H)" on={settings.clean} onChange={clean => update({ clean })} />
         <div className="divider" />
+        <Toggle label="Vis klokke øverst til venstre" on={settings.clock} onChange={clock => update({ clock })} />
+        <div className="divider" />
         <Toggle label="Hold skjermen våken" on={settings.keepAwake} onChange={keepAwake => update({ keepAwake })} />
         <div className="divider" />
         <Toggle label="Vis knappene bare når musa er over dem" on={settings.autoHide} onChange={autoHide => update({ autoHide })} />
