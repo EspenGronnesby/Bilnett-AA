@@ -234,6 +234,13 @@ body {
 .muted-row { color: var(--muted); }
 .hint { color: var(--faint); }
 .row.slider { cursor: default; }
+.keys { display: flex; gap: calc(6 * var(--u)); }
+kbd {
+  min-width: calc(28 * var(--u)); padding: calc(3 * var(--u)) calc(8 * var(--u)); border-radius: calc(8 * var(--u));
+  background: hsl(0 0% 100% / 0.09); color: var(--fg); text-align: center;
+  font: 600 calc(13 * var(--u)) / 1.3 system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+.shortcuts-sheet { max-width: calc(420 * var(--u)); }
 .row.disabled { opacity: .45; }
 .row.slider input { width: calc(150 * var(--u)); accent-color: var(--fg); }
 .slider-value { min-width: calc(48 * var(--u)); text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }

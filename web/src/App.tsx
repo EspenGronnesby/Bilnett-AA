@@ -19,6 +19,7 @@ import { useWakeLock } from './ui/useWakeLock'
 import { useReducedMotion } from './ui/useReducedMotion'
 import { useShortcut } from './ui/useShortcut'
 import { Clock } from './ui/Clock'
+import { ShortcutsSheet } from './ui/Shortcuts'
 import { PartyBanner, PartyControls, PartyCoverFx, PartyGrain, PartyParticles, PartyScene, PartyShaker } from './party/PartyLayers'
 import { useParty, type Party } from './party/useParty'
 import { Koko } from './party/Koko'
@@ -153,6 +154,8 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
     if (saved && saved !== settings.lyricsStyle) updateSettings({ lyricsStyle: saved })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layoutKey])
+  const [keysOpen, setKeysOpen] = useState(false)
+  useShortcut(['?'], () => setKeysOpen(true))
   // «Ren visning»: H switches it, Esc leaves it.
   useShortcut(['h'], () => updateSettings({ clean: !settings.clean }))
   useShortcut(['Escape'], () => updateSettings({ clean: false }), settings.clean)
@@ -229,6 +232,7 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
       </button>
       </div>
       </Zone>
+      {keysOpen && <ShortcutsSheet onClose={() => setKeysOpen(false)} />}
       {settingsOpen && (
         <SettingsSheet now={now} settings={settings} update={updateSettings}
           fullscreen={fullscreen} toggleFullscreen={toggleFullscreen} onClose={() => setSettingsOpen(false)} />

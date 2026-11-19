@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { getDevices, getMe, transfer, type DeviceInfo, type Me } from '../spotify/api'
 import { logout } from '../spotify/auth'
 import type { NowPlaying } from '../spotify/nowPlaying'
+import { ShortcutList } from './Shortcuts'
 import { LANDSCAPE_LAYOUTS, PORTRAIT_LAYOUTS, type Settings as SettingsData } from '../settings'
 
 // Settings sheet: «Konto og enhet» and «Skjerm». Opens over a dark scrim (fade only),
@@ -34,6 +35,10 @@ export function SettingsSheet({ now, settings, update, fullscreen, toggleFullscr
         <Screen settings={settings} update={update} fullscreen={fullscreen} toggleFullscreen={toggleFullscreen} />
         <TextSettings settings={settings} update={update} />
         <PartySettings settings={settings} update={update} />
+        <section className="group">
+          <h3>Hurtigtaster</h3>
+          <ShortcutList />
+        </section>
       </div>
     </div>
   )
