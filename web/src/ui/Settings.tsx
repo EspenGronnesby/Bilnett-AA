@@ -135,7 +135,11 @@ function TextSettings({ settings, update }: Pick<Props, 'settings' | 'update'>) 
       <div className="card">
         <Slider label="Tekststørrelse" value={settings.lyricsScale} min={80} max={150} step={5}
           format={v => `${v} %`} onChange={lyricsScale => update({ lyricsScale })} />
+        <div className="divider" />
+        <Slider label="Mørkere bakgrunn" value={settings.dim} min={0} max={100} step={5}
+          format={v => `${v} %`} onChange={dim => update({ dim })} />
       </div>
+      <p className="hint group-hint">Mørkner coveret og videoen bak teksten. 50 % er slik det var før.</p>
     </section>
   )
 }

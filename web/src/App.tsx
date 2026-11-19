@@ -163,7 +163,7 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
   // Everything below shares the settings button and sheet.
   const shell = (content: ReactNode, cover: string | null = null) => (
     <div className={`screen${!wide ? ` portrait-${settings.portraitLayout}` : ''}${idle ? ' idle' : ''}${autoHide ? ' autohide' : ''}`}
-      style={{ '--u-lyrics': `${dp * settings.lyricsScale / 100}px`, '--lyrics-scale': settings.lyricsScale / 100 } as CSSProperties}>
+      style={{ '--u-lyrics': `${dp * settings.lyricsScale / 100}px`, '--lyrics-scale': settings.lyricsScale / 100, '--dim': settings.dim / 50 } as CSSProperties}>
       <Backdrop url={cover} colors={coverColors} covered={showVideo} party={party.on} />
       {party.on && <PartyScene party={party} palette={coverColors} hasCover={hasCover} />}
       {settings.videoOn && videos.current && (
