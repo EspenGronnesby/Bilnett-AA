@@ -3,9 +3,10 @@ import { useCallback, useEffect, useState } from 'react'
 // Rave's settings, kept in this browser (localStorage). Shared between tabs: a change in one
 // tab shows up in the others through the «storage» event.
 
-export const PORTRAIT_LAYOUTS = { original: 'Original', poster: 'Musikkplakat', lyrics: 'Tekstfokus', party: 'Party-scene', cinema: 'Filmvisning' } as const
+export const PORTRAIT_LAYOUTS = { poster: 'Original (musikkplakat)', original: 'Tidligere original', lyrics: 'Tekstfokus', party: 'Party-scene', cinema: 'Filmvisning' } as const
 export interface Settings {
   portraitLayout: keyof typeof PORTRAIT_LAYOUTS
+  portraitLayoutVersion: number
   /** Layout: follow the window, or force landscape / portrait. */
   orientation: 'auto' | 'landscape' | 'portrait'
   /** Keep the screen from sleeping while Rave is open. */
@@ -49,7 +50,7 @@ export type LyricsStyle = typeof LYRICS_STYLES[number]['id']
 
 const KEY = 'rave.settings'
 const DEFAULTS: Settings = {
-  portraitLayout: 'original', orientation: 'auto', keepAwake: true, autoHide: true, autoFullscreen: false, volume: 80, player: true,
+  portraitLayoutVersion: 1, portraitLayout: 'poster', orientation: 'auto', keepAwake: true, autoHide: true, autoFullscreen: false, volume: 80, player: true,
   showLyrics: true, lyricsStyle: 'scroll', lyricsGlass: true, lyricsOffsets: {}, videoOn: true,
   party: false, partySource: 'system', partyStrength: {}, koko: false,
 }
@@ -57,7 +58,15 @@ const DEFAULTS: Settings = {
 function read(): Settings {
   try {
     const raw = localStorage.getItem(KEY)
-    return raw ? { ...DEFAULTS, ...(JSON.parse(raw) as Partial<Settings>) } : DEFAULTS
+    if (!raw) return DEFAULTS
+    const saved = JSON.parse(raw) as Partial<Settings>
+    const next = { ...DEFAULTS, ...saved }
+    if (saved.portraitLayoutVersion !== 1) {
+      if (!saved.portraitLayout || saved.portraitLayout === 'original') next.portraitLayout = 'poster'
+      next.portraitLayoutVersion = 1
+      try { localStorage.setItem(KEY, JSON.stringify(next)) } catch { /* keep settings in memory */ }
+    }
+    return next
   } catch { return DEFAULTS }
 }
 
