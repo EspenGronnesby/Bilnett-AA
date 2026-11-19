@@ -563,4 +563,12 @@ select option { background: #211827; color: white; }
   left: 50%; translate: -50% -100%; width: 90%;
 }
 
+/* «Ren visning»: title, buttons, lyrics and banners hidden in place (nothing moves); cover, visuals,
+   video and Koko stay. The corner buttons (with «Vis alt») come back while the mouse moves. */
+.screen.clean main .info, .screen.clean main > .hero:last-child:not(:first-child), .screen.clean .hero-rest,
+.screen.clean .lyrics-panel, .screen.clean .banner, .screen.clean .party-banner {
+  visibility: hidden; pointer-events: none;
+}
+.screen.clean:not(.idle) .corner-zone .hideable { opacity: 1; pointer-events: auto; }
+
 .party-fullscreen-prompt { z-index: 6; display: flex; align-items: center; gap: 12px; max-width: 94vw; padding: 12px; border-radius: 18px; background: var(--bg); }

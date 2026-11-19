@@ -17,6 +17,7 @@ import { useFullscreen } from './ui/useFullscreen'
 import { useIdle } from './ui/useIdle'
 import { useWakeLock } from './ui/useWakeLock'
 import { useReducedMotion } from './ui/useReducedMotion'
+import { useShortcut } from './ui/useShortcut'
 import { PartyBanner, PartyControls, PartyCoverFx, PartyGrain, PartyParticles, PartyScene, PartyShaker } from './party/PartyLayers'
 import { useParty, type Party } from './party/useParty'
 import { Koko } from './party/Koko'
@@ -140,6 +141,9 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
     calm: settings.noFlash || reduceMotion,
   })
   const zoneHeight = useZoneHeight()
+  // «Ren visning»: H switches it, Esc leaves it.
+  useShortcut(['h'], () => updateSettings({ clean: !settings.clean }))
+  useShortcut(['Escape'], () => updateSettings({ clean: false }), settings.clean)
   // The troubleshooting box (browser, full screen, sound) only with /?debug.
   const [debug] = useState(() => new URLSearchParams(location.search).has('debug'))
   const [fullscreenError, setFullscreenError] = useState('')
@@ -163,7 +167,7 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
   // Everything below shares the settings button and sheet.
   const shell = (content: ReactNode, cover: string | null = null) => (
     <ZoneLinger.Provider value={Math.max(1_500, settings.hideAfter * 500)}>
-    <div className={`screen${!wide ? ` portrait-${settings.portraitLayout}` : ''}${idle ? ' idle' : ''}${autoHide ? ' autohide' : ''}`}
+    <div className={`screen${!wide ? ` portrait-${settings.portraitLayout}` : ''}${idle ? ' idle' : ''}${autoHide ? ' autohide' : ''}${settings.clean ? ' clean' : ''}`}
       style={{ '--u-lyrics': `${dp * settings.lyricsScale / 100}px`, '--lyrics-scale': settings.lyricsScale / 100, '--dim': settings.dim / 50 } as CSSProperties}>
       <Backdrop url={cover} colors={coverColors} covered={showVideo} party={party.on} />
       {party.on && <PartyScene party={party} palette={coverColors} hasCover={hasCover} />}
@@ -191,7 +195,8 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
       )}
       <Zone className="corner-zone">
       <div className="corner-buttons hideable">
-        {!wide && <select className="portrait-picker chip" aria-label="Stående oppsett" value={settings.portraitLayout} onChange={e => updateSettings({ portraitLayout: e.target.value as typeof settings.portraitLayout })}>
+        {settings.clean && <button className="chip on" title="Avslutt ren visning (H eller Esc)" onClick={() => updateSettings({ clean: false })}>Vis alt</button>}
+        {!wide && <select className="portrait-picker chip" aria-label="Stående oppsett" value={settings.portraitLayout} onChange={e => { updateSettings({ portraitLayout: e.target.value as typeof settings.portraitLayout }); e.currentTarget.blur() }}>
           {Object.entries(PORTRAIT_LAYOUTS).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
         </select>}
         <button className={party.on ? 'icon-pill small-icon on' : 'icon-pill small-icon'} aria-label={party.on ? 'Slå av Party' : 'Party'}
@@ -230,6 +235,7 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
   const lyricsOn = settings.showLyrics && track.kind === 'track'
   const modes = (
     <ModeButtons settings={settings} update={updateSettings} deviceType={deviceType} hasLyrics={hasLyrics}>
+      <button className="chip" title="Ren visning: bare cover og visualisering (H)" onClick={() => updateSettings({ clean: true })}>Ren</button>
       {videos.current && (
         <button className={settings.videoOn ? 'chip on' : 'chip'} onClick={() => updateSettings({ videoOn: !settings.videoOn })}>Video</button>
       )}
@@ -268,7 +274,7 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
       {wide ? (
         // Landscape: cover with title and buttons; lyrics in a panel on the right (as in the car).
         <main className={lyricsOn ? 'stage wide split' : 'stage wide'}>
-          <HeroColumn autoHide={autoHide}
+          <HeroColumn autoHide={autoHide} clean={settings.clean}
             top={<>{cover}<Info track={track} compact /></>}
             rest={<>
               <div className="hideable"><Controls now={now} /></div>
@@ -397,7 +403,7 @@ function Zone({ className, children }: { className: string; children: ReactNode 
  * the buttons' height, so they sit centred next to the lyrics; they glide back when the mouse moves.
  * (Espen asked for this, 2026-11-18.)
  */
-function HeroColumn({ autoHide, top, rest }: { autoHide: boolean; top: ReactNode; rest: ReactNode }) {
+function HeroColumn({ autoHide, clean, top, rest }: { autoHide: boolean; clean: boolean; top: ReactNode; rest: ReactNode }) {
   const [awake, zone] = useZone()
   const restRef = useRef<HTMLDivElement>(null)
   const [restHeight, setRestHeight] = useState(0)
@@ -410,7 +416,8 @@ function HeroColumn({ autoHide, top, rest }: { autoHide: boolean; top: ReactNode
   }, [])
   // The gap between the two parts counts too (it disappears with the buttons).
   const gap = restRef.current ? parseFloat(getComputedStyle(restRef.current.parentElement!).rowGap) || 0 : 0
-  const shift = autoHide && !awake ? (restHeight + gap) / 2 : 0
+  // In «Ren visning» the buttons are hidden for good: the cover stays where it is when the mouse passes.
+  const shift = autoHide && (clean || !awake) ? (restHeight + gap) / 2 : 0
   return (
     <section className={awake ? 'hero zone awake' : 'hero zone'} {...zone}
       style={{ '--rest-h': `${restHeight}px` } as CSSProperties}>

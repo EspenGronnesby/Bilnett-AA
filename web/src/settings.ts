@@ -51,6 +51,8 @@ export interface Settings {
   dim: number
   /** Seconds before the mouse pointer hides (3, 6 or 10); the buttons stay half that after the mouse leaves. */
   hideAfter: number
+  /** «Ren visning»: only the cover and the visuals (title, buttons and lyrics hidden). Key H. */
+  clean: boolean
 }
 
 export const LYRICS_STYLES = [
@@ -66,7 +68,7 @@ const KEY = 'rave.settings'
 const DEFAULTS: Settings = {
   portraitLayoutVersion: 1, portraitLayout: 'poster', orientation: 'auto', keepAwake: true, autoHide: true, autoFullscreen: false, volume: 80, player: true,
   showLyrics: true, lyricsStyle: 'scroll', lyricsGlass: true, lyricsOffsets: {}, videoOn: true,
-  party: false, partySource: 'system', partyStrength: {}, koko: false, noFlash: false, lyricsScale: 100, dim: 50, hideAfter: 3,
+  party: false, partySource: 'system', partyStrength: {}, koko: false, noFlash: false, lyricsScale: 100, dim: 50, hideAfter: 3, clean: false,
 }
 
 function read(): Settings {

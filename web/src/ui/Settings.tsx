@@ -115,10 +115,12 @@ function Screen({ settings, update, fullscreen, toggleFullscreen }: Pick<Props, 
         <Toggle label="Fullskjerm automatisk (ved første klikk eller tast)" on={settings.autoFullscreen} onChange={autoFullscreen => update({ autoFullscreen })} />
         <div className="divider" />
         <div className="row"><span className="grow">Stående oppsett</span>
-          <select aria-label="Stående oppsett" value={settings.portraitLayout} onChange={e => update({ portraitLayout: e.target.value as SettingsData['portraitLayout'] })}>
+          <select aria-label="Stående oppsett" value={settings.portraitLayout} onChange={e => { update({ portraitLayout: e.target.value as SettingsData['portraitLayout'] }); e.currentTarget.blur() }}>
             {Object.entries(PORTRAIT_LAYOUTS).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
           </select>
         </div>
+        <div className="divider" />
+        <Toggle label="Ren visning: bare cover og visualisering (tast H)" on={settings.clean} onChange={clean => update({ clean })} />
         <div className="divider" />
         <Toggle label="Hold skjermen våken" on={settings.keepAwake} onChange={keepAwake => update({ keepAwake })} />
         <div className="divider" />
