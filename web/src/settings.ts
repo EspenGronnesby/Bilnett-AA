@@ -53,7 +53,7 @@ export interface Settings {
   dim: number
   /** Seconds before the mouse pointer hides (3, 6 or 10); the buttons stay half that after the mouse leaves. */
   hideAfter: number
-  /** «Ren visning»: only the cover and the visuals (title, buttons and lyrics hidden). Key H. */
+  /** «Ren visning»: only the cover and the visuals (title, buttons and lyrics hidden). Key H. Not saved. */
   clean: boolean
   /** A small clock in the top-left corner. */
   clock: boolean
@@ -83,6 +83,7 @@ function read(): Settings {
     if (!raw) return DEFAULTS
     const saved = JSON.parse(raw) as Partial<Settings>
     const next = { ...DEFAULTS, ...saved }
+    next.clean = false
     if (saved.portraitLayoutVersion !== 1) {
       if (!saved.portraitLayout || saved.portraitLayout === 'original') next.portraitLayout = 'poster'
       next.portraitLayoutVersion = 1
@@ -96,7 +97,8 @@ export function useSettings(): [Settings, (change: Partial<Settings>) => void] {
   const [settings, setSettings] = useState<Settings>(read)
 
   useEffect(() => {
-    const onStorage = (e: StorageEvent) => { if (e.key === KEY) setSettings(read()) }
+    // Another tab changed the settings; «Ren visning» belongs to this tab and stays as it is.
+    const onStorage = (e: StorageEvent) => { if (e.key === KEY) setSettings(prev => ({ ...read(), clean: prev.clean })) }
     window.addEventListener('storage', onStorage)
     return () => window.removeEventListener('storage', onStorage)
   }, [])
@@ -106,7 +108,9 @@ export function useSettings(): [Settings, (change: Partial<Settings>) => void] {
       const layout = change.portraitLayout ?? change.landscapeLayout
       const preset = layout ? LAYOUT_PRESETS[layout] ?? {} : {}
       const next = { ...prev, ...preset, ...change }
-      try { localStorage.setItem(KEY, JSON.stringify(next)) } catch { /* private mode: keep in memory */ }
+      // «Ren visning» is not saved: after a reload Rave always starts with everything showing.
+      const { clean: _clean, ...saved } = next
+      try { localStorage.setItem(KEY, JSON.stringify(saved)) } catch { /* private mode: keep in memory */ }
       return next
     })
   }, [])

@@ -453,8 +453,13 @@ function HeroColumn({ autoHide, clean, top, rest }: { autoHide: boolean; clean: 
   }, [])
   // The gap between the two parts counts too (it disappears with the buttons).
   const gap = restRef.current ? parseFloat(getComputedStyle(restRef.current.parentElement!).rowGap) || 0 : 0
-  // In «Ren visning» the buttons are hidden for good: the cover stays where it is when the mouse passes.
-  const shift = autoHide && (clean || !awake) ? (restHeight + gap) / 2 : 0
+  const normal = autoHide && !awake ? (restHeight + gap) / 2 : 0
+  // «Ren visning» keeps the cover exactly where it was when it was switched on: it doesn't glide
+  // when H is pressed, nor when the mouse passes.
+  const frozen = useRef<number | null>(null)
+  if (!clean) frozen.current = null
+  else if (frozen.current === null) frozen.current = normal
+  const shift = clean ? frozen.current ?? normal : normal
   return (
     <section className={awake ? 'hero zone awake' : 'hero zone'} {...zone}
       style={{ '--rest-h': `${restHeight}px` } as CSSProperties}>

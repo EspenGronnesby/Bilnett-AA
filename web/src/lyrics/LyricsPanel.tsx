@@ -54,6 +54,8 @@ export function LyricsPanel({ lyrics, positionMs, offsetMs, settings, update, ac
       // Not while typing, using a slider or a button group, or with the settings sheet open.
       if (e.target instanceof HTMLElement && e.target.closest('input, textarea, select, [role=radio], [role=dialog]')) return
       if (document.querySelector('[role=dialog]')) return
+      // Not in «Ren visning» (the lyrics are hidden: the change would be invisible).
+      if (document.querySelector('.screen.clean')) return
       if (e.key === 'ArrowRight') step(1)
       else if (e.key === 'ArrowLeft') step(-1)
     }
