@@ -43,6 +43,8 @@ export function SettingsSheet({ now, settings, update, wide, onClose }: Props) {
   const open = (next: Section | null) => {
     setSection(next)
     sheet.current?.scrollTo({ top: 0 })
+    // The row/back button that had focus disappears: keep keyboard focus in the sheet.
+    sheet.current?.focus({ preventScroll: true })
   }
 
   useEffect(() => {
@@ -59,7 +61,7 @@ export function SettingsSheet({ now, settings, update, wide, onClose }: Props) {
 
   return (
     <div className="scrim" onClick={onClose}>
-      <div ref={sheet} className="sheet" role="dialog" aria-label="Innstillinger" onClick={e => e.stopPropagation()}>
+      <div ref={sheet} tabIndex={-1} className="sheet" role="dialog" aria-label="Innstillinger" onClick={e => e.stopPropagation()}>
         {section && <button className="text-button sheet-back" onClick={() => open(null)}>‹ Innstillinger</button>}
         <div className="sheet-head">
           <h2>{section ? TITLES[section] : 'Innstillinger'}</h2>

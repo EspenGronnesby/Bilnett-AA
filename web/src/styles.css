@@ -243,6 +243,7 @@ body {
 .nav-icon svg { width: calc(18 * var(--u)); height: calc(18 * var(--u)); fill: currentColor; }
 .nav-value { max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: calc(14 * var(--u)); }
 .nav-chevron { color: var(--faint); font-size: calc(22 * var(--u)); line-height: 1; }
+.sheet:focus { outline: none; }
 .sheet-back { padding-left: 0; margin-bottom: calc(6 * var(--u)); }
 .row.slider { cursor: default; }
 .text-button.danger, .choice.danger { color: var(--destructive); }
