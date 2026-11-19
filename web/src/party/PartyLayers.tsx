@@ -231,7 +231,6 @@ export function PartyControls({ party, strength, setStrength, koko, setKoko }: {
   koko: boolean
   setKoko: (on: boolean) => void
 }) {
-  const next: Record<PartySource, PartySource> = { system: 'mic', mic: 'tab', tab: 'system' }
   const [, redraw] = useState(0)
   // The genre label and live level change with the music: refresh the row a few times a second.
   useEffect(() => {
@@ -243,14 +242,13 @@ export function PartyControls({ party, strength, setStrength, koko, setKoko }: {
   return (
     <div className="party-controls">
       <div className="mode-buttons">
-        {party.listening
-          ? <button className="chip" title="Bytt lydkilde" onClick={() => party.listenTo(next[party.listening!.source])}>
-              Lyd: {SOURCE_LABEL[party.listening.source]}
-            </button>
-          : <button className="chip on" onClick={() => party.listenTo('system')}>Lytt til musikken</button>}
+        <div data-audio-choice>
+          {(['system', 'tab', 'mic'] as PartySource[]).map(source => <button key={source} className={party.listening?.source === source ? 'chip on' : 'chip'} onClick={() => party.listenTo(source)}>{SOURCE_LABEL[source]}</button>)}
+        </div>
         <button className={koko ? 'chip on' : 'chip'} onClick={() => setKoko(!koko)}>Koko</button>
-        <span className="chip info">{e.hearing ? e.genreLabel : 'Hører ingenting'}</span>
+        <span className="chip info">{party.connecting ? 'Kobler til …' : party.listening ? party.paused ? 'Pause' : party.listening.status() : 'Ikke tilkoblet'}</span>
       </div>
+      {party.listening && <span className="chip info">{party.listening.label}</span>}
       <div className="vibe">
         <button className={strength === undefined ? 'chip small on' : 'chip small'} onClick={() => setStrength(undefined)}>Auto</button>
         <input type="range" min={0} max={100} step={1} aria-label="Vibe-styrke"

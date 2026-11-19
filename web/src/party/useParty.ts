@@ -8,11 +8,13 @@ import { startListening, type PartyListener, type PartySource } from './audio'
 // loop that ticks the engine and then lets every Party layer draw from its outputs.
 
 export interface Party {
+  paused: boolean
   on: boolean
   engine: WebPartyEngine
   /** Where it listens now (null = not listening). */
   listening: PartyListener | null
   error: string | null
+  connecting: boolean
   /** Turn Party on/off. Call from a click (screen sharing needs one). */
   toggle: () => void
   /** Listen through another source. Call from a click. */
@@ -50,6 +52,8 @@ function explain(e: unknown, kind: PartySource): string {
 export function useParty(o: Options): Party {
   const engine = engineOnce()
   const [listening, setListening] = useState<PartyListener | null>(null)
+  const [connecting, setConnecting] = useState(false)
+  const activeListener = useRef<PartyListener | null>(null)
   const [error, setError] = useState<string | null>(null)
   const listeners = useRef(new Set<(now: number) => void>())
   const live = useRef(o)
@@ -61,38 +65,40 @@ export function useParty(o: Options): Party {
   useEffect(() => () => { request.current++ }, [])
   const stopListening = useCallback(() => {
     request.current++
-    setListening(null) // the effect below stops the old one
+    activeListener.current?.stop()
+    activeListener.current = null
+    setConnecting(false)
+    setListening(null)
   }, [])
 
   // Open the sound; if the PC's sound can't be shared, fall back to the microphone (Espen's choice).
   const listenTo = useCallback((kind: PartySource) => {
     setError(null)
-    stopListening()
-    const mine = request.current
+    const mine = ++request.current
+    setConnecting(true)
     const keep = (l: PartyListener) => {
       if (mine !== request.current || !live.current.enabled) { l.stop(); return false }
+      activeListener.current?.stop()
+      activeListener.current = l
+      l.activate()
+      setConnecting(false)
       setListening(l)
       return true
     }
-    const lost = () => { if (mine === request.current) setListening(null) }
+    const lost = () => { if (activeListener.current?.status() === 'Deling avsluttet') { activeListener.current = null; setListening(null); setError('Deling avsluttet') } }
     startListening(kind, engine, lost)
-      .then(l => { if (keep(l)) live.current.setSource(kind) })
+      .then(l => { if (keep(l) && kind !== 'mic') live.current.setSource(kind) })
       .catch(e => {
         if (mine !== request.current) return
-        // Cancelled in the sharing dialog: respect that, don't ask for the microphone instead.
-        const cancelled = e instanceof DOMException && e.name === 'NotAllowedError'
-        if (kind === 'mic' || cancelled) { setError(explain(e, kind)); return }
-        setError(`${explain(e, kind)} Bruker mikrofonen.`)
-        startListening('mic', engine, lost)
-          .then(l => { if (keep(l)) live.current.setSource('mic') })
-          .catch(e2 => { if (mine === request.current) setError(explain(e2, 'mic')) })
+        setConnecting(false)
+        setError(explain(e, kind))
       })
   }, [engine, stopListening])
 
   const toggle = useCallback(() => {
     const on = !live.current.enabled
     live.current.setEnabled(on)
-    if (on && !live.current.demoSound) listenTo(live.current.source)
+    if (on && !live.current.demoSound) listenTo(live.current.source === 'mic' ? 'system' : live.current.source)
     else { stopListening(); setError(null) }
   }, [listenTo, stopListening])
 
@@ -167,6 +173,6 @@ export function useParty(o: Options): Party {
   }, [])
 
   // Stable object: the layers subscribe once, and Koko keeps his place between Spotify polls.
-  return useMemo(() => ({ on: o.enabled, engine, listening, error, toggle, listenTo, onFrame }),
-    [o.enabled, engine, listening, error, toggle, listenTo, onFrame])
+  return useMemo(() => ({ paused: !o.playing, on: o.enabled, engine, listening, error, connecting, toggle, listenTo, onFrame }),
+    [o.playing, o.enabled, engine, listening, error, connecting, toggle, listenTo, onFrame])
 }

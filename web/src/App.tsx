@@ -136,6 +136,12 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
     setSource: kind => updateSettings({ partySource: kind }),
     demoSound: demo,
   })
+  const [fullscreenError, setFullscreenError] = useState('')
+  useEffect(() => {
+    const onError = (e: Event) => setFullscreenError((e as CustomEvent<string>).detail)
+    window.addEventListener('rave-fullscreen-error', onError)
+    return () => window.removeEventListener('rave-fullscreen-error', onError)
+  }, [])
   const [offerFullscreen, setOfferFullscreen] = useState(false)
   useEffect(() => {
     setOfferFullscreen(!!party.listening && party.listening.source !== 'mic' && !document.fullscreenElement)
@@ -165,6 +171,10 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
       {party.on && <PartyGrain />}
       {content}
       <PartyBanner party={party} />
+      {settingsOpen && <details style={{ position: 'fixed', bottom: 8, left: 8, zIndex: 20, background: '#111', maxWidth: '90vw' }}><summary>Feilsøking</summary>
+        <pre style={{ whiteSpace: 'pre-wrap' }}>{JSON.stringify({ browser: navigator.userAgent, fullscreen: !!document.fullscreenElement, window: [innerWidth, innerHeight], screen: [screen.width, screen.height], audio: party.listening?.diagnostics(), error: party.error, fullscreenError }, null, 2)}</pre>
+      </details>}
+      {fullscreenError && <div className="banner" style={{ zIndex: 8, background: '#111', padding: 12 }}>Fullskjerm ble avvist. Prøv F11 i Chrome. <button onClick={() => setFullscreenError('')}>Lukk</button></div>}
       {party.on && party.listening && offerFullscreen && !fullscreen && (
         <div className="banner party-fullscreen-prompt">
           <button className="pill" data-fullscreen onClick={toggleFullscreen}>Lyden er tilkoblet – gå til fullskjerm</button>
@@ -177,7 +187,7 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
           {Object.entries(PORTRAIT_LAYOUTS).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
         </select>}
         <button className={party.on ? 'icon-pill small-icon on' : 'icon-pill small-icon'} aria-label={party.on ? 'Slå av Party' : 'Party'}
-          title={party.on ? 'Slå av Party' : 'Party (eller 5 trykk på coveret)'} onClick={party.toggle}>
+          title={party.on ? 'Slå av Party' : 'Party (eller 5 trykk på coveret)'} data-audio-choice onClick={party.toggle}>
           <svg viewBox="0 0 24 24" aria-hidden><path d={PARTY_ICON} /></svg>
         </button>
         <button className="icon-pill small-icon" data-fullscreen aria-label={fullscreen ? 'Avslutt fullskjerm' : 'Fullskjerm'}

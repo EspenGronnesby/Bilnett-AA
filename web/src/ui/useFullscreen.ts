@@ -11,8 +11,8 @@ let autoDone = false
 export function useFullscreen(auto = false): [boolean, () => void] {
   const [full, setFull] = useState(() => document.fullscreenElement !== null)
   const toggle = useCallback(() => {
-    if (document.fullscreenElement) document.exitFullscreen().catch(() => {})
-    else document.documentElement.requestFullscreen().catch(() => {})
+    if (document.fullscreenElement) document.exitFullscreen().catch(e => window.dispatchEvent(new CustomEvent('rave-fullscreen-error', { detail: String(e) })))
+    else document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(e => window.dispatchEvent(new CustomEvent('rave-fullscreen-error', { detail: String(e) })))
   }, [])
 
   useEffect(() => {
@@ -35,10 +35,10 @@ export function useFullscreen(auto = false): [boolean, () => void] {
     const go = (e: Event) => {
       // Not when the click is on a button or the key is F: those handle full screen themselves.
       if (e instanceof KeyboardEvent && (e.key.toLowerCase() === 'f' || e.key === 'Escape')) return
-      if (e.target instanceof Element && e.target.closest('[data-fullscreen]')) return
+      if (e.target instanceof Element && e.target.closest('[data-fullscreen], [data-audio-choice]')) return
       autoDone = true
       remove()
-      if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {})
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(e => window.dispatchEvent(new CustomEvent('rave-fullscreen-error', { detail: String(e) })))
     }
     const remove = () => { window.removeEventListener('pointerdown', go, true); window.removeEventListener('keydown', go, true) }
     window.addEventListener('pointerdown', go, true)

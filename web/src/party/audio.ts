@@ -8,8 +8,8 @@ import type { WebPartyEngine } from '../core/generated/rave-core.mjs'
 export type PartySource = 'system' | 'tab' | 'mic'
 
 export const SOURCE_LABEL: Record<PartySource, string> = {
-  system: 'Systemlyd',
-  tab: 'Denne fanen',
+  system: 'PC-lyd',
+  tab: 'Fanelyd',
   mic: 'Mikrofon',
 }
 
@@ -50,6 +50,9 @@ export interface PartyListener {
   source: PartySource
   /** Name of the shared sound / microphone, for the screen. */
   label: string
+  activate: () => void
+  status: () => string
+  diagnostics: () => object
   stop: () => void
 }
 
@@ -82,6 +85,8 @@ export async function startListening(kind: PartySource, engine: WebPartyEngine, 
   let ctx: AudioContext | null = null
   let source: MediaStreamAudioSourceNode | null = null
   let tap: AudioWorkletNode | null = null
+  let active = false
+  let lastPacket = 0, loudSince = 0, lastLoud = 0, db = -120
   let stopped = false
   const stop = () => {
     if (stopped) return
@@ -103,11 +108,27 @@ export async function startListening(kind: PartySource, engine: WebPartyEngine, 
     const rate = ctx.sampleRate
     tap.port.onmessage = (e: MessageEvent<Float32Array>) => {
       // One clock for sound and picture: performance.now() (like SystemClock.uptimeMillis in the app).
-      engine.pushPcm(e.data, rate, performance.now())
+      const now = performance.now()
+      lastPacket = now
+      let sum = 0
+      for (const v of e.data) sum += v * v
+      db = 20 * Math.log10(Math.max(Math.sqrt(sum / e.data.length), 1e-12))
+      if (db > (kind === 'mic' ? -50 : -60)) {
+        if (!loudSince) loudSince = now
+        if (now - loudSince >= 200) lastLoud = now
+      } else loudSince = 0
+      if (active) engine.pushPcm(e.data, rate, now)
     }
     source.connect(tap)
     track.addEventListener('ended', () => { stop(); onEnded() }, { once: true })
-    return { source: kind, label: track.label || SOURCE_LABEL[kind], stop }
+    return {
+      source: kind, label: track.label || SOURCE_LABEL[kind], stop,
+      activate: () => { active = true },
+      status: () => stopped || track.readyState === 'ended' ? 'Deling avsluttet'
+        : track.muted || ctx?.state !== 'running' || performance.now() - lastPacket > 1000 ? 'Midlertidig avbrutt'
+        : lastLoud > 0 && performance.now() - lastLoud < 2000 ? 'Mottar lyd' : 'Tilkoblet – stille',
+      diagnostics: () => ({ source: kind, label: track.label, track: track.readyState, muted: track.muted, context: ctx?.state, db, lastPacket }),
+    }
   } catch (e) {
     stop()
     throw e
