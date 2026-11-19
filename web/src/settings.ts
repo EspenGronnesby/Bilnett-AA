@@ -4,14 +4,16 @@ import { useCallback, useEffect, useState } from 'react'
 // tab shows up in the others through the «storage» event.
 
 export const PORTRAIT_LAYOUTS = { poster: 'Original (musikkplakat)', original: 'Tidligere original', lyrics: 'Tekstfokus', party: 'Party-scene', cinema: 'Filmvisning' } as const
-/** What choosing a portrait layout switches on/off (can be changed afterwards as usual). */
-const LAYOUT_PRESETS: Partial<Record<keyof typeof PORTRAIT_LAYOUTS, Partial<Settings>>> = {
+export const LANDSCAPE_LAYOUTS = { standard: 'Standard', lyrics: 'Tekstfokus', cinema: 'Filmvisning', party: 'Party-scene' } as const
+/** What choosing a layout (portrait or landscape, same ids) switches on/off; can be changed afterwards as usual. */
+const LAYOUT_PRESETS: Partial<Record<string, Partial<Settings>>> = {
   cinema: { videoOn: true, showLyrics: true, lyricsGlass: false },
   lyrics: { showLyrics: true },
   party: { videoOn: false },
 }
 export interface Settings {
   portraitLayout: keyof typeof PORTRAIT_LAYOUTS
+  landscapeLayout: keyof typeof LANDSCAPE_LAYOUTS
   portraitLayoutVersion: number
   /** Layout: follow the window, or force landscape / portrait. */
   orientation: 'auto' | 'landscape' | 'portrait'
@@ -68,7 +70,7 @@ export type LyricsStyle = typeof LYRICS_STYLES[number]['id']
 
 const KEY = 'rave.settings'
 const DEFAULTS: Settings = {
-  portraitLayoutVersion: 1, portraitLayout: 'poster', orientation: 'auto', keepAwake: true, autoHide: true, autoFullscreen: false, volume: 80, player: true,
+  portraitLayoutVersion: 1, portraitLayout: 'poster', landscapeLayout: 'standard', orientation: 'auto', keepAwake: true, autoHide: true, autoFullscreen: false, volume: 80, player: true,
   showLyrics: true, lyricsStyle: 'scroll', lyricsGlass: true, lyricsOffsets: {}, videoOn: true,
   party: false, partySource: 'system', partyStrength: {}, koko: false, noFlash: false, lyricsScale: 100, dim: 50, hideAfter: 3, clean: false, clock: false,
 }
@@ -99,7 +101,8 @@ export function useSettings(): [Settings, (change: Partial<Settings>) => void] {
 
   const update = useCallback((change: Partial<Settings>) => {
     setSettings(prev => {
-      const preset = change.portraitLayout ? LAYOUT_PRESETS[change.portraitLayout] ?? {} : {}
+      const layout = change.portraitLayout ?? change.landscapeLayout
+      const preset = layout ? LAYOUT_PRESETS[layout] ?? {} : {}
       const next = { ...prev, ...preset, ...change }
       try { localStorage.setItem(KEY, JSON.stringify(next)) } catch { /* private mode: keep in memory */ }
       return next

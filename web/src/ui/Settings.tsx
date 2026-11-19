@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { getDevices, getMe, transfer, type DeviceInfo, type Me } from '../spotify/api'
 import { logout } from '../spotify/auth'
 import type { NowPlaying } from '../spotify/nowPlaying'
-import { PORTRAIT_LAYOUTS, type Settings as SettingsData } from '../settings'
+import { LANDSCAPE_LAYOUTS, PORTRAIT_LAYOUTS, type Settings as SettingsData } from '../settings'
 
 // Settings sheet: «Konto og enhet» and «Skjerm». Opens over a dark scrim (fade only),
 // closes with Esc or a click outside.
@@ -120,6 +120,12 @@ function Screen({ settings, update, fullscreen, toggleFullscreen }: Pick<Props, 
           </select>
         </div>
         <div className="divider" />
+        <div className="row"><span className="grow">Liggende oppsett</span>
+          <select aria-label="Liggende oppsett" value={settings.landscapeLayout} onChange={e => { update({ landscapeLayout: e.target.value as SettingsData['landscapeLayout'] }); e.currentTarget.blur() }}>
+            {Object.entries(LANDSCAPE_LAYOUTS).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+          </select>
+        </div>
+        <div className="divider" />
         <Toggle label="Ren visning: bare cover og visualisering (tast H)" on={settings.clean} onChange={clean => update({ clean })} />
         <div className="divider" />
         <Toggle label="Vis klokke øverst til venstre" on={settings.clock} onChange={clock => update({ clock })} />
@@ -150,7 +156,6 @@ function TextSettings({ settings, update }: Pick<Props, 'settings' | 'update'>) 
         <Slider label="Mørkere bakgrunn" value={settings.dim} min={0} max={100} step={5}
           format={v => `${v} %`} onChange={dim => update({ dim })} />
       </div>
-      <p className="hint group-hint">Mørkner coveret og videoen bak teksten. 50 % er slik det var før.</p>
     </section>
   )
 }
@@ -162,7 +167,6 @@ function PartySettings({ settings, update }: Pick<Props, 'settings' | 'update'>)
       <div className="card">
         <Toggle label="Ingen blinking (strobe og lysglimt av)" on={settings.noFlash} onChange={noFlash => update({ noFlash })} />
       </div>
-      <p className="hint group-hint">Ringen, partiklene og ristingen er med. Slås også på av seg selv hvis Windows/Mac er satt til «reduser bevegelse».</p>
     </section>
   )
 }

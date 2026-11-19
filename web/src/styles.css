@@ -317,7 +317,7 @@ body {
   overflow-x: auto; scrollbar-width: none;
 }
 .lyrics-foot::-webkit-scrollbar { display: none; }
-.lyrics-foot .mode-buttons { flex-wrap: nowrap; flex: none; }
+.lyrics-foot .mode-buttons { flex-wrap: wrap; flex: 0 1 auto; justify-content: flex-start; }
 .lyrics-foot .style-dots { flex: none; }
 .lyrics-foot .chip { white-space: nowrap; flex: none; }
 .lyrics-foot:empty { display: none; }
@@ -492,7 +492,7 @@ button.chip:active, .chip.sync button:active { transform: scale(0.97); }
 .party-controls .vibe input { width: calc(160 * var(--u)); accent-color: var(--fg); }
 /* Small chips (the same size as «Auto»), so cover, buttons and Party fit on a 1080 px tall screen. */
 .party-controls { gap: calc(8 * var(--u)); }
-.party-controls .chip { height: calc(32 * var(--u)); padding: 0 calc(12 * var(--u)); font-size: calc(13 * var(--u)); }
+.party-controls .chip { height: calc(32 * var(--u)); padding: 0 calc(12 * var(--u)); font-size: calc(13 * var(--u)); white-space: nowrap; }
 .party-controls [data-audio-choice] { display: flex; gap: calc(6 * var(--u)); }
 .chip.info { background: none; color: var(--muted); cursor: default; }
 .chip.small { height: calc(32 * var(--u)); padding: 0 calc(12 * var(--u)); font-size: calc(13 * var(--u)); }
@@ -535,7 +535,7 @@ select option { background: #211827; color: white; }
 .stage.tall[data-layout="lyrics"] .song { font-size: calc(24 * var(--u)); line-height: 1.2; }
 
 /* Filmvisning: no cover (App.tsx), video behind a light veil, lyrics low on the screen. */
-.portrait-cinema .veil { background: hsl(0 0% 0% / min(.9, calc(.3 * var(--dim, 1)))); }
+.portrait-cinema .veil, .landscape-cinema .veil { background: hsl(0 0% 0% / min(.9, calc(.3 * var(--dim, 1)))); }
 .stage.tall[data-layout="cinema"] > .hero:first-child { display: flex; align-self: start; gap: calc(14 * var(--u)); }
 .stage.tall[data-layout="cinema"] .song { font-size: calc(22 * var(--u)); line-height: 1.2; }
 .stage.tall[data-layout="cinema"] > .lyrics-panel { align-self: end; height: min(26vh, 360px); text-shadow: 0 2px 8px #000; }
@@ -566,7 +566,7 @@ select option { background: #211827; color: white; }
 /* «Ren visning»: title, buttons, lyrics and banners hidden in place (nothing moves); cover, visuals,
    video and Koko stay. The corner buttons (with «Vis alt») come back while the mouse moves. */
 .screen.clean main .info, .screen.clean main > .hero:last-child:not(:first-child), .screen.clean .hero-rest,
-.screen.clean .lyrics-panel, .screen.clean .banner, .screen.clean .party-banner {
+.screen.clean .lyrics-panel, .screen.clean .banner, .screen.clean .party-banner, .screen.clean .side-zone {
   visibility: hidden; pointer-events: none;
 }
 .screen.clean:not(.idle) .corner-zone .hideable { opacity: 1; pointer-events: auto; }
@@ -581,5 +581,32 @@ select option { background: #211827; color: white; }
    (which starts at the top when it doesn't fit) moves down below it. */
 .screen.with-clock .portrait-picker { max-width: min(48vw, calc(100vw - 300 * var(--u))); }
 .screen.with-clock .stage.tall[data-layout="original"] { padding-top: calc(64 * var(--u)); }
+
+/* ---------- Landscape layouts (Settings → «Liggende oppsett»; «standard» is the rules above) ---------- */
+/* Tekstfokus: narrow cover column, wide lyrics. */
+.stage.wide.split[data-layout="lyrics"] { grid-template-columns: 40fr 60fr; }
+.stage.wide.split[data-layout="lyrics"] .cover { --size: max(calc(80 * var(--u)), min(calc(100dvh - var(--rest-h, 0px) - 175 * var(--u)), 18vw, calc(200 * var(--u)))); }
+/* Filmvisning: no cover (App.tsx), the lyrics low on the screen over the video. */
+.stage.wide.split[data-layout="cinema"] > .lyrics-panel { align-self: end; height: min(40vh, calc(420 * var(--u))); text-shadow: 0 2px 8px #000; }
+/* Party-scene: title | cover (in the middle of the screen) + lyrics band | buttons. */
+.stage.wide[data-layout="party"] {
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: calc(32 * var(--u));
+  padding: calc(72 * var(--u)) calc(32 * var(--u)) calc(24 * var(--u));
+  --land-cover: min(36vw, calc(100dvh - 140 * var(--u)));
+  --land-lyrics: min(32dvh, calc(340 * var(--u)));
+}
+.stage.wide[data-layout="party"].with-lyrics { --land-cover: min(32vw, calc(100dvh - 164 * var(--u) - var(--land-lyrics))); }
+.stage.wide[data-layout="party"] .party-center { display: flex; flex-direction: column; align-items: center; gap: calc(24 * var(--u)); }
+.stage.wide[data-layout="party"] .cover { --size: var(--land-cover); }
+.stage.wide[data-layout="party"] .party-center > .lyrics-panel { width: max(var(--land-cover), 40vw); height: var(--land-lyrics); flex: none; }
+.stage.wide[data-layout="party"] .side { max-height: 100%; min-width: 0; }
+/* The buttons in the lyrics band at ¾ size, so they fit in one row under the lyrics. */
+.stage.wide[data-layout="party"] .party-center .lyrics-foot, .stage.wide[data-layout="party"] .party-modes { --u: calc(var(--u-page) * .75); }
+.stage.wide[data-layout="party"] .side-info .info { text-align: center; }
+.stage.wide[data-layout="party"] .side-zone {
+  display: grid; justify-items: center; align-content: safe center; gap: calc(12 * var(--u));
+  overflow-y: auto; scrollbar-width: none;
+}
+.stage.wide[data-layout="party"] .side-zone::-webkit-scrollbar { display: none; }
 
 .party-fullscreen-prompt { z-index: 6; display: flex; align-items: center; gap: 12px; max-width: 94vw; padding: 12px; border-radius: 18px; background: var(--bg); }

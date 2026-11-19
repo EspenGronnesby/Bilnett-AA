@@ -4,7 +4,7 @@ import { useNowPlaying, type NowPlaying as Now } from './spotify/nowPlaying'
 import type { Track } from './spotify/playback'
 import { LyricsPanel, ModeButtons } from './lyrics/LyricsPanel'
 import { useLyrics } from './lyrics/useLyrics'
-import { PORTRAIT_LAYOUTS, useSettings } from './settings'
+import { LANDSCAPE_LAYOUTS, PORTRAIT_LAYOUTS, useSettings } from './settings'
 import { accentOf, css, useCoverColors, type Rgb } from './ui/colors'
 import { SOURCE_LABEL } from './video/apple'
 import { useVideos } from './video/useVideos'
@@ -168,8 +168,8 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
   // Everything below shares the settings button and sheet.
   const shell = (content: ReactNode, cover: string | null = null) => (
     <ZoneLinger.Provider value={Math.max(1_500, settings.hideAfter * 500)}>
-    <div className={`screen${!wide ? ` portrait-${settings.portraitLayout}` : ''}${idle ? ' idle' : ''}${autoHide ? ' autohide' : ''}${settings.clean ? ' clean' : ''}${settings.clock ? ' with-clock' : ''}`}
-      style={{ '--u-lyrics': `${dp * settings.lyricsScale / 100}px`, '--lyrics-scale': settings.lyricsScale / 100, '--dim': settings.dim / 50 } as CSSProperties}>
+    <div className={`screen${wide ? ` landscape-${settings.landscapeLayout}` : ` portrait-${settings.portraitLayout}`}${idle ? ' idle' : ''}${autoHide ? ' autohide' : ''}${settings.clean ? ' clean' : ''}${settings.clock ? ' with-clock' : ''}`}
+      style={{ '--u-page': `${dp}px`, '--u-lyrics': `${dp * settings.lyricsScale / 100}px`, '--lyrics-scale': settings.lyricsScale / 100, '--dim': settings.dim / 50 } as CSSProperties}>
       <Backdrop url={cover} colors={coverColors} covered={showVideo} party={party.on} />
       {party.on && <PartyScene party={party} palette={coverColors} hasCover={hasCover} />}
       {settings.videoOn && videos.current && (
@@ -198,9 +198,13 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
       <Zone className="corner-zone">
       <div className="corner-buttons hideable">
         {settings.clean && <button className="chip on" title="Avslutt ren visning (H eller Esc)" onClick={() => updateSettings({ clean: false })}>Vis alt</button>}
-        {!wide && <select className="portrait-picker chip" aria-label="Stående oppsett" value={settings.portraitLayout} onChange={e => { updateSettings({ portraitLayout: e.target.value as typeof settings.portraitLayout }); e.currentTarget.blur() }}>
-          {Object.entries(PORTRAIT_LAYOUTS).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
-        </select>}
+        {wide
+          ? <select className="portrait-picker chip" aria-label="Liggende oppsett" value={settings.landscapeLayout} onChange={e => { updateSettings({ landscapeLayout: e.target.value as typeof settings.landscapeLayout }); e.currentTarget.blur() }}>
+              {Object.entries(LANDSCAPE_LAYOUTS).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+            </select>
+          : <select className="portrait-picker chip" aria-label="Stående oppsett" value={settings.portraitLayout} onChange={e => { updateSettings({ portraitLayout: e.target.value as typeof settings.portraitLayout }); e.currentTarget.blur() }}>
+              {Object.entries(PORTRAIT_LAYOUTS).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+            </select>}
         <button className={party.on ? 'icon-pill small-icon on' : 'icon-pill small-icon'} aria-label={party.on ? 'Slå av Party' : 'Party'}
           title={party.on ? 'Slå av Party' : 'Party (eller 5 trykk på coveret)'} data-audio-choice onClick={party.toggle}>
           <svg viewBox="0 0 24 24" aria-hidden><path d={PARTY_ICON} /></svg>
@@ -273,11 +277,27 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
 
   return shell(
     <>
-      {wide ? (
+      {wide && settings.landscapeLayout === 'party' ? (
+        // Landscape Party-scene: title on the left, the cover in the middle of the screen with a band of
+        // lyrics under it, the buttons on the right.
+        <main data-layout="party" className={lyricsOn ? 'stage wide with-lyrics' : 'stage wide'}>
+          <section className="side side-info"><Info track={track} compact={false} /></section>
+          <section className="party-center">
+            {cover}
+            {lyricsOn ? panel('center', modes) : <div className="hideable party-modes">{modes}</div>}
+          </section>
+          <Zone className="side side-zone">
+            <div className="hideable"><Controls now={now} /></div>
+            {partyControls}
+            {problem && <p className="notice hideable">{problem}</p>}
+          </Zone>
+        </main>
+      ) : wide ? (
         // Landscape: cover with title and buttons; lyrics in a panel on the right (as in the car).
-        <main className={lyricsOn ? 'stage wide split' : 'stage wide'}>
+        // Tekstfokus: narrow left column; Filmvisning: no cover, the video behind.
+        <main data-layout={settings.landscapeLayout} className={lyricsOn ? 'stage wide split' : 'stage wide'}>
           <HeroColumn autoHide={autoHide} clean={settings.clean}
-            top={<>{cover}<Info track={track} compact /></>}
+            top={<>{settings.landscapeLayout !== 'cinema' && cover}<Info track={track} compact /></>}
             rest={<>
               <div className="hideable"><Controls now={now} /></div>
               {partyControls}
