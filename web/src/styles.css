@@ -115,14 +115,14 @@ body {
 /* Landscape: cover with title underneath, centered (lyrics come to the right in phase 2). */
 .stage.wide .hero { display: grid; justify-items: center; gap: calc(12 * var(--u)); }
 .stage.wide .cover {
-  --size: max(calc(80 * var(--u)), min(calc(100dvh - var(--rest-h, 0px) - 130 * var(--u)), 40vw, calc(300 * var(--u))));
+  --size: max(calc(80 * var(--u)), min(calc(100dvh - var(--rest-h, 0px) - var(--dock-h, 0px) - 130 * var(--u)), 40vw, calc(300 * var(--u))));
 }
 /* Never taller than the screen: if cover, title and buttons still don't fit, the column scrolls.
    The extra padding (into the page margin and the gap, never over the lyrics) keeps room for the
    Party ring around the cover, which would be cut off otherwise. */
 .stage.wide { grid-template-rows: minmax(0, 1fr); }
 .stage.wide > .hero {
-  max-height: calc(100% + 80 * var(--u)); margin-block: calc(-40 * var(--u)); padding-block: calc(40 * var(--u));
+  max-height: calc(100% + 40 * var(--u)); margin-block: calc(-40 * var(--u)) 0; padding-block: calc(40 * var(--u)) 0;
   margin-inline: calc(-24 * var(--u)); padding-inline: calc(24 * var(--u));
   overflow-y: auto; scrollbar-width: none;
 }
@@ -307,7 +307,7 @@ kbd {
 /* Room for the settings button above the panel. */
 .stage.wide.split { padding-top: calc(72 * var(--u)); }
 .stage.wide.split .hero { align-self: center; }
-.stage.wide.split .cover { --size: max(calc(80 * var(--u)), min(calc(100dvh - var(--rest-h, 0px) - 175 * var(--u)), 36vw, calc(300 * var(--u)))); }
+.stage.wide.split .cover { --size: max(calc(80 * var(--u)), min(calc(100dvh - var(--rest-h, 0px) - var(--dock-h, 0px) - 175 * var(--u)), 36vw, calc(300 * var(--u)))); }
 /* Portrait: cover, title, lyrics filling the middle, buttons at the bottom. */
 .stage.tall { display: flex; flex-direction: column; align-items: center; justify-content: safe center; gap: calc(24 * var(--u)); }
 /* «safe»: if everything doesn't fit, start at the top (never cut the cover off above). */
@@ -537,7 +537,7 @@ select option { background: #211827; color: white; }
 .stage.tall:not([data-layout="original"]) {
   /* What is left for the cover after buttons, title, a minimum of lyrics, paddings and gaps. */
   --lyrics-min: calc(150 * var(--u));
-  --cover-room: calc(100dvh - var(--zone-h, 0px) - var(--info-h, 0px) - var(--lyrics-min) - 160 * var(--u));
+  --cover-room: calc(100dvh - var(--zone-h, 0px) - var(--info-h, 0px) - var(--lyrics-min) - var(--dock-h, 0px) - 160 * var(--u));
 }
 .stage.tall:not(.with-lyrics):not([data-layout="original"]) { grid-template-rows: minmax(0, 1fr) auto; --lyrics-min: 0px; }
 .stage.tall:not([data-layout="original"]) > .hero { min-height: 0; }
@@ -569,7 +569,7 @@ select option { background: #211827; color: white; }
    up under them; it never goes so high that the title above it (--info-h) hits the top. */
 .stage.tall[data-layout="party"] {
   --party-top: calc(var(--info-h, 80px) + 100 * var(--u));
-  --party-below: calc(var(--zone-h, 0px) + var(--lyrics-min) + 52 * var(--u));
+  --party-below: calc(var(--zone-h, 0px) + var(--lyrics-min) + var(--dock-h, 0px) + 52 * var(--u));
   --party-cover-size: max(calc(80 * var(--u)), min(55vw, 30dvh, calc(100dvh - var(--party-top) - var(--party-below))));
   --party-mid: max(calc(var(--party-top) + var(--party-cover-size) / 2),
     min(50dvh, calc(100dvh - var(--party-below) - var(--party-cover-size) / 2)));
@@ -609,17 +609,17 @@ select option { background: #211827; color: white; }
 /* ---------- Landscape layouts (Settings → «Liggende oppsett»; «standard» is the rules above) ---------- */
 /* Tekstfokus: narrow cover column, wide lyrics. */
 .stage.wide.split[data-layout="lyrics"] { grid-template-columns: 40fr 60fr; }
-.stage.wide.split[data-layout="lyrics"] .cover { --size: max(calc(80 * var(--u)), min(calc(100dvh - var(--rest-h, 0px) - 175 * var(--u)), 18vw, calc(200 * var(--u)))); }
+.stage.wide.split[data-layout="lyrics"] .cover { --size: max(calc(80 * var(--u)), min(calc(100dvh - var(--rest-h, 0px) - var(--dock-h, 0px) - 175 * var(--u)), 18vw, calc(200 * var(--u)))); }
 /* Filmvisning: no cover (App.tsx), the lyrics low on the screen over the video. */
 .stage.wide.split[data-layout="cinema"] > .lyrics-panel { align-self: end; height: min(40vh, calc(420 * var(--u))); text-shadow: 0 2px 8px #000; }
 /* Party-scene: title | cover (in the middle of the screen) + lyrics band | buttons. */
 .stage.wide[data-layout="party"] {
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: calc(32 * var(--u));
-  padding: calc(72 * var(--u)) calc(32 * var(--u)) calc(24 * var(--u));
-  --land-cover: min(36vw, calc(100dvh - 140 * var(--u)));
-  --land-lyrics: min(32dvh, calc(340 * var(--u)));
+  padding: calc(40 * var(--u)) calc(32 * var(--u)) calc(24 * var(--u));
+  --land-cover: min(36vw, calc(100dvh - var(--dock-h, 0px) - 108 * var(--u)));
+  --land-lyrics: min(28dvh, calc(300 * var(--u)));
 }
-.stage.wide[data-layout="party"].with-lyrics { --land-cover: min(32vw, calc(100dvh - 164 * var(--u) - var(--land-lyrics))); }
+.stage.wide[data-layout="party"].with-lyrics { --land-cover: min(32vw, calc(100dvh - var(--dock-h, 0px) - 132 * var(--u) - var(--land-lyrics))); }
 .stage.wide[data-layout="party"] .party-center { display: flex; flex-direction: column; align-items: center; gap: calc(24 * var(--u)); }
 .stage.wide[data-layout="party"] .cover { --size: var(--land-cover); }
 .stage.wide[data-layout="party"] .party-center > .lyrics-panel { width: max(var(--land-cover), 40vw); height: var(--land-lyrics); flex: none; }
@@ -629,8 +629,39 @@ select option { background: #211827; color: white; }
 .stage.wide[data-layout="party"] .side-info .info { text-align: center; }
 .stage.wide[data-layout="party"] .side-zone {
   display: grid; justify-items: center; align-content: safe center; gap: calc(12 * var(--u));
+  align-self: stretch; padding-top: calc(56 * var(--u)); /* below the corner buttons */
   overflow-y: auto; scrollbar-width: none;
 }
 .stage.wide[data-layout="party"] .side-zone::-webkit-scrollbar { display: none; }
+
+/* ---------- The bar at the bottom (every layout): view buttons, then where | ⏮ ⏯ ⏭ | volume ----------
+   The layouts keep its measured height (--dock-h, App.tsx) free, so nothing ends up under it. */
+.screen .stage.wide, .screen .stage.tall[data-layout="original"] { padding-bottom: calc(24 * var(--u) + var(--dock-h, 0px)); }
+.screen .stage.tall:not([data-layout="original"]) { padding-bottom: calc(16 * var(--u) + var(--dock-h, 0px)); }
+.dock {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 4;
+  display: flex; justify-content: center; padding: 0 calc(24 * var(--u)) calc(12 * var(--u));
+}
+.dock-zone { width: min(100%, calc(1100 * var(--u))); display: grid; justify-items: center; gap: calc(10 * var(--u)); }
+.dock-zone > .hideable { width: 100%; }
+.dock .controls {
+  width: min(100%, calc(1100 * var(--u))); margin: 0; align-items: center; gap: calc(24 * var(--u));
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); grid-template-areas: "where transport volume";
+}
+.dock .transport { grid-area: transport; gap: calc(10 * var(--u)); }
+.dock .icon-pill { width: calc(40 * var(--u)); height: calc(40 * var(--u)); }
+.dock .icon-pill.big { width: calc(52 * var(--u)); height: calc(52 * var(--u)); }
+.dock .volume { grid-area: volume; justify-self: start; width: min(100%, calc(180 * var(--u))); }
+.dock .where { grid-area: where; justify-self: end; min-width: 0; max-width: 100%; white-space: nowrap; }
+.dock .where span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.dock .where .pill { flex: none; }
+.screen.clean .dock { visibility: hidden; pointer-events: none; }
+/* Portrait and narrow screens: the play buttons on their own row, where it plays and the volume under them. */
+.screen[class*="portrait-"] .dock .controls {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "transport transport" "where volume"; gap: calc(10 * var(--u)) calc(16 * var(--u));
+}
+@media (max-width: 720px) {
+  .dock .controls { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "transport transport" "where volume"; gap: calc(10 * var(--u)) calc(16 * var(--u)); }
+}
 
 .party-fullscreen-prompt { z-index: 6; display: flex; align-items: center; gap: 12px; max-width: 94vw; padding: 12px; border-radius: 18px; background: var(--bg); }

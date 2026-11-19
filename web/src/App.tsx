@@ -143,6 +143,7 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
     calm: settings.noFlash || reduceMotion,
   })
   const zoneHeight = useZoneHeight()
+  const dockHeight = useDockHeight()
   // Each layout remembers its lyrics style: saved when it changes, restored when the layout changes
   // (choosing another layout or turning the screen).
   const layoutKey = wide ? `l:${settings.landscapeLayout}` : `p:${settings.portraitLayout}`
@@ -299,10 +300,9 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
           <section className="side side-info"><Info track={track} compact={false} /></section>
           <section className="party-center">
             {cover}
-            {lyricsOn ? panel('center', modes) : <div className="hideable party-modes">{modes}</div>}
+            {lyricsOn && panel('center')}
           </section>
           <Zone className="side side-zone">
-            <div className="hideable"><Controls now={now} /></div>
             {partyControls}
             {problem && <p className="notice hideable">{problem}</p>}
           </Zone>
@@ -314,12 +314,10 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
           <HeroColumn autoHide={autoHide} clean={settings.clean}
             top={<>{settings.landscapeLayout !== 'cinema' && cover}<Info track={track} compact /></>}
             rest={<>
-              <div className="hideable"><Controls now={now} /></div>
               {partyControls}
-              {!lyricsOn && <div className="hideable">{modes}</div>}
               {problem && <p className="notice hideable">{problem}</p>}
             </>} />
-          {lyricsOn && panel('start', modes)}
+          {lyricsOn && panel('start')}
         </main>
       ) : (
         // Portrait: cover on top (smaller with lyrics), title, lyrics filling the middle, buttons.
@@ -330,13 +328,19 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
           </section>
           {lyricsOn && panel('center')}
           <Zone className="hero">
-            <div className="hideable"><Controls now={now} /></div>
             {partyControls}
-            <div className="hideable">{modes}</div>
             {problem && <p className="notice hideable">{problem}</p>}
           </Zone>
         </main>
       )}
+      {/* Every layout: the view buttons (Tekst, sync, Ren, Video) and the play controls in the same place at
+          the bottom of the screen. Its height (--dock-h) is kept free by the layouts. */}
+      <div ref={dockHeight} className="dock">
+        <Zone className="dock-zone">
+          <div className="hideable">{modes}</div>
+          <div className="hideable"><Controls now={now} /></div>
+        </Zone>
+      </div>
       {now.playerProblem === 'autoplay' && (
         <button className="pill banner" onClick={now.controls.unlock}>Trykk for å starte lyden</button>
       )}
@@ -426,6 +430,19 @@ function useZoneHeight() {
     swaps.observe(hero, { childList: true, subtree: true })
     measure()
     stop.current = () => { sizes.disconnect(); swaps.disconnect() }
+  }, [])
+}
+
+/** The bottom bar's height as --dock-h on .screen (its parent), so every layout keeps that room free. */
+function useDockHeight() {
+  const observer = useRef<ResizeObserver | null>(null)
+  return useCallback((dock: HTMLElement | null) => {
+    observer.current?.disconnect()
+    observer.current = null
+    const screen = dock?.parentElement
+    if (!dock || !screen) return
+    observer.current = new ResizeObserver(() => screen.style.setProperty('--dock-h', `${dock.offsetHeight}px`))
+    observer.current.observe(dock)
   }, [])
 }
 
