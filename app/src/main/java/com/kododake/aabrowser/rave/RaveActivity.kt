@@ -1025,18 +1025,11 @@ class RaveActivity : ComponentActivity() {
                 banner(genreName(), 1600)
             }
         }
-        // Hardstyle sub-genre found (e.g. "RAW", "UPTEMPO") and song parts ("BUILD-UP",
-        // "FAKE DROP", "FØRSTE DROP", "SISTE DROP", "SYNGING").
+        // Hardstyle sub-genre found (e.g. "RAW", "UPTEMPO"). Song parts ("BUILD-UP", "DROP" …) are no longer announced
+        // on screen (Espen 2026-11-20): the analysis view shows them.
         var subShownFor by remember { mutableLongStateOf(subChangedAt) }
         LaunchedEffect(subChangedAt) {
             if (subChangedAt > 0L && subChangedAt != subShownFor && hardWeight(vibe) > .5f && rockness < .5f) { subShownFor = subChangedAt; banner(genreName(), 1600) }
-        }
-        var partShownFor by remember { mutableLongStateOf(partLabelAt) }
-        LaunchedEffect(partLabelAt) {
-            if (partLabelAt > 0L && partLabelAt != partShownFor && vibe >= .5f && songPhase.label.isNotBlank()) {
-                partShownFor = partLabelAt
-                banner(songPhase.label, 1300)
-            }
         }
         var partyAnnounceReady by remember { mutableStateOf(false) }
         LaunchedEffect(hardstyleOn) {
