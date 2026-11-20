@@ -16,6 +16,8 @@ export interface TimePoint {
   pBuild: number
   pDrop: number
   pModel: number
+  /** «Min lærling» (justerer seg av dine rettelser). */
+  pApp: number
   level: number
 }
 
@@ -30,7 +32,7 @@ export class Timeline {
   reset() { this.points = []; this.lastSlots = -1; this.lastPos = -1; this.seg = 0 }
 
   /** Kalles hver ramme; legger til et punkt bare når lytteren har lukket et nytt slag. */
-  feed(e: WebPartyEngine, posMs: number) {
+  feed(e: WebPartyEngine, posMs: number, pApp = 0) {
     const slots = e.listenerSlots
     if (slots === this.lastSlots) return
     if (slots < this.lastSlots) this.reset() // ny sang: lytteren startet på nytt
@@ -41,7 +43,7 @@ export class Timeline {
     const f = e.listenerFeatures, l = e.listenerLevels
     this.points.push({
       pos: posMs, seg: this.seg, sub: f[0], bright: (f[14] + f[15]) / 2, kick: l[3],
-      old: e.partName, listener: e.listenerPart, pBuild: e.pBuild, pDrop: e.pDrop, pModel: e.pBuildModel, level: f[11],
+      old: e.partName, listener: e.listenerPart, pBuild: e.pBuild, pDrop: e.pDrop, pModel: e.pBuildModel, pApp, level: f[11],
     })
     if (this.points.length > MAX_POINTS) this.points.splice(0, this.points.length - MAX_POINTS)
   }

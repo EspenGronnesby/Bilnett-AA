@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type MutableRefObject } from 'react'
 import type { Party } from './useParty'
 import { analysis, MARK_LABEL, useAnalysis, type MarkPart } from './analysis'
 import { timeline } from './timeline'
+import { apprentice } from './trainerModel'
 
 // «AI-trener»: egen visning som åpnes når Analyse er på. Du ser live hva hver «hjerne» tror og hvorfor, og retter den
 // med store knapper (eller på tidslinjen, også bakover i tid). Alt du gjør lagres med en gang som fasit (se analysis.ts).
@@ -170,6 +171,15 @@ export function Trainer({ party, title, artist, playing, positionMs, durationMs,
           lines={[`fylde ${pct(e.listenerLevel)} · drop ${pct(e.pDrop)}`, `build (regel) ${pct(e.pBuild)} · drops ${e.listenerDrops}`]} />
         <Brain name="Build-up-modell" part={modelP >= 0.8 ? 'BUILDUP' : ''} big={pct(modelP)} sure={modelP >= 0.8} onRate={ok => rate('modell', modelP >= 0.8 ? 'BUILDUP' : 'IKKE', ok)}
           lines={[modelP >= 0.8 ? 'sier: build-up' : modelP >= 0.5 ? 'usikker' : 'sier: ikke build-up']} />
+        <div className="tr-card" style={{ borderColor: '#5ad68a' }}>
+          <div className="tr-card-name">Min lærling</div>
+          <div className="tr-card-part" style={{ color: '#5ad68a' }}>{pct(apprentice.p)}</div>
+          <div className="tr-card-sub">Grunnmodellen sier {pct(modelP)}</div>
+          <div className="tr-card-sub">Har lært av {apprentice.updates} rettelser</div>
+          <div className="tr-card-btns">
+            <button className="chip small" onClick={() => { apprentice.reset(); say('Lærlingen er nullstilt') }}>Nullstill</button>
+          </div>
+        </div>
         <div className="tr-card tr-score">
           <div className="tr-card-name">Enige med deg siste minutt</div>
           <div className="tr-scoreline"><span>Ny lytter</span><b>{agree(p => p.listener)}</b></div>
@@ -295,9 +305,9 @@ function LiveTimeline({ party, positionMs: positionProp, selRef, onPick: onPickP
         ctx.stroke()
       }
       line(p => p.sub, '#4aa3ff'); line(p => p.bright, '#ffb347'); line(p => Math.min(p.kick / 3, 1.1), 'rgba(170,170,170,.7)', 1.5)
-      line(p => p.pModel, '#ffffff', 2); line(p => p.pDrop, '#ff4d6d', 1.5)
+      line(p => p.pModel, '#ffffff', 2); line(p => p.pApp, '#5ad68a', 2); line(p => p.pDrop, '#ff4d6d', 1.5)
       ctx.font = '12px system-ui'
-      ;[['sub', '#4aa3ff'], ['lys klang', '#ffb347'], ['kick', '#aaa'], ['build-up (modell)', '#fff'], ['drop (lytter)', '#ff4d6d']].forEach(([n, cc], i) => { ctx.fillStyle = cc; ctx.fillText(n, 8 + i * 110, 12) })
+      ;[['sub', '#4aa3ff'], ['lys klang', '#ffb347'], ['kick', '#aaa'], ['build-up (modell)', '#fff'], ['min lærling', '#5ad68a'], ['drop (lytter)', '#ff4d6d']].forEach(([n, cc], i) => { ctx.fillStyle = cc; ctx.fillText(n, 8 + i * 110, 12) })
       // felt: gammel, ny lytter, modell (≥ 80 %), Din
       const lanes: [string, (p: (typeof pts)[number]) => string | null][] = [
         ['Gammel', p => p.old], ['Ny', p => p.listener], ['Modell', p => (p.pModel >= 0.8 ? 'BUILDUP' : null)],

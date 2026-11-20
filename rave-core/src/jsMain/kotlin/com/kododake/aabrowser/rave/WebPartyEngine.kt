@@ -132,6 +132,10 @@ class WebPartyEngine(fftSize: Int = 2048) {
     val modelInput: FloatArray get() = listener.modelInput
     val modelContrib: FloatArray get() = FloatArray(BuildUpModel.size) { BuildUpModel.contribution(listener.modelInput, it) }
     val modelBias: Float get() = BuildUpModel.bias
+    /** Modellens startvekter (til «Min lærling» i nettleseren): vekt, snitt og skala per måling. */
+    val modelCoef: FloatArray get() = FloatArray(BuildUpModel.size) { BuildUpModel.coef(it) }
+    val modelMean: FloatArray get() = FloatArray(BuildUpModel.size) { BuildUpModel.mean(it) }
+    val modelScale: FloatArray get() = FloatArray(BuildUpModel.size) { BuildUpModel.scale(it) }
     val modelFeatureNames: Array<String> get() = BuildUpModel.FEATURES.toTypedArray()
     /** Den gamle hjernens eget «bygger opp»-mål, takt i frasen og om den er klar for drop. */
     val hudBuild: Float get() = songPhase.hud.build

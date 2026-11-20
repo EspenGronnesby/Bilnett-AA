@@ -686,7 +686,7 @@ select option { background: #211827; color: white; }
 .tr-head-btns { display: flex; gap: calc(8 * var(--tu)); flex-wrap: wrap; align-items: center; }
 .tr-react { color: var(--muted); font-size: calc(13 * var(--tu)); display: grid; gap: calc(2 * var(--tu)); }
 .tr-react input { width: calc(150 * var(--tu)); accent-color: var(--fg); }
-.tr-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: calc(10 * var(--tu)); }
+.tr-cards { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: calc(10 * var(--tu)); }
 .tr-card { background: var(--card); border: calc(2 * var(--tu)) solid var(--control); border-radius: calc(16 * var(--tu)); padding: calc(12 * var(--tu)) calc(14 * var(--tu)); display: grid; gap: calc(3 * var(--tu)); align-content: start; }
 .tr-card-name { color: var(--muted); font-size: calc(13 * var(--tu)); text-transform: uppercase; letter-spacing: .06em; }
 .tr-card-part { font-size: calc(26 * var(--tu)); font-weight: 800; line-height: 1.1; }

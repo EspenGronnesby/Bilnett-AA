@@ -96,6 +96,9 @@ export declare class WebPartyEngine {
     get modelInput(): Float32Array;
     get modelContrib(): Float32Array;
     get modelBias(): number;
+    get modelCoef(): Float32Array;
+    get modelMean(): Float32Array;
+    get modelScale(): Float32Array;
     get modelFeatureNames(): Array<string>;
     get hudBuild(): number;
     get hudBar(): number;

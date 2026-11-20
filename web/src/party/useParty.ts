@@ -5,6 +5,7 @@ import { appleGenreInfo } from '../video/apple'
 import { startListening, type PartyListener, type PartySource } from './audio'
 import { analysis } from './analysis'
 import { timeline } from './timeline'
+import { apprentice } from './trainerModel'
 
 // Party on the website: one shared engine (rave-core), the sound input, and one animation-frame
 // loop that ticks the engine and then lets every Party layer draw from its outputs.
@@ -166,7 +167,8 @@ export function useParty(o: Options): Party {
         engine.setStrength(saved ?? null)
       }
       engine.tick(now, dt, c.playing, c.positionMs(), c.track?.durationMs ?? -1, c.volume)
-      timeline.feed(engine, c.positionMs())
+      apprentice.feed(engine, c.positionMs())
+      timeline.feed(engine, c.positionMs(), apprentice.p)
       listeners.current.forEach(draw => draw(now))
       id = requestAnimationFrame(loop)
     }

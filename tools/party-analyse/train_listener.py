@@ -114,6 +114,10 @@ object BuildUpModel {{
     val bias: Float get() = BIAS
     val size: Int get() = COEF.size
 
+    fun coef(i: Int): Float = COEF[i]
+    fun mean(i: Int): Float = MEAN[i]
+    fun scale(i: Int): Float = SCALE[i]
+
     fun probability(x: FloatArray): Float {{
         var z = BIAS
         for (i in COEF.indices) z += COEF[i] * (x[i] - MEAN[i]) / SCALE[i]
