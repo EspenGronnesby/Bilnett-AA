@@ -248,7 +248,7 @@ export function Trainer({ party, title, artist, playing, positionMs, durationMs,
         </div>
 
         <div className="tr-hero">
-          <div className="tr-cover" style={cover ? { backgroundImage: `url("${cover}")` } : undefined} />
+          <CoverPulse party={party} cover={cover} />
           <div className="tr-hero-text">
             <span className="tr-hero-label">AI-en tror{status !== 'Mottar lyd' ? ` · ${status.toLowerCase()}` : ''}</span>
             <span className="tr-hero-part">{PART_NAME[guess] ?? guess}</span>
@@ -356,6 +356,19 @@ export function Trainer({ party, title, artist, playing, positionMs, durationMs,
   )
 }
 
+/** Lite cover som hopper litt på kicken (Espen ba om det 2026-11-20). Av ved «Ingen blinking» og reduser bevegelse. */
+function CoverPulse({ party, cover }: { party: Party; cover: string | null }) {
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (reducedMotion()) return
+    return party.onFrame(() => {
+      const el = ref.current; if (!el) return
+      el.style.transform = `scale(${1 + (party.calm ? 0 : party.engine.kick) * 0.09})`
+    })
+  }, [party])
+  return <div ref={ref} className="tr-cover" style={cover ? { backgroundImage: `url("${cover}")` } : undefined} />
+}
+
 /** Equalizer som danser med musikken (48 bånd), farget etter delen AI-en tror på. */
 function Equalizer({ party }: { party: Party }) {
   const ref = useRef<HTMLCanvasElement>(null)
@@ -366,16 +379,25 @@ function Equalizer({ party }: { party: Party }) {
     const fit = () => { const r = c.getBoundingClientRect(), ratio = Math.min(window.devicePixelRatio || 1, 2); w = Math.max(1, Math.round(r.width)); h = Math.max(1, Math.round(r.height)); c.width = w * ratio; c.height = h * ratio; ctx.setTransform(ratio, 0, 0, ratio, 0, 0) }
     fit(); const ro = new ResizeObserver(fit); ro.observe(c)
     const still = reducedMotion()
-    const off = party.onFrame(() => {
+    const peaks = new Float32Array(96)
+    let last = performance.now()
+    const off = party.onFrame(now => {
+      const dt = Math.min((now - last) / 1000, 0.1); last = now
       ctx.clearRect(0, 0, w, h)
+      ctx.fillStyle = getComputedStyle(c).getPropertyValue('--fg').trim() || '#fff'
       const sp = party.engine.spectrum, n = sp.length || 48, bw = w / n
       const kick = party.calm ? 0 : party.engine.kick
-      ctx.fillStyle = getComputedStyle(c).getPropertyValue('--fg').trim() || '#fff'
       for (let i = 0; i < n; i++) {
-        const v = still ? 0.15 : Math.pow(Math.min(1, sp[i] ?? 0), 0.85)
-        const bh = Math.max(3, v * h * (0.82 + kick * 0.18))
-        ctx.globalAlpha = 0.14 + 0.5 * v
+        // Kraftigere respons: løft de svake båndene, og la kicken løfte hele raden et lite hakk.
+        const v = still ? 0.12 : Math.min(1, Math.pow(Math.min(1, sp[i] ?? 0), 0.7) * (1.05 + kick * 0.3))
+        const bh = Math.max(3, v * h)
+        ctx.globalAlpha = 0.16 + 0.6 * v
         ctx.beginPath(); ctx.roundRect(i * bw + bw * 0.14, h - bh, bw * 0.72, bh, Math.min(bw * 0.36, 6)); ctx.fill()
+        if (!still) {
+          // «Topp-prikk» som henger igjen og faller sakte
+          peaks[i] = Math.max(v, peaks[i] - dt * 0.55)
+          if (peaks[i] > v + 0.04) { ctx.globalAlpha = 0.5; ctx.fillRect(i * bw + bw * 0.14, h - peaks[i] * h - 4, bw * 0.72, 2) }
+        }
       }
       ctx.globalAlpha = 1
     })
