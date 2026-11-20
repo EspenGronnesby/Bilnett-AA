@@ -35,6 +35,10 @@ private const val BUILD_RISE = .15f
 val LISTENER_FEATURES = listOf("posSub", "posFull", "posPre", "jump", "airRise", "presRise", "noiseRise", "centRise",
     "snareNow", "snareRatio", "kickNow", "level", "range", "subDelta", "airPos", "presPos")
 
+/** Plassene til [BuildUpModel]s 12 grunnmålinger i [SongListener.features]. */
+private val MODEL_BASE = intArrayOf(0, 1, 3, 4, 5, 6, 7, 9, 13, 14, 15, 11)
+private val MODEL_LAGS = intArrayOf(2, 4, 8)
+
 class SongListener {
     var part = SongPart.INTRO; private set
     var dropKind = DropKind.NONE; private set
@@ -48,6 +52,10 @@ class SongListener {
     var drops = 0; private set
     /** Målingene for siste slag, i rekkefølgen [LISTENER_FEATURES] (alle selvrelative: mot sangens egne p10–p90). */
     val features = FloatArray(LISTENER_FEATURES.size)
+    /** Skygge: build-up-modellens sannsynlighet (glattet over fire slag) og uglattet. Styrer ingenting. */
+    var pBuildModel = 0f; private set
+    var pBuildModelRaw = 0f; private set
+    private val modelHistory = ArrayList<FloatArray>(); private val modelProbs = ArrayList<Float>()
     /** Antall slag lukket så langt (for å vite når [features] er ferske). */
     val slots get() = sub.size
     val effectsAllowed get() = part == SongPart.DROP
@@ -78,6 +86,7 @@ class SongListener {
         slotStart = now; slotMs = 400f; bpmN = 0
         part = SongPart.INTRO; dropKind = DropKind.NONE; label = ""; labelAt = now
         level = 0f; pBuild = 0f; pDrop = 0f; drops = 0
+        modelHistory.clear(); modelProbs.clear(); pBuildModel = 0f; pBuildModelRaw = 0f
         lastFrame = null; gapAt = 0; hitRun = 0; dropRef = 0f; fallRun = 0; buildRun = 0; noBuildRun = 0; partSince = 0; intensity = .4f
         lastBuildSlots = 0; buildStart = 0
     }
@@ -183,6 +192,7 @@ class SongListener {
         features[11] = level; features[12] = range
         features[13] = posSub - posS(mean(sub, c - NOW_SLOTS - BEFORE_SLOTS, c - NOW_SLOTS))
         features[14] = posA(curAir); features[15] = posP(curPres)
+        runModel()
         val buildEvidence = range >= MIN_RANGE_DB && posSub < BUILD_SUB_POS && rising
         pBuild = if (range < MIN_RANGE_DB) 0f else
             (((BUILD_SUB_POS - posSub) / BUILD_SUB_POS).coerceIn(0f, 1f) * .5f +
@@ -225,6 +235,23 @@ class SongListener {
         if (dur > 0 && pos > dur - 20_000L && drops > 0 && part != SongPart.DROP) setPart(SongPart.OUTRO, pos, now, dur)
 
         intensity += (.35f + .95f * level - intensity) * .25f
+    }
+
+    /** Modellen ser på de 12 grunnmålingene nå og endringen mot 2, 4 og 8 slag siden (som ved treningen). */
+    private fun runModel() {
+        val base = FloatArray(MODEL_BASE.size) { features[MODEL_BASE[it]] }
+        modelHistory.add(base)
+        val x = FloatArray(base.size * (1 + MODEL_LAGS.size))
+        for (i in base.indices) x[i] = base[i]
+        for ((li, lag) in MODEL_LAGS.withIndex()) {
+            val past = modelHistory[max(modelHistory.size - 1 - lag, 0)]
+            for (i in base.indices) x[base.size * (li + 1) + i] = base[i] - past[i]
+        }
+        pBuildModelRaw = BuildUpModel.probability(x)
+        modelProbs.add(pBuildModelRaw)
+        val from = max(0, modelProbs.size - 4)
+        var sum = 0f; for (i in from until modelProbs.size) sum += modelProbs[i]
+        pBuildModel = sum / (modelProbs.size - from)
     }
 
     private fun setPart(p: SongPart, pos: Long, now: Long, dur: Long) {

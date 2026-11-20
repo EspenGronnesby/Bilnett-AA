@@ -98,7 +98,10 @@ Plan: `~/.claude/plans/lag-en-plan-for-fizzy-parasol.md` (steg 0–6).
 build-up med én sang utenfor om gangen (AUC 0,75; gradient boosting ga 0,77 – forskjellen er støy på 9 sanger). Hybrid = gammel
 hjerne bestemmer alt, men der den ikke sier DROP og modellen er ≥ 0,8 sikker → BUILDUP: enig 69 % (som gammel), drop 87 %
 (uendret), build-up fanget 7/15 (gammel 2/15), falsk build-up 43 s (gammel 27 s). Terskel 0,5 gir 13/15 men enig 64 %.
-Ikke i appen ennå (modellvekter + lagrede målinger i Kotlin mangler). `hybrid.txt` i assets har tallene.
+I skyggen i appen fra 2026-11-20: `BuildUpModel.kt` (generert av `train_listener.py --save`, vekter uten lyd) kjøres av `SongListener`
+(`pBuildModel`, glattet over 4 slag) og logges som `p_model` sist i analyse-CSV. Styrer ingenting. Hybrid-regelen (gammel ≠ DROP og
+`p_model` ≥ 0,8 → BUILDUP) regnes ut på Mac-en fra loggen. Python og Kotlin gir samme p (snittavvik 0,0002).
+Tren på nytt etter mer fasit: `exportListenerFeatures` → `train_listener.py --save` → bygg. `hybrid.txt` i assets har tallene.
 Lytteren: samme lydbilde telles bare én gang (live mater det flere ganger), og pause/spoling starter vinduene på nytt.
 
 Gammel plan for trening:

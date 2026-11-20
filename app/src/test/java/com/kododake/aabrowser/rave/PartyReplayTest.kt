@@ -648,7 +648,7 @@ class PartyReplayTest {
     /** Målingene per slag (SongListener.features) + fasit + gammel hjernes del → listener-features.csv, til train_listener.py. */
     @Test fun exportListenerFeatures() {
         assumeTrue("ingen opptak på denne maskinen", File(raw, "fft").isDirectory)
-        val sb = StringBuilder("song,pos_ms,dur_ms,truth,old," + LISTENER_FEATURES.joinToString(",") + "\n")
+        val sb = StringBuilder("song,pos_ms,dur_ms,truth,old," + LISTENER_FEATURES.joinToString(",") + ",p_model_raw\n")
         for ((si, sg) in songs().withIndex()) {
             if (sg.cleanKey.isEmpty()) continue
             val ln = SongListener(); ln.newTrack(sg.now[0])
@@ -662,7 +662,7 @@ class PartyReplayTest {
                     val t = sg.cleanKey.lastOrNull { it.first <= sg.pos[i] }?.second ?: continue
                     val dur = if (lastPos < 0) 0L else sg.pos[i] - lastPos; lastPos = sg.pos[i]
                     sb.append("$si,${sg.pos[i]},$dur,$t,${norm(old.part.name)},")
-                    sb.append(ln.features.joinToString(",") { "%.4f".format(Locale.US, it) }).append('\n')
+                    sb.append(ln.features.joinToString(",") { "%.4f".format(Locale.US, it) }).append(",%.5f".format(Locale.US, ln.pBuildModelRaw)).append('\n')
                 }
             }
         }

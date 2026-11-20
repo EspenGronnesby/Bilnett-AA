@@ -29,7 +29,7 @@ internal class AnalysisLog(private val dir: File) {
         var autoPart = ""
         var autoDrop = ""
         /** The new «listen first» analysis ([com.kododake.aabrowser.rave.SongListener]) running in the shadow. */
-        var newPart = ""; var newLevel = 0f; var pBuild = 0f; var pDrop = 0f
+        var newPart = ""; var newLevel = 0f; var pBuild = 0f; var pDrop = 0f; var pModel = 0f
         /** Who decided the song part: "espen" (manual mode), "espen_hold" (his correction holding in
          *  auto mode) or "auto". Only "espen" is a full answer key for training. */
         var partBy = "auto"
@@ -56,7 +56,7 @@ internal class AnalysisLog(private val dir: File) {
     private val io = Executors.newSingleThreadExecutor { r -> Thread(r, "rave-analyse").apply { isDaemon = true } }
     private var file: File? = null
     private var songName = ""
-    private var lastNewPart = ""; private var lastNewLevel = 0f; private var lastPBuild = 0f; private var lastPDrop = 0f
+    private var lastNewPart = ""; private var lastNewLevel = 0f; private var lastPBuild = 0f; private var lastPDrop = 0f; private var lastPModel = 0f
     private val newPartOfBar get() = lastNewPart
     private var startedAt = 0L
     private var lastFrameMs = 0L
@@ -128,7 +128,7 @@ internal class AnalysisLog(private val dir: File) {
         if (x.thermal > maxThermal) maxThermal = x.thermal
         lastPos = x.positionMs; lastPart = x.part; lastDrop = x.dropKind; lastGenre = x.genre; lastSub = x.sub
         lastAutoPart = x.autoPart
-        lastNewLevel = x.newLevel; lastPBuild = x.pBuild; lastPDrop = x.pDrop; lastNewPart = x.newPart
+        lastNewLevel = x.newLevel; lastPBuild = x.pBuild; lastPDrop = x.pDrop; lastPModel = x.pModel; lastNewPart = x.newPart
         // A new bar every 4 beats; without a beat grid (calm music) a "bar" is 2 s.
         val key = if (x.beat > 0) x.beat / 4 else -(1 + ((nowMs - startedAt) / 2000L).toInt())
         if (key != barKey || nowMs - barStartMs > 4000L) {
@@ -168,6 +168,7 @@ internal class AnalysisLog(private val dir: File) {
             append(',').append("%.2f".format(Locale.US, lastHeadroom))
             append(',').append(newPartOfBar).append(',').append("%.2f".format(Locale.US, lastNewLevel))
             append(',').append("%.2f".format(Locale.US, lastPBuild)).append(',').append("%.2f".format(Locale.US, lastPDrop))
+            append(',').append("%.2f".format(Locale.US, lastPModel))
             append('\n')
         }
         val stats = parts.getOrPut(barPart) { PartStats() }
@@ -259,6 +260,6 @@ internal class AnalysisLog(private val dir: File) {
             "vibe,sw,pi,build_rise,volume,bass,heavy,grit,screech,sub_bass,energy,high_motion," +
             "out_heavy,out_grit,shake_px,particles,spike,density,bpm," +
             "max_kick,max_out_kick,max_snare,max_shake_px,max_strobe,max_heavy,max_grit,max_screech,temp_c,thermal,headroom," +
-            "new_part,new_level,p_build,p_drop"
+            "new_part,new_level,p_build,p_drop,p_model"
     }
 }

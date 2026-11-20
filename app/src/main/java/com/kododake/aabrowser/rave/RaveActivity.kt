@@ -1348,7 +1348,7 @@ class RaveActivity : ComponentActivity() {
                         dropKind = songPhase.dropKind.name
                         autoPart = autoPhase.part.name
                         autoDrop = autoPhase.dropKind.name
-                        newPart = listener.part.name; newLevel = listener.level; pBuild = listener.pBuild; pDrop = listener.pDrop
+                        newPart = listener.part.name; newLevel = listener.level; pBuild = listener.pBuild; pDrop = listener.pDrop; pModel = listener.pBuildModel
                         partBy = when {
                             songPhase.manual -> "espen"
                             songPhase.correctionHolding -> "espen_hold"

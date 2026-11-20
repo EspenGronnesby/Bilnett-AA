@@ -87,6 +87,49 @@ def score(label, truth, pred, dur, song, pos):
     return ok / tot, caught, sections, false_s
 
 
+KOTLIN = os.path.join(os.path.dirname(__file__), "../../rave-core/src/commonMain/kotlin/com/kododake/aabrowser/rave/BuildUpModel.kt")
+
+
+def write_kotlin(names, sc, m):
+    """Vektene som ren Kotlin (ingen avhengigheter): målingene er selvrelative, så vektene inneholder ingen lyd."""
+    f = lambda a: ", ".join(f"{v:.6f}f" for v in a)
+    open(KOTLIN, "w").write(f"""package com.kododake.aabrowser.rave
+
+import kotlin.math.exp
+
+/**
+ * Build-up-modellen (steg 3 lettvekt, laget av tools/party-analyse/train_listener.py – ikke rediger for hånd).
+ * Logistisk regresjon trent på Espens fasit, {len(names)} målinger: {len(BASE)} nå + endring mot 2, 4 og 8 slag siden
+ * (rekkefølge: {', '.join(BASE)}). Gir sannsynlighet 0..1 for build-up.
+ */
+object BuildUpModel {{
+    val FEATURES = listOf({", ".join(chr(34) + n + chr(34) for n in names)})
+    private val MEAN = floatArrayOf({f(sc.mean_)})
+    private val SCALE = floatArrayOf({f(sc.scale_)})
+    private val COEF = floatArrayOf({f(m.coef_[0])})
+    private const val BIAS = {float(m.intercept_[0]):.6f}f
+
+    fun probability(x: FloatArray): Float {{
+        var z = BIAS
+        for (i in COEF.indices) z += COEF[i] * (x[i] - MEAN[i]) / SCALE[i]
+        return (1.0 / (1.0 + exp(-z.toDouble()))).toFloat()
+    }}
+}}
+""")
+    print("BuildUpModel.kt skrevet")
+
+
+def parity(X, sc, m):
+    """Sammenligner med Kotlin-verdiene i listener-features.csv (kolonnen p_model_raw), hvis de finnes."""
+    rows = list(csv.DictReader(open(os.path.join(DATA, "listener-features.csv"))))
+    rows = [r for r in rows if float(r["range"]) > 0 and r["truth"] in CLASSES + ["OUTRO"]]
+    if not rows or "p_model_raw" not in rows[0]:
+        return
+    py = m.predict_proba(sc.transform(X))[:, 1]
+    kt = np.array([float(r["p_model_raw"]) for r in rows])
+    print(f"Python mot Kotlin: største avvik {np.abs(py - kt).max():.4f} (snitt {np.abs(py - kt).mean():.4f})")
+
+
 def main():
     names, X, song, truth, old, dur, pos = load()
     y = (truth == "BUILDUP").astype(int)
@@ -114,6 +157,8 @@ def main():
                    "coef": m.coef_[0].tolist(), "bias": float(m.intercept_[0])},
                   open(os.path.join(DATA, "hybrid-model.json"), "w"))
         print("\nhybrid-model.json lagret")
+        write_kotlin(names, sc, m)
+        parity(X, sc, m)
 
 
 if __name__ == "__main__":
