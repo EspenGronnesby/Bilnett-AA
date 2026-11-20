@@ -129,6 +129,41 @@ Løype: `sync.py --web` → `exportAllSlots` → `teacher.py --write` → `revie
 6–11 sanger (AUC 0,7; boosting/MLP 0,45–0,7); spektrum-målinger hjalp på drop-musikk (0,82) men skadet på alle sanger; lærerens svake merker ga ingen sikker gevinst.
 **Ingen modell velges av dette: for lite data (6 unike drop-sanger, ~15 build-ups).** Neste reelle steg er flere menneskemerkede sanger (ca. 25–30), ikke flere modeller.
 
+**AI-trener (2026-11-20).** Når Analyse slås på åpnes en egen visning («Trener AI-en») på nettsiden (`web/src/party/Trainer.tsx`, motor-getters i
+`WebPartyEngine`, historikk i `timeline.ts`): kort for gammel hjerne, ny lytter og build-up-modell (med «Riktig/Feil»), live tidslinje (siste 2 min; dra for å velge
+tidsrom, klikk for «fra her»), forklaring («slik tenker den nå», modellens tre viktigste grunner) og mange valg (deler 1–5, «startet for 2/4/8 s / 1–4 takter siden»,
+flytt siste merke, stemmer ikke, fake drop, ingen drop, ikke drop-musikk, bra/for mye/for lite/feil sjanger, angre, spol tilbake 10 s). `analysis.ts` bygger CSV
+først ved lagring: merker kan settes bakover i tid, filen får `# kilde: review`, kolonnene `new_part,p_model`, og `<navn>.events.csv`. «Min lærling»
+(`trainerModel.ts`) er en liten kopi av build-up-modellen som justerer seg av rettelsene dine i nettleseren (viser AT den lærer, ikke at den er bedre; nullstill-knapp).
+Appen (Analyse-modus): AI-blokk i `AnalysisHud` (hjerner + live tidslinje, `TrainerTimeline.kt`), «Startet for …»-knapper, «Stemmer ikke», «Fake drop», «Ingen drop»;
+bakover-merker skrives som `# RELABEL <fra_s> <til_s> <DEL>` i sang-CSV (`AnalysisLog.relabel`) og leses av `PartyReplayTest.truth()` (uten reaksjonstid).
+
+**AI-trener gjort enklere (2026-11-20, etter kritiker).** Standard er «Enkel modus»: når den nye lytteren bytter del, kommer et stort «Stemmer det? ✔ Ja (mellomrom) / ✖ Nei (N) / ▶ Hør igjen»;
+«Stopp sangen og spør» (standard på) setter sangen på pause ved bytte (maks hvert 20. s), du kan spole 6 s tilbake og høre igjen, og sangen fortsetter der den stoppet når du har svart (eller etter 45 s).
+«Finn starten automatisk» legger starten der fylden (sub/lys klang) faktisk hopper (`snapOnset`), ellers reaksjonstiden. «Flere valg» viser resten. Rettelser etter kritiker: sjekkpunkter hvert 20. s og ved skjuling
+(IndexedDB `drafts`/`parts`, `recover()` berger utkast ved neste åpning), tomt slutt-merke (`part=''`, `part_by=review`) når et tidsrom dras først (testen leser tom del som «her slutter det du merket»),
+`sync.py` kaster aldri opptak med `espen`/`review`, `.events.csv` kopieres til `raw/events/` og forveksles ikke med sang-CSV, ærlige «Lagret»/«Angret»-meldinger, «flytt siste merke» flytter riktig merke, lærlingen
+trener først på slag eldre enn 6 s og lagrer en modell-signatur. Ikke testet: ekte Spotify (pause/spol/fortsett), ekte PC-lyd, hvordan det oppleves å bruke mens du hører på, appen på telefon.
+
+**AI-trener, renere (2026-11-20).** Standardvisningen er bare: tittel, «AI-en tror: <del>», live tidslinje (bass og lys klang + felt for AI og Din), fem store knapper (Intro, Build-up, Drop, Breakdown, Outro),
+og tre små brytere (Angre, Finn start selv, Pause og spør). «Hjernen» åpner hjernekort og forklaring, «Flere valg» åpner resten (tidspunkt, stemmer ikke, fake drop, følelse, sjanger, spol, reaksjonstid, data).
+Mappe-valg og eksport ligger kun under «Flere valg → data» og vises ikke lenger i Party-panelet: sangene lagres i nettleseren av seg selv, og eksport/mappe er noe Espen gjør senere.
+
+**AI-trener, musikk-uttrykk, senere dempet etter designprofilen (2026-11-20: ingen emoji/konfetti, nøytrale knapper, valgt = kremhvit, delene som lysstyrke-skala på tidslinjen, rolig prikk).** Første versjon: Coveret blurret som bakgrunn, farger som følger delen AI-en tror på (`--tr-accent`), lite cover som pulserer på kicken, equalizer (48 bånd) som danser,
+fylt «bølge» under bassen på tidslinjen, emoji på delknappene (🌅 🚀 💥 🌊 🌙), glass-kort og konfetti ved svar. Av ved «Ingen blinking» og reduser-bevegelse. Ren utseende-endring (ingen endring i data).
+
+**AI-trener, designprofil-gjennomgang (2026-11-20, mål: maksimalt clean).** Sentrert spalte med luft; ett kort per del med tynne skillelinjer (ikke kort i kort); tonale kontroller uten kant;
+valgt = fylt aksent (kremhvit) med hake, ellers grå flate; reserveveier («Hjernen ›», «Flere valg ›», Angre, Lukk) som dempede tekstlenker; bryterne «Finn start selv» og «Pause og spør» som `.switch`-lignende;
+delene som lysstyrke-skala via CSS-tokens (`--p-intro … --p-drop`), ingen hex i komponenten; forklaringene i vanlige ord uten tall; ingen fast forklaringstekst om lagring; coveret pulserer ikke (regel: ingen uønsket
+bevegelse); ingen `will-change`/blur på kort; bevegelse via tokens (120/180/250 ms), hover bare med `@media (hover: hover)`, reduser bevegelse gir kortere overganger.
+
+Profil-revisjon (automatisk, i nettleseren, 67 stilregler for AI-treneren): 0× `transition: all`, 0× `will-change`, 0× `scale(0)`, 0× `backdrop-filter`, alle `:hover` i `@media (hover: hover)`,
+0 bokstavelige farger i regler (alt via tokens), 0 transisjoner på width/height/margin/top/left, 0 bokstavelig easing, 0 emoji, ingen animasjon på coveret, redusert bevegelse = bare opacity-fade, knapper ≥ 28 px.
+
+**Party-skjermen ryddet (2026-11-20, siden AI-treneren viser det).** Ingen tekst midt på skjermen om sangdel eller sjanger (bare «PARTY ON / OFF»), i appen og på nettsiden. Nettsiden: dock har bare lydkilde,
+styrke, tilkoblingsstatus (kun når noe er galt) og «Analyse på/av» + «AI-trener»; delknappene, sjanger-prikken og Koko-knappen er borte (Koko ligger i Innstillinger → Utseende). Appen: Analyse-panelet viser bare AI-blokken
+(hjerner + live tidslinje), uten Sub-bass/Diskant/Zaag-målere, sang-info (`SongInfoBlock` slettet) og «Nå er det …»-overskriften.
+
 Gammel plan for trening:
 
 1. Hent loggene og lydopptakene (sync).

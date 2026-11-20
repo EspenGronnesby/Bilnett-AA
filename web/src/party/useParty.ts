@@ -4,6 +4,8 @@ import type { Track } from '../spotify/playback'
 import { appleGenreInfo } from '../video/apple'
 import { startListening, type PartyListener, type PartySource } from './audio'
 import { analysis } from './analysis'
+import { timeline } from './timeline'
+import { apprentice } from './trainerModel'
 
 // Party on the website: one shared engine (rave-core), the sound input, and one animation-frame
 // loop that ticks the engine and then lets every Party layer draw from its outputs.
@@ -42,6 +44,9 @@ interface Options {
   demoSound?: boolean
   /** No strobe or white flashes («Ingen blinking», or the system's «reduce motion»). */
   calm?: boolean
+  /** AI-treneren: åpnes av seg selv ved Analyse, og reaksjonstid i sekunder. */
+  trainerAuto: boolean
+  trainerReaction: number
 }
 
 let shared: WebPartyEngine | null = null
@@ -65,8 +70,12 @@ export function useParty(o: Options): Party {
   live.current = o
   // Analyse-opptaket (steg 5) spør etter posisjon, sjanger og hva appen selv tror.
   analysis.positionMs = () => live.current.positionMs()
+  analysis.reactionMs = Math.round(live.current.trainerReaction * 1000)
+  analysis.autoOpenTrainer = live.current.trainerAuto
   analysis.genre = () => engine.genre
   analysis.autoPart = () => engine.partName
+  analysis.listenerPart = () => engine.listenerPart
+  analysis.pModel = () => engine.pBuildModel
 
   // Each request gets a number: an answer that arrives after Party was switched off (or a newer
   // request) is closed at once instead of being left open in the background.
@@ -131,6 +140,7 @@ export function useParty(o: Options): Party {
   useEffect(() => {
     if (!trackKey || !o.track) return
     engine.newTrack(performance.now())
+    timeline.reset()
     analysis.startSong(o.track.artist, o.track.title)
     let stale = false
     const { title, artist } = o.track
@@ -157,6 +167,8 @@ export function useParty(o: Options): Party {
         engine.setStrength(saved ?? null)
       }
       engine.tick(now, dt, c.playing, c.positionMs(), c.track?.durationMs ?? -1, c.volume)
+      apprentice.feed(engine, c.positionMs())
+      timeline.feed(engine, c.positionMs(), apprentice.p)
       listeners.current.forEach(draw => draw(now))
       id = requestAnimationFrame(loop)
     }

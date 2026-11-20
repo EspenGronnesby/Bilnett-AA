@@ -1,6 +1,7 @@
 package com.kododake.aabrowser.rave
 
 import org.junit.Assume.assumeTrue
+import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.io.DataInputStream
 import java.io.EOFException
@@ -35,11 +36,22 @@ class PartyReplayTest {
         val head = lines.first().split(",")
         val iPos = head.indexOf("pos_s"); val iPart = head.indexOf("part"); val iBy = head.indexOf("part_by")
         if (iPos < 0 || iPart < 0 || iBy < 0) return emptyList()
-        return lines.drop(1).mapNotNull { l ->
+        val base = lines.drop(1).mapNotNull { l ->
             val c = l.split(",")
             if (c.size <= iBy || (c[iBy] != "espen" && c[iBy] != "review")) null
             else c[iPos].toFloatOrNull()?.let { (it * 1000).toLong() to norm(c[iPart]) }
         }
+        // «Startet for N s siden» (AI-treneren i appen): fra–til er delen satt om, resten av nøkkelen beholdes.
+        var key = base
+        for ((from, to, part) in relabels(csv)) key = (key.filter { it.first < from || it.first > to } + (from to part)).sortedBy { it.first }
+        return key
+    }
+
+    /** `# RELABEL <fra_s> <til_s> <DEL>`-linjer i sang-CSV (AnalysisLog.relabel): (fra ms, til ms, del). */
+    private fun relabels(csv: File): List<Triple<Long, Long, String>> = csv.readLines().filter { it.startsWith("# RELABEL ") }.mapNotNull { l ->
+        val p = l.removePrefix("# RELABEL ").trim().split(" ")
+        if (p.size < 3) null
+        else p[0].toFloatOrNull()?.let { a -> p[1].toFloatOrNull()?.let { b -> Triple((a * 1000).toLong(), (b * 1000).toLong(), norm(p[2])) } }
     }
 
     /** Espen's «it is X now» presses per song CSV (song position ms), from feedback.csv. */
@@ -74,9 +86,10 @@ class PartyReplayTest {
             if (first != null) k = k.filter { it.first >= first - REACTION_MS }
         }
         val out = ArrayList<Pair<Long, String>>(k.size)
+        val exact = relabels(csv).map { it.first }.toSet() // satt bakover med riktig tid: ingen reaksjonstid å trekke fra
         for ((i, e) in k.withIndex()) {
             val changed = i > 0 && e.second != k[i - 1].second
-            val pos = if (changed) maxOf(e.first - REACTION_MS, out.last().first + 1) else e.first
+            val pos = if (changed && e.first !in exact) maxOf(e.first - REACTION_MS, out.last().first + 1) else e.first
             out.add(pos to e.second)
         }
         return out
@@ -117,7 +130,7 @@ class PartyReplayTest {
     @Test fun featuresPerPart() {
         val fftDir = File(raw, "fft")
         assumeTrue(fftDir.isDirectory)
-        val csvs = raw.listFiles { f -> f.name.endsWith(".csv") && f.name != "feedback.csv" }?.toList().orEmpty()
+        val csvs = raw.listFiles { f -> f.name.endsWith(".csv") && f.name != "feedback.csv" && !f.name.endsWith(".events.csv") }?.toList().orEmpty()
         val names = listOf("bass", "energy", "sub", "subDbRel", "lowDbRel", "airDbRel", "highs", "grit", "screech",
             "kick/s", "onset/s", "beatConf", "noise", "centroid", "heavy", "presDbRel", "midDbRel")
         val sums = HashMap<String, DoubleArray>(); val time = HashMap<String, Double>()
@@ -133,7 +146,7 @@ class PartyReplayTest {
             for (fr in fs) {
                 val f = audio.accept(fr.fft, fr.rate, fr.now)
                 val dt = (fr.now - prev).coerceIn(0L, 200L) / 1000.0; prev = fr.now
-                val t = key.lastOrNull { it.first <= fr.pos }?.second ?: continue
+                val t = key.lastOrNull { it.first <= fr.pos }?.second?.takeIf { it.isNotEmpty() } ?: continue
                 val kickHit = if (f.kick > .95f && lastKick <= .95f) 1.0 else 0.0
                 val beatHit = if (f.beat != lastBeat) 1.0 else 0.0
                 lastKick = f.kick; lastBeat = f.beat
@@ -167,7 +180,7 @@ class PartyReplayTest {
     @Test fun fullnessPerPart() {
         val fftDir = File(raw, "fft")
         assumeTrue(fftDir.isDirectory)
-        val csvs = raw.listFiles { f -> f.name.endsWith(".csv") && f.name != "feedback.csv" }?.toList().orEmpty()
+        val csvs = raw.listFiles { f -> f.name.endsWith(".csv") && f.name != "feedback.csv" && !f.name.endsWith(".events.csv") }?.toList().orEmpty()
         val vals = HashMap<String, HashMap<String, ArrayList<Double>>>()
         fun db(x: Float) = 20.0 * kotlin.math.log10(maxOf(x.toDouble(), 2.5))
         for (fft in fftDir.listFiles { f -> f.name.endsWith(".fft.gz") }.orEmpty().sortedBy { it.name }) {
@@ -187,7 +200,7 @@ class PartyReplayTest {
                     ema[i] += (x[i] - ema[i]) * (1 - kotlin.math.exp(-dt / 2.0))
                     ref[i] = maxOf(ema[i], ref[i] - dt * 3.0 / 60.0)
                 }
-                val t = key.lastOrNull { it.first <= fr.pos }?.second ?: continue
+                val t = key.lastOrNull { it.first <= fr.pos }?.second?.takeIf { it.isNotEmpty() } ?: continue
                 if (fr.pos - (key.firstOrNull()?.first ?: 0L) < 20_000L) continue  // warm-up
                 val m = vals.getOrPut(t) { HashMap() }
                 val subR = ema[0] - ref[0]; val airR = ema[1] - ref[1]; val preR = ema[2] - ref[2]
@@ -266,7 +279,7 @@ class PartyReplayTest {
     /** Decodes every song with an answer key once (the audio analysis doesn't depend on PartyTuning). */
     private fun songs(all: Boolean = false): List<Song> {
         val fftDir = File(raw, "fft")
-        val csvs = raw.listFiles { f -> f.name.endsWith(".csv") && f.name != "feedback.csv" }?.toList().orEmpty()
+        val csvs = raw.listFiles { f -> f.name.endsWith(".csv") && f.name != "feedback.csv" && !f.name.endsWith(".events.csv") }?.toList().orEmpty()
         return fftDir.listFiles { f -> f.name.endsWith(".fft.gz") }.orEmpty().sortedBy { it.name }.mapNotNull { fft ->
             val csv = csvFor(fft, csvs) ?: return@mapNotNull null
             val key = truth(csv); val dropMusic = structured(csv, fft.name)
@@ -310,7 +323,7 @@ class PartyReplayTest {
                 val dt = (sg.now[i] - prev).coerceIn(0L, 200L) / 1000.0; prev = sg.now[i]
                 val a = norm((if (listener) ln.part else st.part).name)
                 if (a == "DROP" && last != "DROP") auto.add(sg.pos[i]); last = a
-                val t = key.lastOrNull { it.first <= sg.pos[i] }?.second ?: continue
+                val t = key.lastOrNull { it.first <= sg.pos[i] }?.second?.takeIf { it.isNotEmpty() } ?: continue  // tom del = «her slutter det du merket»
                 total.getOrPut(t) { HashMap() }.merge(a, dt, Double::plus)
                 autoParts.add(sg.pos[i] to a)
             }
@@ -426,7 +439,7 @@ class PartyReplayTest {
                 if (s.now[i] - secStart >= 1000L) {
                     val mean = DoubleArray(acc.size) { acc[it] / n }
                     hist.add(mean)
-                    val truth = s.key.lastOrNull { it.first <= s.pos[i] }?.second
+                    val truth = s.key.lastOrNull { it.first <= s.pos[i] }?.second?.takeIf { it.isNotEmpty() }
                     if (truth != null && hist.size > 8) {
                         val row = ArrayList<String>()
                         row += "$si"; row += "%.1f".format(Locale.US, s.pos[i] / 1000.0)
@@ -451,7 +464,7 @@ class PartyReplayTest {
     @Test fun dropFingerprint() {
         val pdir = File(raw.parentFile, "previews-fft")
         assumeTrue(pdir.isDirectory && File(raw, "fft").isDirectory)
-        val csvs = raw.listFiles { f -> f.name.endsWith(".csv") && f.name != "feedback.csv" }?.toList().orEmpty()
+        val csvs = raw.listFiles { f -> f.name.endsWith(".csv") && f.name != "feedback.csv" && !f.name.endsWith(".events.csv") }?.toList().orEmpty()
         fun slug(k: String) = Regex("[^a-z0-9]+").replace(k, "_").take(80)
         fun cos(a: DoubleArray, b: DoubleArray): Double {
             var d = 0.0; var na = 0.0; var nb = 0.0
@@ -494,7 +507,7 @@ class PartyReplayTest {
             val lWin = windowed(LongArray(lf.size) { lf[it].now }, lSpec, 4_000L)
             val inDrop = ArrayList<Double>(); val other = ArrayList<Double>()
             for (i in lf.indices) {
-                val t = key.lastOrNull { it.first <= lf[i].pos }?.second ?: continue
+                val t = key.lastOrNull { it.first <= lf[i].pos }?.second?.takeIf { it.isNotEmpty() } ?: continue
                 (if (t == "DROP") inDrop else other).add(cos(lWin[i], print))
             }
             if (inDrop.isEmpty() || other.isEmpty()) continue
@@ -661,7 +674,7 @@ class PartyReplayTest {
                 ln.update(sg.frames[i], sg.now[i], sg.pos[i], -1L)
                 if (ln.slots > slots) {
                     slots = ln.slots
-                    val t = sg.cleanKey.lastOrNull { it.first <= sg.pos[i] }?.second ?: continue
+                    val t = sg.cleanKey.lastOrNull { it.first <= sg.pos[i] }?.second?.takeIf { it.isNotEmpty() } ?: continue
                     val dur = if (lastPos < 0) 0L else sg.pos[i] - lastPos; lastPos = sg.pos[i]
                     sb.append("$si,${sg.pos[i]},$dur,$t,${norm(old.part.name)},")
                     sb.append(ln.features.joinToString(",") { "%.4f".format(Locale.US, it) }).append(",%.5f".format(Locale.US, ln.pBuildModelRaw)).append('\n')
@@ -677,7 +690,7 @@ class PartyReplayTest {
      */
     @Test fun exportAllSlots() {
         assumeTrue("ingen opptak på denne maskinen", File(raw, "fft").isDirectory)
-        val csvs = raw.listFiles { f -> f.name.endsWith(".csv") && f.name != "feedback.csv" }?.toList().orEmpty()
+        val csvs = raw.listFiles { f -> f.name.endsWith(".csv") && f.name != "feedback.csv" && !f.name.endsWith(".events.csv") }?.toList().orEmpty()
         val sb = StringBuilder("song,title,pos_ms,slot_ms,truth,old,p_model_raw,subDb,airDb,presDb,kicks,snares," +
             LISTENER_FEATURES.joinToString(",") + "," + (0 until 12).joinToString(",") { "b$it" } + "\n")
         val fftFiles = File(raw, "fft").listFiles { f -> f.name.endsWith(".fft.gz") }.orEmpty().sortedBy { it.name }
@@ -707,6 +720,34 @@ class PartyReplayTest {
             }
         }
         File(raw.parentFile, "slots-all.csv").writeText(sb.toString())
+    }
+
+    /** `# RELABEL` (bakover-merke fra appens AI-trener) bytter ut delen mellom fra og til, og trekkes ikke fra reaksjonstid. */
+    @Test fun relabelIsApplied() {
+        val f = File.createTempFile("relabel", ".csv")
+        try {
+            f.writeText("# A – B\npos_s,part,part_by\n" + (0..20).joinToString("\n") { "$it.0,${if (it < 10) "INTRO" else "DROP"},espen" } +
+                "\n# RELABEL 6.0 12.0 BUILDUP\n")
+            val key = truth(f)
+            assertEquals("BUILDUP", key.last { it.first <= 8_000L }.second)   // 6–12 s er nå build-up
+            assertEquals("BUILDUP", key.last { it.first <= 12_000L }.second)
+            assertEquals("DROP", key.last { it.first <= 14_000L }.second)      // etter «til» gjelder det som var
+            assertEquals("INTRO", key.last { it.first <= 5_000L }.second)      // før «fra» er uendret
+            val clean = cleanKey(key, f)
+            assertEquals(6_000L, clean.first { it.second == "BUILDUP" }.first) // ingen 600 ms-forskyvning på bakover-merket
+        } finally { f.delete() }
+    }
+
+    /** En review-rad med tom del («her slutter det jeg merket») avslutter nøkkelen: det som kommer etter regnes ikke som merket. */
+    @Test fun emptyPartEndsTheKey() {
+        val f = File.createTempFile("endkey", ".csv")
+        try {
+            f.writeText("# A – B\n# kilde: review\npos_s,part,part_by\n" +
+                (0..9).joinToString("\n") { "$it.0,BUILDUP,review" } + "\n10.0,,review\n11.0,DROP,auto\n12.0,DROP,auto\n")
+            val key = truth(f)
+            assertEquals("BUILDUP", key.last { it.first <= 9_000L }.second)
+            assertEquals("", key.last { it.first <= 12_000L }.second)   // auto-rader etter slutten teller ikke som fasit
+        } finally { f.delete() }
     }
 
     private companion object {

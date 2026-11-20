@@ -82,13 +82,13 @@ def build(raw_dir, out_path):
     per_song = []
     effects = defaultdict(lambda: defaultdict(list))
     for fname, title, rows in songs:
-        manual = [r for r in rows if r.get("part_by") == "espen" and r.get("auto_part")]
+        manual = [r for r in rows if r.get("part_by") in ("espen", "review") and r.get("auto_part")]
         agree = sum(1 for r in manual if norm(r["part"]) == norm(r["auto_part"]))
         for r in manual:
             confusion[norm(r["part"])][norm(r["auto_part"])] += 1
         for r in rows:
             part = norm(r.get("part"))
-            if r.get("part_by") == "espen" and part in PARTS:
+            if r.get("part_by") in ("espen", "review") and part in PARTS:
                 effects[part]["shake"].append(fnum(r, "shake_px"))
                 effects[part]["particles"].append(fnum(r, "particles"))
                 effects[part]["strobe"].append(1.0 if fnum(r, "max_strobe") > 0 else 0.0)

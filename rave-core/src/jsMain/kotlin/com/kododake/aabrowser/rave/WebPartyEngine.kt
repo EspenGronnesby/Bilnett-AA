@@ -37,6 +37,8 @@ class WebPartyEngine(fftSize: Int = 2048) {
     private val audio = HardstyleAudio()
     private val genreDetector = GenreDetector()
     private val songPhase = HardstyleStructure()
+    /** «Lytt først»-lytteren (kjører ved siden av den gamle hjernen; styrer ingenting). Vises i AI-treneren. */
+    private val listener = SongListener()
     private val hardSubDetector = HardSubDetector()
     private val beatClock = BeatClock()
     private val halfClock = BeatClock()
@@ -206,6 +208,39 @@ class WebPartyEngine(fftSize: Int = 2048) {
     /** The heard sound is fresh (< 300 ms old). */
     var hearing: Boolean = false; private set
 
+    // ---- «AI-treneren»: hva lytteren og modellen tenker (alt kun lesing) ----
+    val listenerPart: String get() = listener.part.name
+    val listenerLevel: Float get() = listener.level
+    val pBuild: Float get() = listener.pBuild
+    val pDrop: Float get() = listener.pDrop
+    /** Build-up-modellens sannsynlighet, glattet over fire slag. */
+    val pBuildModel: Float get() = listener.pBuildModel
+    val pBuildModelRaw: Float get() = listener.pBuildModelRaw
+    val listenerDrops: Int get() = listener.drops
+    /** Antall slag lukket så langt: når tallet endres er [listenerFeatures] og [listenerLevels] ferske. */
+    val listenerSlots: Int get() = listener.slots
+    val slotLengthMs: Float get() = listener.slotLengthMs
+    /** Kravet til fylde-hopp for å melde drop akkurat nå. */
+    val jumpNeeded: Float get() = listener.jumpNeeded
+    /** 16 selvrelative målinger for siste slag, i rekkefølgen [featureNames]. */
+    val listenerFeatures: FloatArray get() = listener.features
+    /** Sub-, høyde- og nærværsnivå (dB), kick og snare siste slag. */
+    val listenerLevels: FloatArray get() = listener.levels
+    val featureNames: Array<String> get() = LISTENER_FEATURES.toTypedArray()
+    /** Input til build-up-modellen (48), hvert tall sin bidrag og modellens grunnverdi. */
+    val modelInput: FloatArray get() = listener.modelInput
+    val modelContrib: FloatArray get() = FloatArray(BuildUpModel.size) { BuildUpModel.contribution(listener.modelInput, it) }
+    val modelBias: Float get() = BuildUpModel.bias
+    /** Modellens startvekter (til «Min lærling» i nettleseren): vekt, snitt og skala per måling. */
+    val modelCoef: FloatArray get() = FloatArray(BuildUpModel.size) { BuildUpModel.coef(it) }
+    val modelMean: FloatArray get() = FloatArray(BuildUpModel.size) { BuildUpModel.mean(it) }
+    val modelScale: FloatArray get() = FloatArray(BuildUpModel.size) { BuildUpModel.scale(it) }
+    val modelFeatureNames: Array<String> get() = BuildUpModel.FEATURES.toTypedArray()
+    /** Den gamle hjernens eget «bygger opp»-mål, takt i frasen og om den er klar for drop. */
+    val hudBuild: Float get() = songPhase.hud.build
+    val hudBar: Int get() = songPhase.hud.barInPhrase
+    val hudReady: Boolean get() = songPhase.hud.ready
+
     // ---- The smoothed frame the visuals use ----
     val bass: Float get() = shown.bass
     val kick: Float get() = shown.kick
@@ -265,6 +300,7 @@ class WebPartyEngine(fftSize: Int = 2048) {
         frame = HardstyleFrame()
         genreDetector.newTrack(now)
         songPhase.newTrack(now)
+        listener.newTrack(now)
         hardSubDetector.newTrack()
         loudNoDropS = 0f
         beatClock.reset(); halfClock.reset()
@@ -326,6 +362,7 @@ class WebPartyEngine(fftSize: Int = 2048) {
         val visualInput = if (songPhase.part == SongPart.BUILDUP) clocked.copy(snare = clocked.snare * .3f) else clocked
         val shapedFull = vibeShape(visualInput, v, r)
         val phaseIntensity = if (playing && fresh) songPhase.update(rawTarget, now, pos, dur) else 1f
+        if (playing && fresh) listener.update(rawTarget, now, pos, dur)
         partName = songPhase.part.name
         partLabel = songPhase.label
         partLabelAt = songPhase.labelAt.toDouble()

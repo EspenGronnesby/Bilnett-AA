@@ -11,6 +11,8 @@ export interface Controls {
   toggle: () => void
   next: () => void
   previous: () => void
+  /** Hopp til et sted i sangen (ms). */
+  seek: (ms: number) => void
   /** 0–100 */
   setVolume: (percent: number) => void
   /** Move the music to «Rave PC». Call straight from a click. */
@@ -78,6 +80,7 @@ export function useNowPlaying(enabled: boolean, playerOn: boolean, volume: numbe
         toggle: () => { player?.togglePlay() },
         next: () => { player?.nextTrack() },
         previous: () => { player?.previousTrack() },
+        seek: ms => { player?.seek(Math.max(0, Math.round(ms))) },
         setVolume: p => { onVolume(p); player?.setVolume(p / 100) },
         playHere: () => {},
         unlock: () => { player?.activateElement(); player?.resume() },
@@ -101,6 +104,7 @@ export function useNowPlaying(enabled: boolean, playerOn: boolean, volume: numbe
       toggle: () => run(() => (remote.status === 'playing' ? api.pause(deviceId) : api.play(deviceId))),
       next: () => run(() => api.next(deviceId)),
       previous: () => run(() => api.previous(deviceId)),
+      seek: ms => run(() => api.seek(ms, deviceId)),
       setVolume: p => run(() => api.setVolume(p, deviceId)),
       playHere: () => { playHere(rave.player, rave.deviceId); settle(remote.refresh) },
       unlock: () => { rave.player?.activateElement(); rave.player?.resume() },

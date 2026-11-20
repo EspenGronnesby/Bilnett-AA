@@ -1,4 +1,4 @@
-import { analysis, MARK_LABEL, type MarkPart } from './analysis'
+import { analysis } from './analysis'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Rgb } from '../ui/colors'
 import { SOURCE_LABEL, type PartySource } from './audio'
@@ -220,10 +220,10 @@ export function PartyGrain() {
   return <div ref={ref} className="party-grain" style={{ backgroundImage: `url(${tile})` }} aria-hidden />
 }
 
-/** Short announcements, as the app's banner: PARTY ON/OFF, a new genre, a new song part. */
+/** The only on-screen announcement: PARTY ON / PARTY OFF (no genre or song-part text: the AI trainer shows those). */
 export function PartyBanner({ party }: { party: Party }) {
   const [text, setText] = useState<string | null>(null)
-  const seen = useRef({ genreAt: 0, partAt: 0, on: party.on, first: true })
+  const seen = useRef({ on: party.on })
   useEffect(() => {
     const s = seen.current
     if (s.on !== party.on) {
@@ -231,16 +231,6 @@ export function PartyBanner({ party }: { party: Party }) {
       setText(party.on ? 'PARTY ON' : 'PARTY OFF')
     }
   }, [party.on])
-  useEffect(() => party.onFrame(() => {
-    const e = party.engine
-    const s = seen.current
-    if (e.genreAnnouncedAt > s.genreAt) {
-      s.genreAt = e.genreAnnouncedAt
-      if (!s.first) setText(e.genreLabel)
-      s.first = false
-    }
-    if (e.partLabelAt > s.partAt && e.partLabel) { s.partAt = e.partLabelAt; setText(e.partLabel) }
-  }), [party])
   useEffect(() => {
     if (!text) return
     const t = setTimeout(() => setText(null), 1_800)
@@ -250,12 +240,10 @@ export function PartyBanner({ party }: { party: Party }) {
 }
 
 /** Where Party listens, and the vibe slider (Auto or a fixed strength per genre, as in the app). */
-export function PartyControls({ party, strength, setStrength, koko, setKoko }: {
+export function PartyControls({ party, strength, setStrength }: {
   party: Party
   strength: number | undefined
   setStrength: (value: number | undefined) => void
-  koko: boolean
-  setKoko: (on: boolean) => void
 }) {
   const [, redraw] = useState(0)
   // The genre label and live level change with the music: refresh the row a few times a second.
@@ -265,22 +253,23 @@ export function PartyControls({ party, strength, setStrength, koko, setKoko }: {
   }, [])
   const e = party.engine
   const shown = strength ?? e.vibeLive
+  // Tilkoblingen vises bare når noe er galt (ikke ved «Mottar lyd» eller pause).
+  const status = party.connecting ? 'Kobler til …' : party.listening ? (party.paused ? 'Pause' : party.listening.status()) : 'Ikke tilkoblet'
+  const connection = status === 'Mottar lyd' || status === 'Pause' ? '' : status
   return (
     <div className="party-controls">
       <div className="mode-buttons">
         <div data-audio-choice>
           {(['system', 'tab', 'mic'] as PartySource[]).map(source => <button key={source} className={party.listening?.source === source ? 'chip on' : 'chip'} onClick={() => party.listenTo(source)}>{SOURCE_LABEL[source]}</button>)}
         </div>
-        <button className={koko ? 'chip on' : 'chip'} onClick={() => setKoko(!koko)}>Koko</button>
       </div>
-      {/* Vibe, connection and genre on one row (the name of the shared sound shows on hover). */}
+      {/* Vibe and (only when something is off) the connection (the name of the shared sound shows on hover). */}
       <div className="vibe">
         <button className={strength === undefined ? 'chip small on' : 'chip small'} onClick={() => setStrength(undefined)}>Auto</button>
         <input type="range" min={0} max={100} step={1} aria-label="Vibe-styrke"
           value={Math.round(shown * 100)}
           onChange={ev => setStrength(Number(ev.currentTarget.value) / 100)} />
-        <span className="chip info" title={party.listening?.label}>{party.connecting ? 'Kobler til …' : party.listening ? party.paused ? 'Pause' : party.listening.status() : 'Ikke tilkoblet'}</span>
-        {party.listening && e.hearing && <span className="chip info">{e.genreLabel}</span>}
+        {connection && <span className="chip info" title={party.listening?.label}>{connection}</span>}
       </div>
       {party.error && <p className="notice">{party.error}</p>}
       <AnalysisPanel />
@@ -291,25 +280,16 @@ export function PartyControls({ party, strength, setStrength, koko, setKoko }: {
 /** Analyse (steg 5): ta opp og merk hvor i sangen vi er; merkene brukes til å trene lytteren (eksporteres til Mac-en). */
 function AnalysisPanel() {
   const [, redraw] = useState(0)
-  const [busy, setBusy] = useState(false)
   useEffect(() => {
-    analysis.onChange = () => redraw(n => n + 1)
     void analysis.refreshCount()
-    return () => { analysis.onChange = () => {} }
+    return analysis.subscribe(() => redraw(n => n + 1))
   }, [])
   const on = analysis.enabled
   return (
     <div className="analysis">
       <button className={on ? 'chip small on' : 'chip small'} onClick={() => analysis.setEnabled(!on)}
         title="Tar opp lyden og lar deg merke sangdelene. Lagres i nettleseren til du eksporterer.">Analyse {on ? 'på' : 'av'}</button>
-      {on && (Object.keys(MARK_LABEL) as MarkPart[]).map(p =>
-        <button key={p} className={analysis.mark === p ? 'chip small on' : 'chip small'} onClick={() => analysis.setMark(p)}>{MARK_LABEL[p]}</button>)}
-      {on && <button className={analysis.dirName ? 'chip small on' : 'chip small'} onClick={() => void analysis.pickDir()}
-        title="Velg en mappe (for eksempel Nedlastinger/rave-analyse): hver sang lagres dit av seg selv, så du kan la en spilleliste gå uten å trykke noe.">
-        {analysis.dirName ? `Mappe: ${analysis.dirName}` : 'Velg mappe'}</button>}
-      {analysis.savedCount > 0 && (
-        <button className="chip small" disabled={busy} onClick={async () => { setBusy(true); try { await analysis.exportAll() } finally { setBusy(false) } }}>
-          Eksporter ({analysis.savedCount})</button>)}
+      {on && <button className={analysis.trainerOpen ? 'chip small on' : 'chip small'} onClick={() => analysis.trainerOpen ? analysis.closeTrainer() : analysis.openTrainer()}>AI-trener</button>}
       {on && analysis.note && <span className="chip info">{analysis.note}</span>}
     </div>
   )

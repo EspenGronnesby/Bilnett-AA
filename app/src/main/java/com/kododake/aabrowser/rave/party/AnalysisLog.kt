@@ -218,9 +218,10 @@ internal class AnalysisLog(private val dir: File) {
      * analysis believed at that moment, in the song's CSV and in `feedback.csv` (all songs).
      * This is the answer key the analysis is trained against.
      */
-    fun mark(kind: String) {
+    fun mark(kind: String, atPosMs: Long = -1L) {
         val song = if (file != null) songName else "$pendingArtist – $pendingTitle"
-        val pos = if (lastPos >= 0) "%.1f".format(Locale.US, lastPos / 1000f) else ""
+        val at = if (atPosMs >= 0) atPosMs else lastPos
+        val pos = if (at >= 0) "%.1f".format(Locale.US, at / 1000f) else ""
         val time = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
         val clean = song.replace(',', ' ')
         val line = "$time,$clean,$pos,$kind,$lastPart,$lastDrop,$lastGenre,$lastSub,${file?.name.orEmpty()},$lastAutoPart\n"
@@ -235,6 +236,16 @@ internal class AnalysisLog(private val dir: File) {
                 f?.appendText("# MARK $pos $kind\n")
             } catch (_: Exception) { }
         }
+    }
+
+    /**
+     * «This part started earlier»: from [fromPosMs] to [toPosMs] the part was [part] (Espen's back-dated tap in the AI trainer).
+     * Written as a line in the song's CSV; the replay test applies it to the rows in between (exact: no reaction-time shift).
+     */
+    fun relabel(part: String, fromPosMs: Long, toPosMs: Long) {
+        val f = file ?: return
+        val line = "# RELABEL %.1f %.1f %s\n".format(Locale.US, fromPosMs / 1000f, toPosMs / 1000f, part)
+        io.execute { try { f.appendText(line) } catch (_: Exception) { } }
     }
 
     /** Keep only the newest song files. */

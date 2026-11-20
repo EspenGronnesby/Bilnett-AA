@@ -63,6 +63,8 @@ export const transfer = (deviceId: string, play = true) =>
 
 export const play = (deviceId?: string | null) => spotifyFetch(`/me/player/play${deviceQuery(deviceId)}`, { method: 'PUT' })
 export const pause = (deviceId?: string | null) => spotifyFetch(`/me/player/pause${deviceQuery(deviceId)}`, { method: 'PUT' })
+export const seek = (positionMs: number, deviceId?: string | null) =>
+  spotifyFetch(`/me/player/seek?position_ms=${Math.max(0, Math.round(positionMs))}${deviceId ? `&device_id=${encodeURIComponent(deviceId)}` : ''}`, { method: 'PUT' })
 export const next = (deviceId?: string | null) => spotifyFetch(`/me/player/next${deviceQuery(deviceId)}`, { method: 'POST' })
 export const previous = (deviceId?: string | null) => spotifyFetch(`/me/player/previous${deviceQuery(deviceId)}`, { method: 'POST' })
 
