@@ -485,20 +485,27 @@ button.chip:active, .chip.sync button:active { transform: scale(0.97); }
 
 /* ---------- Party ---------- */
 .party-layer { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-/* In Party the canvas draws the lights and the vignette; the blurred cover drifts faster (8 s, as the app). */
+/* In Party the canvas draws the lights and the vignette; the blurred cover drifts a little faster, still calm. */
 .backdrop.party .lights, .backdrop.party::after { display: none; }
-.backdrop.party img { animation-duration: 8s; }
+.backdrop.party img { animation-duration: 24s; }
 .party-grain { position: absolute; inset: 0; pointer-events: none; opacity: 0.06; mix-blend-mode: overlay; background-repeat: repeat; }
 
-/* The cover with its ring and glow (the app's ReactiveCover): ring and glow behind the cover. */
-.cover-wrap { position: relative; display: grid; place-items: center; }
+/* The cover with its aura and glow (the app's ReactiveCover). Its own stacking context: the numbers below
+   only order the cover, the aura and the glow among themselves, never against the rest of the page. */
+.cover-wrap { position: relative; display: grid; place-items: center; isolation: isolate; }
 .cover-wrap .cover { position: relative; z-index: 1; }
 .party-orb, .party-glow { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 0; }
-/* The snare edge: a thin white frame hugging the cover from just outside (same corner shape as the cover:
-   its radius is the cover's plus the gap), not inset into the picture with different corners. */
+/* The aura lies above the cover's shadow (the cover itself is cut out of it); its bloom stays behind the cover. */
+.party-orb { z-index: 2; }
+/* The aura never draws across the title and artist: the song's text block lies above the whole cover
+   group (nothing moves). Only that block: `.chip.info` (the status chips) is something else. */
+.info:not(.chip) { position: relative; z-index: 1; }
+/* The snare glow: a soft, short, warm-white light just outside the cover's edge (the same light as the
+   aura's core, which lies right there), no line. Only its shadow is visible; it follows the cover's pulse.
+   The shadow itself (blur, spread, colour) is set by PartyCoverFx from rave-core's EDGE_GLOW_* / CORE_COLOR. */
 .party-edge {
-  position: absolute; inset: calc(-5 * var(--u)); z-index: 2; pointer-events: none; opacity: 0;
-  border: calc(3 * var(--u)) solid #fff; border-radius: calc(var(--radius-cover) + 5 * var(--u));
+  position: absolute; inset: 0; z-index: 2; pointer-events: none; opacity: 0; border-radius: var(--radius-cover);
+  will-change: opacity, transform;
 }
 
 .party-banner {

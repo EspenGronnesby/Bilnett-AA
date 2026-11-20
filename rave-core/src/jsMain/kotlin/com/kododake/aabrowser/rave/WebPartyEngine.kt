@@ -48,6 +48,11 @@ class WebPartyEngine(fftSize: Int = 2048) {
     private var shown = HardstyleFrame()
     private val smoothSpectrum = FloatArray(SPECTRUM_BANDS)
     private var shakeAngle = 0f
+    private val orb = OrbGeometry()
+    private val orbBands = FloatArray(DISPLAY_BANDS)
+    private var orbSide = 0f
+    private var orbRadius = 0f
+    private var coverKick = 0f
     private var shakeArmed = 1f
 
     // ---- Settings from the page ----
@@ -104,6 +109,100 @@ class WebPartyEngine(fftSize: Int = 2048) {
     var strobeAmount: Float = 0f; private set
     var density: Float = 1f; private set
     var softness: Float = 1f; private set
+    /** Dropet er på: bare da rister scenen og kommer det ripples. */
+    var dropOn: Boolean = false; private set
+    /** Partiklenes fart nå (1 i dropet, roligere ellers). */
+    var particleDrift: Float = 1f; private set
+    /** Partikler ved vanlig volum og største antall; minste tid mellom ripples (ms). */
+    val particleBase: Int get() = PARTICLES_BASE
+    val particleMax: Int get() = PARTICLES_MAX
+    val rippleGapMs: Int get() = RIPPLE_MIN_GAP_MS.toInt()
+
+    // ---- Samme lys som auraen: tallene står i FestivalShow.kt (deles med appen senere) ----
+    /** Snare-gløden rett utenfor coverkanten (0..[EDGE_GLOW_MAX]), jevnet. */
+    var edgeGlow: Float = 0f; private set
+    private var edgeLevel = 0f
+    val backlightHitTravel: Float get() = BACKLIGHT_HIT_TRAVEL
+    val backlightCycleS: Float get() = BACKLIGHT_CYCLE_S
+    val haloWidth: Float get() = HALO_WIDTH
+    val haloHeight: Float get() = HALO_HEIGHT
+    val haloRest: Float get() = HALO_REST
+    val haloGain: Float get() = HALO_GAIN
+    val haloSwell: Float get() = HALO_SWELL
+    val haloOffset: Float get() = HALO_OFFSET
+    val haloRoundS: Float get() = HALO_ROUND_S
+    val dustDriftS: Float get() = DUST_DRIFT_S
+    val dustReach: Float get() = DUST_REACH
+    val dustSmallDp: Float get() = DUST_SMALL_DP
+    val dustBigDp: Float get() = DUST_BIG_DP
+    val dustBigEvery: Int get() = DUST_BIG_EVERY
+    val dustWhiteEvery: Int get() = DUST_WHITE_EVERY
+    val dustBigAlpha: Float get() = DUST_BIG_ALPHA
+    val dustRest: Float get() = DUST_REST
+    val dustCalmShare: Float get() = DUST_CALM_SHARE
+    val dustAttackS: Float get() = DUST_ATTACK_S
+    val dustReleaseS: Float get() = DUST_RELEASE_S
+    val dustSway: Float get() = DUST_SWAY
+    val waveLifeMs: Int get() = WAVE_LIFE_MS
+    val waveReach: Float get() = WAVE_REACH
+    val waveWidthFrom: Float get() = WAVE_WIDTH_FROM
+    val waveWidthTo: Float get() = WAVE_WIDTH_TO
+    val waveAlpha: Float get() = WAVE_ALPHA
+    val haloSquash: Float get() = HALO_SQUASH
+    val haloGainCalm: Float get() = HALO_GAIN_CALM
+    val videoLightDim: Float get() = VIDEO_LIGHT_DIM
+    val dustPaceEaseS: Float get() = DUST_PACE_EASE_S
+    val dustStart: Float get() = DUST_START
+    val dustPathCurve: Float get() = DUST_PATH_CURVE
+    val dustFadeIn: Float get() = DUST_FADE_IN
+    val dustFadeOutCurve: Float get() = DUST_FADE_OUT_CURVE
+    val dustShimmer: Float get() = DUST_SHIMMER
+    val dustWhiteMix: Float get() = DUST_WHITE_MIX
+    val dustTintMix: Float get() = DUST_TINT_MIX
+    val dustTwinkleShare: Float get() = DUST_TWINKLE_SHARE
+    val dustTwinkleMin: Float get() = DUST_TWINKLE_MIN
+    val dustTwinkleDecayS: Float get() = DUST_TWINKLE_DECAY_S
+    val dustBandGain: Float get() = DUST_BAND_GAIN
+    val dustTwinkleGain: Float get() = DUST_TWINKLE_GAIN
+    val waveCount: Int get() = WAVE_COUNT
+    val waveBassFrom: Float get() = WAVE_BASS_FROM
+    val waveGritFrom: Float get() = WAVE_GRIT_FROM
+    val waveRearmBass: Float get() = WAVE_REARM_BASS
+    val waveStart: Float get() = WAVE_START
+    val waveSlowdown: Float get() = WAVE_SLOWDOWN
+    val waveFadeIn: Float get() = WAVE_FADE_IN
+    val waveFadeOutCurve: Float get() = WAVE_FADE_OUT_CURVE
+    val waveStrokes: Int get() = WAVE_STROKES
+    val waveWhiteMix: Float get() = WAVE_WHITE_MIX
+    val edgeGlowBlurDp: Float get() = EDGE_GLOW_BLUR_DP
+    val edgeGlowSpreadDp: Float get() = EDGE_GLOW_SPREAD_DP
+    val edgeGlowAlpha: Float get() = EDGE_GLOW_ALPHA
+
+    // ---- Auraens tegning: tallene står i OrbGeometry.kt (appen tegner med de samme i Compose) ----
+    /** Fyll-alfa for et lag før [orbAlpha], fargeforskyvning i fargehjulet og driftretning (1 / −1). */
+    fun auraLayerAlpha(layer: Int): Float = com.kododake.aabrowser.rave.auraLayerAlpha(layer)
+    fun auraLayerColorShift(layer: Int): Int = com.kododake.aabrowser.rave.auraLayerColorShift(layer)
+    fun auraLayerDrift(layer: Int): Float = com.kododake.aabrowser.rave.auraLayerDrift(layer)
+    val auraColorRounds: Int get() = AURA_COLOR_ROUNDS
+    val coreReachDp: Float get() = CORE_REACH_DP
+    /** 0xRRGGBB. */
+    val coreColor: Int get() = CORE_COLOR
+    val coreRest: Float get() = CORE_REST
+    val coreGain: Float get() = CORE_GAIN
+    val coreStrokes: Int get() = CORE_STROKES
+    val coreDensity: Float get() = CORE_DENSITY
+    val bloomBlurDp: Float get() = BLOOM_BLUR_DP
+    val bloomRoomBlurs: Float get() = BLOOM_ROOM_BLURS
+    val bloomBackColor: Int get() = BLOOM_BACK_COLOR
+    val bloomBackAlpha: Float get() = BLOOM_BACK_ALPHA
+    val bloomBackOpen: Float get() = BLOOM_BACK_OPEN
+    val bloomMainColor: Int get() = BLOOM_MAIN_COLOR
+    val bloomMainAlpha: Float get() = BLOOM_MAIN_ALPHA
+    val bloomMainOpen: Float get() = BLOOM_MAIN_OPEN
+    val bloomRimAlpha: Float get() = BLOOM_RIM_ALPHA
+    val bloomRimDp: Float get() = BLOOM_RIM_DP
+    /** Furthest any part of the aura is from the cover's centre, as a share of the cover's side (canvas margin). */
+    val orbExtent: Float get() = ORB_EXTENT
     /** The heard sound is fresh (< 300 ms old). */
     var hearing: Boolean = false; private set
 
@@ -127,6 +226,26 @@ class WebPartyEngine(fftSize: Int = 2048) {
     /** 48 bands, eased every frame (quick rise, slower fall). */
     val spectrum: FloatArray get() = smoothSpectrum
 
+    // ---- The aura (OrbGeometry): finished outlines per layer, updated in [tick] ----
+    /** The cover's pulse scale this frame (1 = at rest). Draw the cover with it; the aura already uses it. */
+    var coverScale: Float = 1f; private set
+    /** Number of layers: 0 = the main shape, the rest lie behind it (the same spectrum, slower and bigger). */
+    val orbLayers: Int get() = orb.layerCount
+    /** 0..1: 0 = the aura rests tight against the cover, 1 = fully open. */
+    val orbOpen: Float get() = orb.open
+    /** 0..1: strength of the glow (follows the bass softly). */
+    val orbGlow: Float get() = orb.glow
+    /** [side]: the cover's side length in px at rest (the cover itself, not its box); [cornerRadius]: its corner radius in px. */
+    fun setOrbSize(side: Float, cornerRadius: Float) { orbSide = side; orbRadius = cornerRadius }
+    /** x,y per point in px from the cover's centre (closed). Same array every call. */
+    fun orbPoints(layer: Int): FloatArray = orb.points(layer)
+    /** Per segment c1x,c1y,c2x,c2y,x,y: moveTo(orbPoints[0], orbPoints[1]), then one bezierCurveTo each. Same array every call. */
+    fun orbCurves(layer: Int): FloatArray = orb.curves(layer)
+    /** 0..1: weaker while the aura is closed. Multiply with [auraLayerAlpha]. */
+    fun orbAlpha(layer: Int): Float = orb.alpha(layer)
+    /** 0..1: the slow drift of the colours round the ring (wraps). */
+    val orbDrift: Float get() = orb.drift
+
     /** [samples]: [hop] new mono samples (−1..1) at [rateHz]. */
     /** Returns the FFT frame (Visualizer bytes) the analysis just used, so the page can record it. */
     fun pushPcm(samples: FloatArray, rateHz: Int, nowMs: Double): ByteArray {
@@ -141,6 +260,8 @@ class WebPartyEngine(fftSize: Int = 2048) {
     fun newTrack(nowMs: Double) {
         val now = nowMs.toLong()
         audio.reset()
+        orb.reset()
+        coverKick = 0f
         frame = HardstyleFrame()
         genreDetector.newTrack(now)
         songPhase.newTrack(now)
@@ -283,6 +404,8 @@ class WebPartyEngine(fftSize: Int = 2048) {
         strobeAmount = p.strobe * (if (effectsOn && pi >= .9f) 1f else 0f) * subMul(sub.strobe) * look.strobe *
             (if (strength < GenreRules.STROBE_FROM_STRENGTH) 0f else 1f)
         density = p.density * (1f + BUILD_DENSITY_RISE * buildRise)
+        dropOn = playing && effectsOn && pi >= SHOW_DROP_FROM
+        particleDrift = if (dropOn) 1f else PARTICLE_CALM_SPEED
         softness = p.softness.let { if (it <= 1.2f) it.coerceAtMost(1.15f) else it }
         val popLift = if (g == Genre.POP || g == Genre.REGGAE || g == Genre.REGGAETON) genreDetector.chorus else 0f
         if (popLift > 0f) { spike *= 1f + .35f * popLift; particles *= 1f + .4f * popLift }
@@ -314,21 +437,21 @@ class WebPartyEngine(fftSize: Int = 2048) {
 
         // Camera shake (in dp; the app multiplies the same numbers by the screen density).
         val f = shown
+        // Roligere (2026-11-20): bare i dropet, bare drevet av heavy, ingen rask skjelving. Hvert tungt
+        // kick gir ett mykt dytt i en tilfeldig retning som glir tilbake med kicket.
         val ramp = loudRamp(volume)
-        val punch = shakeAmount * f.kick * volumeGain(volume) *
-            (f.heavy * (10f + loudness(volume) * 4f) * (1f + ramp * .8f) + ramp * 5f)
-        val tremble = screechShake * f.screech * 7f * volumeGain(volume)
+        val punch = if (dropOn) shakeAmount * f.kick * volumeGain(volume) *
+            f.heavy * (SHAKE_PUNCH_DP + loudness(volume) * SHAKE_PUNCH_LOUD_DP) * (1f + ramp * .8f) else 0f
+        // Skrik (screech) gir litt hardere dytt på kicket, ikke egen skjelving.
+        val tremble = if (dropOn) screechShake * f.screech * SHAKE_SCREECH_DP * volumeGain(volume) * f.kick else 0f
         if (f.kick < .3f) shakeArmed = 1f
         if (f.kick > .55f && shakeArmed == 1f) { shakeArmed = 0f; shakeAngle = (random.nextDouble() * 2 * PI).toFloat() }
-        val s = (now % 1_000_000L) / 1000f
-        val wobble = punch * .35f + tremble
-        val x = cos(shakeAngle) * punch + sin(s * 61f) * wobble
-        val y = sin(shakeAngle) * punch + cos(s * 47f) * wobble
+        val push = punch + tremble
         // The app compares with 0.5 px; ~0.2 dp is the same on a typical screen.
-        val big = punch + tremble > .2f
-        shakeX = if (big) x else 0f
-        shakeY = if (big) y else 0f
-        shakeRotation = if (big) (f.heavy * f.kick * .8f * if (shakeAngle > PI) -1f else 1f) else 0f
+        val big = push > .2f
+        shakeX = if (big) cos(shakeAngle) * push else 0f
+        shakeY = if (big) sin(shakeAngle) * push else 0f
+        shakeRotation = if (big) (f.heavy * f.kick * SHAKE_ROTATION_DEG * if (shakeAngle > PI) -1f else 1f) else 0f
         val split = f.heavy * f.kick * shakeAmount
         aberration = if (effectsOn && split > .25f) ((split - .25f) / .75f).coerceAtMost(1f) * 5f else 0f
         bounceY = -look.bounceY * GENRE_BOUNCE_DP * strengthMul
@@ -348,12 +471,18 @@ class WebPartyEngine(fftSize: Int = 2048) {
         grade += ((if (playing) gradeTarget else 0f) - grade) * (1f - exp(-dt / 1.5f))
 
         // ---- Background hits and flashes (decided here, once per frame; drawn by the page) ----
-        partyHit = ((.3f + .7f * phaseLevel) *
+        // Jevnet (fort opp, sakte ned): bakgrunnslyset svulmer med bassen i stedet for å slå.
+        fun eased(from: Float, goal: Float, attackS: Float, releaseS: Float) =
+            from + (goal - from) * (1f - exp(-dt / if (goal > from) attackS else releaseS))
+        val hitGoal = ((.3f + .7f * phaseLevel) *
             (maxOf(f.kick, f.bass * .55f, f.highMotion * .2f) + f.heavy * f.kick * .4f +
                 (smoothSpectrum.maxOrNull() ?: 0f) * .25f * volumeGain(volume))).coerceAtMost(1.6f)
+        partyHit = eased(partyHit, hitGoal, BACKLIGHT_ATTACK_S, BACKLIGHT_RELEASE_S).let { if (it < .001f) 0f else it }
         val heavyRaw = f.heavy * f.kick * (.6f + .4f * loudness(volume))
         val showOn = structureWeight(v)
-        subGlow = .12f * f.sub * f.bass * showOn
+        subGlow = eased(subGlow, .12f * f.sub * f.bass * showOn, BACKLIGHT_ATTACK_S, BACKLIGHT_RELEASE_S)
+        edgeLevel = eased(edgeLevel, f.snare.coerceIn(0f, 1f) * showOn, EDGE_GLOW_ATTACK_S, EDGE_GLOW_RELEASE_S)
+        edgeGlow = (EDGE_GLOW_MAX * edgeLevel).let { if (it < .004f) 0f else it }
         screechTint = (f.screech * .7f * showOn).coerceAtMost(.7f)
         // Strobe: heavy distorted kicks (or crashes for rock) at high volume; never more than
         // 2.5 per second, and every flash type shares one budget of 3 per second.
@@ -365,5 +494,11 @@ class WebPartyEngine(fftSize: Int = 2048) {
         strobeColor = strobeColorIndex
         if (heavyRaw > .3f && now - lastHeavyFlashAt >= 400L && now - lastStrobeAt >= 120L && flashBudget.tryFlash(now)) lastHeavyFlashAt = now
         heavyFlash = if (heavyRaw > .02f && now - lastHeavyFlashAt < 120L) heavyRaw else 0f
+
+        // ---- The aura: same cover pulse as the page draws, so the aura always lies outside the cover ----
+        coverKick = easeCoverKick(coverKick, f.kick, dtS.toFloat())
+        coverScale = coverPulseScale(breath, coverKick, f.heavy, volume, phaseLevel)
+        orb.update(dtS.toFloat(), playing, orbBands, audio.readDisplay(orbBands), orbSide, orbRadius, coverScale,
+            phaseLevel, spike, volume, f.heavy, f.kick, clockKick)
     }
 }

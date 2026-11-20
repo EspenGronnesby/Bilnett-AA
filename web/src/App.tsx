@@ -287,7 +287,7 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
   )
   const cover = (
     <Cover url={track.coverUrl} party={party}
-      fx={party.on && <PartyCoverFx party={party} palette={coverColors} hasCover={hasCover} volume={partyVolume} dp={dp} />} />
+      fx={party.on && <PartyCoverFx party={party} palette={coverColors} hasCover={hasCover} dp={dp} />} />
   )
 
   return shell(

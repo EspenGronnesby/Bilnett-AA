@@ -73,6 +73,8 @@ data class HardstyleFrame(val bass: Float = 0f, val kick: Float = 0f, val highs:
 /** Independent from the original visualizer. Input sample rate is Hz, not Android's milliHz. */
 class HardstyleAudio {
     private val spectrumAnalyzer = HardstyleSpectrum()
+    /** The ring's own raw spectrum (drawing only; the analysis never reads it). */
+    private val display = DisplaySpectrum()
     private var peak = 8f
     private var average = 0f
     private var lastBass = 0f
@@ -99,8 +101,22 @@ class HardstyleAudio {
      */
     @JvmSync fun setTempoHint(bpm: Float) { beats.setHint(bpm) }
 
+    /**
+     * **The thread-safe bridge from the sound thread to the drawing thread.** Copies the aura's raw
+     * display spectrum ([DISPLAY_BANDS] bands) into the caller's own buffer and returns its version (goes
+     * up by one per FFT frame and per [reset]). Call it on the drawing thread, right before
+     * [OrbGeometry.update], with a buffer only that thread touches; [accept] keeps running on the
+     * Visualizer's / microphone's thread. Both hold this object's lock, and the copy takes microseconds.
+     * [OrbGeometry] itself has no lock: never hand it [DisplaySpectrum.bands] or call it from the sound thread.
+     */
+    @JvmSync fun readDisplay(into: FloatArray): Int {
+        display.bands.copyInto(into, 0, 0, minOf(into.size, DISPLAY_BANDS))
+        return display.version
+    }
+
     @JvmSync fun reset() {
         spectrumAnalyzer.reset()
+        display.reset()
         peak = 8f; average = 0f; lastBass = 0f; lastAt = 0; lastKick = -1000; lastBurst = -5000
         shortAverage = 0f; longAverage = 0f; beatPeriod = 0f
         vocalAvg = 0f; lastVocalValue = 0f; lastVocalHit = -1000
@@ -111,6 +127,7 @@ class HardstyleAudio {
     }
     @JvmSync fun accept(fft: ByteArray, sampleRate: Int, now: Long): HardstyleFrame {
         if (sampleRate <= 0 || fft.size < 4) return HardstyleFrame()
+        display.accept(fft, sampleRate)
         var low = 0f; var bass = 0f; var high = 0f; var mid = 0f; var snareBand = 0f; var air = 0f; var scr = 0f
         var nl = 0; var nb = 0; var nh = 0; var nm = 0; var ns = 0; var na = 0; var nsc = 0
         // Spectral flatness (2–12 kHz) and centroid (250 Hz–12 kHz) for build-up detection.

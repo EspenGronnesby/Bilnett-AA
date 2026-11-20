@@ -92,16 +92,18 @@ scrcpy --no-audio --stay-awake          # speil telefonskjermen til Mac-en
 ```
 rave-core/src/commonMain/kotlin/com/kododake/aabrowser/rave/   # Felles Party-analyse (app = JVM, nettside = JS)
 ├── HardstyleAudio.kt      # FFT → HardstyleFrame (bass, kick, energy, heavy, grit …)
-├── HardstyleSpectrum.kt   # 48 logaritmiske bånd + historikk for ekko-lagene
+├── HardstyleSpectrum.kt   # 48 logaritmiske bånd for ANALYSEN (sjanger/drop) – ikke for tegning
+├── DisplaySpectrum.kt     # 96 rå bånd 40 Hz–10 kHz for TEGNING av auraen (HardstyleAudio.readDisplay)
+├── OrbGeometry.kt         # Auraen rundt coveret: form, jevning, «åpner seg», alle ORB_/AURA_/CORE_-tall
 ├── GenreDetector.kt       # Sjanger, HardstyleStructure (intro/build-up/drop), PartyTuning (tersklene)
-├── FestivalShow.kt        # Konstanter, BeatClock, FlashBudget, SyncTapper
+├── FestivalShow.kt        # Konstanter, BeatClock, FlashBudget, SyncTapper, risting/lysstøv/bølger/snare-glød
 ├── PcmFft.kt              # Rå lyd → FFT i Visualizer-format (mikrofon i bilen, delt lyd på nettsiden)
 ├── Volume.kt              # volumeGain, loudness, loudRamp, maxVolumeBoost
 └── party/                 # GenreRules, SongMood
 rave-core/src/jsMain/…/WebPartyEngine.kt   # Nettsidens Party-motor (port av appens effektløkke)
 app/src/main/java/com/kododake/aabrowser/rave/
 ├── RaveActivity.kt        # Skjermen: metadata, tekst, video, bakgrunnslys, shake, strobe, volum
-├── HardstyleVisuals.kt    # HardstyleOrb (ringen), HardstyleBackdrop (partikler, ripples)
+├── HardstyleVisuals.kt    # PartyAura (auraen), HardstyleBackdrop (lysstøv, lysbølger, nordlysskjær)
 ├── SilentClipView.kt      # Musikkvideo
 ├── SpotifyVideoLookup.kt  # Finner video via iTunes-søk
 ├── NowPlayingListener.kt  # Varseltilgang for å lese hva som spilles
@@ -122,11 +124,13 @@ web/                       # Rave-nettsiden (Vite/React, https://rave-espen.verc
 | `heavy` | `rave-core/…/HardstyleAudio.kt` | Tung + distortert bass, eller drop etter breakdown (0..1) |
 | `grit` | `rave-core/…/HardstyleAudio.kt` | Kun distortion på sterk bass (mid 250–2500 Hz / bass) |
 | `volumeGain`, `loudness`, `loudRamp`, `maxVolumeBoost` | `rave-core/…/Volume.kt` | Telefonvolum → styrke (rolig lavt, ekstra fra 70 %, «tar av» 90–100 %) |
-| Spikes, ekstra strek, lys på topper | `HardstyleOrb` | Utslag, tak (`displacementCap`) og glød |
-| Partikler, ripples | `HardstyleBackdrop`, `RippleBank` | Ripples kun når `bass > .72 && grit > .35` |
-| Shake, strobe, blink | `RaveActivity.kt` (`graphicsLayer`, bakgrunns-Canvas) | Strobe fra 85 % volum + heavy kick |
+| Auraen (form, utslag, «åpner seg», farger, glød) | `rave-core/…/OrbGeometry.kt` | Tallene; appen (`PartyAura`) og nettsiden (`drawOrb`) tegner bare |
+| Lysstøv, lysbølger, nordlysskjær, snare-glød | `rave-core/…/FestivalShow.kt` (`DUST_*`, `WAVE_*`, `HALO_*`, `EDGE_*`) | Bølger kun i drop, ≥ 400 ms mellom, når `bass > .72 && grit > .35` |
+| Risting | `FestivalShow.kt` (`SHAKE_*`) | Kun i drop, kun på `heavy` |
+| Strobe, blink | `RaveActivity.kt` (bakgrunns-Canvas) | Strobe fra 85 % volum + heavy kick (urørt i aura-ombyggingen) |
 
 Terskler er kvalifiserte gjetninger, ikke målt — juster etter Espens tilbakemelding.
+Appen og nettsiden leser de samme tallene fra kjernen: juster ett sted, kjør `syncWebCore`.
 
 ## Beslutninger Espen har tatt (ikke reverser uten å spørre)
 
@@ -136,6 +140,9 @@ Terskler er kvalifiserte gjetninger, ikke målt — juster etter Espens tilbakem
 - **Ingen bevegelse Espen ikke har bedt om.** Coveret skal ikke vugge/vippe fra side til side
   (reggae-sway fjernet 2026-11-18), ingen spinning/spiral, knapper og tekst står stille.
   Nye bevegelser av cover/scene: spør først.
+- **Party-auraen skal være en aura** (2026-11-20): fylt, glødende lys i coverfargene, halo/engel/nordlys,
+  ikke aggressiv, ingen tynne streker. Kanten viser lydspekteret (bass øverst). Strobe og hvite blink
+  skal ikke endres uten å spørre.
 
 ## Git
 
@@ -151,7 +158,7 @@ Terskler er kvalifiserte gjetninger, ikke målt — juster etter Espens tilbakem
 - **Android Auto:** sideloadede apper krever «Ukjente kilder» i Android Auto-utviklerinnstillinger.
   Kan slå seg av etter AA-oppdatering.
 - **Volum:** appen leser telefonens `STREAM_MUSIC`, ikke bilens forsterker.
-- **Ytelse:** Party-modus tegner mye (opptil 224 partikler, 8 ripples, gradienter) — følg med på varme.
+- **Ytelse:** Party-modus tegner mye (aura med 3 additive lag + blur, opptil 120 lyskorn, lysbølger, gradienter) — følg med på varme.
 - **Upstream-merge** fra `origin` kan gjeninnføre analytics-kallet og README-innhold — sjekk diffen.
 
 ## Arbeidsflyt for Claude

@@ -66,13 +66,31 @@ if (typeof Math.log10 === 'undefined') {
     return Math.log(x) * Math.LOG10E;
   };
 }
+if (typeof Math.tanh === 'undefined') {
+  var epsilon = 2.220446049250313E-16;
+  var taylor_2_bound = Math.sqrt(epsilon);
+  var taylor_n_bound = Math.sqrt(taylor_2_bound);
+  Math.tanh = function (x) {
+    if (Math.abs(x) < taylor_n_bound) {
+      var result = x;
+      if (Math.abs(x) > taylor_2_bound) {
+        result -= x * x * x / 3;
+      }
+      return result;
+    } else {
+      var a = Math.exp(+x), b = Math.exp(-x);
+      return a === Infinity ? 1 : b === Infinity ? -1 : (a - b) / (a + b);
+    }
+  };
+}
 //endregion
 //region block: imports
 var imul_0 = Math.imul;
 var isView = ArrayBuffer.isView;
 var clz32 = Math.clz32;
-var log10 = Math.log10;
 var hypot = Math.hypot;
+var log10 = Math.log10;
+var tanh = Math.tanh;
 //endregion
 //region block: pre-declaration
 initMetadataForInterface(CharSequence, 'CharSequence');
@@ -97,10 +115,10 @@ initMetadataForClass(AbstractCollection, 'AbstractCollection', VOID, VOID, [Coll
 initMetadataForClass(AbstractMutableCollection, 'AbstractMutableCollection', VOID, AbstractCollection, [Collection]);
 initMetadataForClass(IteratorImpl, 'IteratorImpl');
 initMetadataForClass(AbstractMutableList, 'AbstractMutableList', VOID, AbstractMutableCollection, [KtList, Collection]);
-initMetadataForClass(AbstractMutableSet, 'AbstractMutableSet', VOID, AbstractMutableCollection, [Collection, KtSet]);
+initMetadataForClass(AbstractMutableSet, 'AbstractMutableSet', VOID, AbstractMutableCollection, [KtSet, Collection]);
 initMetadataForCompanion(Companion_1);
 initMetadataForClass(ArrayList, 'ArrayList', ArrayList_init_$Create$, AbstractMutableList, [KtList, Collection]);
-initMetadataForClass(HashSet, 'HashSet', HashSet_init_$Create$, AbstractMutableSet, [Collection, KtSet]);
+initMetadataForClass(HashSet, 'HashSet', HashSet_init_$Create$, AbstractMutableSet, [KtSet, Collection]);
 initMetadataForCompanion(Companion_2);
 initMetadataForClass(Itr, 'Itr');
 initMetadataForClass(KeysItr, 'KeysItr', VOID, Itr);
@@ -143,7 +161,7 @@ function containsAllEntries(m) {
 }
 initMetadataForInterface(InternalMap, 'InternalMap');
 initMetadataForClass(InternalHashMap, 'InternalHashMap', InternalHashMap_init_$Create$, VOID, [InternalMap]);
-initMetadataForClass(LinkedHashSet, 'LinkedHashSet', LinkedHashSet_init_$Create$, HashSet, [Collection, KtSet]);
+initMetadataForClass(LinkedHashSet, 'LinkedHashSet', LinkedHashSet_init_$Create$, HashSet, [KtSet, Collection]);
 initMetadataForClass(Exception, 'Exception', Exception_init_$Create$, Error);
 initMetadataForClass(RuntimeException, 'RuntimeException', RuntimeException_init_$Create$, Exception);
 initMetadataForClass(UnsupportedOperationException, 'UnsupportedOperationException', UnsupportedOperationException_init_$Create$, RuntimeException);
@@ -194,6 +212,7 @@ initMetadataForClass(IntProgressionIterator, 'IntProgressionIterator', VOID, Int
 initMetadataForCompanion(Companion_8);
 initMetadataForClass(OpenEndFloatRange, 'OpenEndFloatRange', VOID, VOID, [OpenEndRange]);
 initMetadataForClass(Pair, 'Pair');
+initMetadataForClass(DisplaySpectrum, 'DisplaySpectrum', DisplaySpectrum);
 initMetadataForClass(BeatClock, 'BeatClock', BeatClock);
 initMetadataForClass(FlashBudget, 'FlashBudget', FlashBudget);
 initMetadataForClass(Genre, 'Genre', VOID, Enum);
@@ -210,6 +229,10 @@ initMetadataForClass(HardstyleFrame, 'HardstyleFrame', HardstyleFrame);
 initMetadataForClass(HardstyleAudio, 'HardstyleAudio', HardstyleAudio);
 initMetadataForClass(BeatTracker, 'BeatTracker', BeatTracker);
 initMetadataForClass(HardstyleSpectrum, 'HardstyleSpectrum', HardstyleSpectrum);
+initMetadataForClass(OrbBandSpec, 'OrbBandSpec');
+initMetadataForClass(OrbLayerSpec, 'OrbLayerSpec');
+initMetadataForClass(OrbSource, 'OrbSource', VOID, Enum);
+initMetadataForClass(OrbGeometry, 'OrbGeometry', OrbGeometry);
 initMetadataForClass(PcmFft, 'PcmFft');
 initMetadataForObject(RaveLog, 'RaveLog');
 initMetadataForClass(GenreLook, 'GenreLook', GenreLook);
@@ -661,6 +684,14 @@ function abs(_this__u8e3s4) {
   return tmp;
 }
 function FunctionAdapter() {
+}
+function booleanArray(size) {
+  var tmp0 = 'BooleanArray';
+  // Inline function 'withType' call
+  var array = fillArrayVal(Array(size), false);
+  array.$type$ = tmp0;
+  // Inline function 'kotlin.js.unsafeCast' call
+  return array;
 }
 function fillArrayVal(array, initValue) {
   var inductionVariable = 0;
@@ -1835,6 +1866,15 @@ function takeHighestOneBit(_this__u8e3s4) {
     tmp = 1 << (31 - clz32(_this__u8e3s4) | 0);
   }
   return tmp;
+}
+function isFinite(_this__u8e3s4) {
+  return !isInfinite(_this__u8e3s4) && !isNaN_1(_this__u8e3s4);
+}
+function isInfinite(_this__u8e3s4) {
+  return _this__u8e3s4 === Infinity || _this__u8e3s4 === -Infinity;
+}
+function isNaN_1(_this__u8e3s4) {
+  return !(_this__u8e3s4 === _this__u8e3s4);
 }
 function Unit() {
 }
@@ -3643,6 +3683,9 @@ function collectionToArrayCommonImpl(collection) {
   }
   return destination;
 }
+function listOf_0(elements) {
+  return elements.length > 0 ? asList(elements) : emptyList();
+}
 function emptyList() {
   return EmptyList_getInstance();
 }
@@ -4392,47 +4435,158 @@ protoOf(Pair).equals = function (other) {
 function to(_this__u8e3s4, that) {
   return new Pair(_this__u8e3s4, that);
 }
-function BeatClock() {
-  this.f7_1 = -1.0;
-  this.g7_1 = new Long(0, 0);
-  this.h7_1 = false;
+function displayBandHz(band) {
+  var tmp0 = 10000.0 / 40.0;
+  // Inline function 'kotlin.math.pow' call
+  var x = band / 95;
+  return 40.0 * Math.pow(tmp0, x);
 }
-protoOf(BeatClock).i7 = function () {
-  this.f7_1 = -1.0;
-  this.g7_1 = new Long(0, 0);
-  this.h7_1 = false;
+function displayBandAt(hz) {
+  // Inline function 'kotlin.math.ln' call
+  var x = hz / 40.0;
+  var tmp = 95 * Math.log(x);
+  // Inline function 'kotlin.math.ln' call
+  var x_0 = 10000.0 / 40.0;
+  var tmp$ret$1 = Math.log(x_0);
+  return coerceIn(tmp / tmp$ret$1, 0.0, 95);
+}
+function magnitude($this, fft, bin, lastBin) {
+  var tmp;
+  if (1 <= bin ? bin <= lastBin : false) {
+    var tmp0 = fft[imul_0(bin, 2)];
+    // Inline function 'kotlin.math.hypot' call
+    var y = fft[imul_0(bin, 2) + 1 | 0];
+    tmp = hypot(tmp0, y);
+  } else {
+    tmp = 0.0;
+  }
+  return tmp;
+}
+function layout($this, sampleRate, size) {
+  $this.l7_1 = sampleRate;
+  $this.m7_1 = size;
+  var binHz = sampleRate / size;
+  var lastBin = (size / 2 | 0) - 1 | 0;
+  var tmp0 = 10000.0 / 40.0;
+  // Inline function 'kotlin.math.pow' call
+  var x = 0.5 / 95;
+  var halfWidth = Math.pow(tmp0, x);
+  var inductionVariable = 0;
+  if (inductionVariable < 96)
+    do {
+      var i = inductionVariable;
+      inductionVariable = inductionVariable + 1 | 0;
+      var hz = displayBandHz(i);
+      $this.h7_1[i] = hz / binHz;
+      // Inline function 'kotlin.math.ceil' call
+      var x_0 = hz / halfWidth / binHz;
+      var tmp$ret$1 = Math.ceil(x_0);
+      // Inline function 'kotlin.math.max' call
+      var b = numberToInt(tmp$ret$1);
+      var tmp$ret$2 = Math.max(1, b);
+      $this.i7_1[i] = tmp$ret$2;
+      // Inline function 'kotlin.math.floor' call
+      var x_1 = hz * halfWidth / binHz;
+      var tmp$ret$3 = Math.floor(x_1);
+      // Inline function 'kotlin.math.min' call
+      var b_0 = numberToInt(tmp$ret$3);
+      var tmp$ret$4 = Math.min(lastBin, b_0);
+      $this.j7_1[i] = tmp$ret$4;
+      $this.k7_1[i] = hz < sampleRate / 2.0;
+    }
+     while (inductionVariable < 96);
+}
+function DisplaySpectrum() {
+  this.f7_1 = new Float32Array(96);
+  this.g7_1 = 0;
+  this.h7_1 = new Float32Array(96);
+  this.i7_1 = new Int32Array(96);
+  this.j7_1 = new Int32Array(96);
+  this.k7_1 = booleanArray(96);
+  this.l7_1 = 0;
+  this.m7_1 = 0;
+}
+protoOf(DisplaySpectrum).n7 = function () {
+  fill_0(this.f7_1, 0.0);
+  this.g7_1 = this.g7_1 + 1 | 0;
 };
-protoOf(BeatClock).j7 = function (f, now, leadMs, halfTime, decayMs) {
-  var beatP = f.g8_1;
-  this.h7_1 = (f.h8_1 >= 3 && beatP > 0.0 && compare(f.f8_1, new Long(0, 0)) > 0 && toNumber(subtract(now, f.f8_1)) < beatP * 1.6);
-  if (!this.h7_1) {
-    this.f7_1 = -1.0;
+protoOf(DisplaySpectrum).o7 = function (fft, sampleRate) {
+  if (sampleRate <= 0 || fft.length < 4)
+    return Unit_instance;
+  if (!(sampleRate === this.l7_1) || !(fft.length === this.m7_1)) {
+    layout(this, sampleRate, fft.length);
+  }
+  var lastBin = (fft.length / 2 | 0) - 1 | 0;
+  var inductionVariable = 0;
+  if (inductionVariable < 96)
+    $l$loop: do {
+      var i = inductionVariable;
+      inductionVariable = inductionVariable + 1 | 0;
+      if (!this.k7_1[i]) {
+        this.f7_1[i] = 0.0;
+        continue $l$loop;
+      }
+      var lower = numberToInt(this.h7_1[i]);
+      var fraction = this.h7_1[i] - lower;
+      var value = magnitude(this, fft, lower, lastBin) * (1.0 - fraction) + magnitude(this, fft, lower + 1 | 0, lastBin) * fraction;
+      var inductionVariable_0 = this.i7_1[i];
+      var last = this.j7_1[i];
+      if (inductionVariable_0 <= last)
+        do {
+          var bin = inductionVariable_0;
+          inductionVariable_0 = inductionVariable_0 + 1 | 0;
+          var tmp0 = value;
+          // Inline function 'kotlin.math.max' call
+          var b = magnitude(this, fft, bin, lastBin);
+          value = Math.max(tmp0, b);
+        }
+         while (!(bin === last));
+      this.f7_1[i] = value;
+    }
+     while (inductionVariable < 96);
+  this.g7_1 = this.g7_1 + 1 | 0;
+};
+function BeatClock() {
+  this.p7_1 = -1.0;
+  this.q7_1 = new Long(0, 0);
+  this.r7_1 = false;
+}
+protoOf(BeatClock).n7 = function () {
+  this.p7_1 = -1.0;
+  this.q7_1 = new Long(0, 0);
+  this.r7_1 = false;
+};
+protoOf(BeatClock).s7 = function (f, now, leadMs, halfTime, decayMs) {
+  var beatP = f.p8_1;
+  this.r7_1 = (f.q8_1 >= 3 && beatP > 0.0 && compare(f.o8_1, new Long(0, 0)) > 0 && toNumber(subtract(now, f.o8_1)) < beatP * 1.6);
+  if (!this.r7_1) {
+    this.p7_1 = -1.0;
     return null;
   }
   var p = halfTime ? beatP * 2.0 : beatP;
-  var anchor = halfTime ? subtract(f.f8_1, multiply(numberToLong(f.e8_1 % 2 | 0), numberToLong(beatP))) : f.f8_1;
+  var anchor = halfTime ? subtract(f.o8_1, multiply(numberToLong(f.n8_1 % 2 | 0), numberToLong(beatP))) : f.o8_1;
   // Inline function 'kotlin.Long.plus' call
   var since = ((toNumber(now) + leadMs - toNumber(anchor)) % p + p) % p;
-  if (this.f7_1 >= 0.0 && since < this.f7_1 && toNumber(subtract(now, this.g7_1)) > p * 0.6)
-    this.g7_1 = now;
-  this.f7_1 = since;
+  if (this.p7_1 >= 0.0 && since < this.p7_1 && toNumber(subtract(now, this.q7_1)) > p * 0.6)
+    this.q7_1 = now;
+  this.p7_1 = since;
   // Inline function 'kotlin.Long.div' call
-  var this_0 = negate(subtract(now, this.g7_1));
+  var this_0 = negate(subtract(now, this.q7_1));
   // Inline function 'kotlin.math.exp' call
   var x = toNumber(this_0) / decayMs;
   return Math.exp(x);
 };
-protoOf(BeatClock).n8 = function (f, now, leadMs, halfTime, decayMs, $super) {
+protoOf(BeatClock).w8 = function (f, now, leadMs, halfTime, decayMs, $super) {
   leadMs = leadMs === VOID ? 70.0 : leadMs;
   halfTime = halfTime === VOID ? false : halfTime;
   decayMs = decayMs === VOID ? 85.0 : decayMs;
-  return $super === VOID ? this.j7(f, now, leadMs, halfTime, decayMs) : $super.j7.call(this, f, now, leadMs, halfTime, decayMs);
+  return $super === VOID ? this.s7(f, now, leadMs, halfTime, decayMs) : $super.s7.call(this, f, now, leadMs, halfTime, decayMs);
 };
 function FlashBudget() {
-  this.o8_1 = longArray(3);
+  this.x8_1 = longArray(3);
 }
-protoOf(FlashBudget).p8 = function (now) {
-  var tmp0 = this.o8_1;
+protoOf(FlashBudget).y8 = function (now) {
+  var tmp0 = this.x8_1;
   var tmp$ret$0;
   $l$block: {
     // Inline function 'kotlin.collections.any' call
@@ -4450,7 +4604,7 @@ protoOf(FlashBudget).p8 = function (now) {
   }
   if (tmp$ret$0)
     return false;
-  var tmp0_0 = get_indices_0(this.o8_1);
+  var tmp0_0 = get_indices_0(this.x8_1);
   var tmp$ret$2;
   $l$block_0: {
     // Inline function 'kotlin.collections.minBy' call
@@ -4463,10 +4617,10 @@ protoOf(FlashBudget).p8 = function (now) {
       break $l$block_0;
     }
     var it = minElem;
-    var minValue = this.o8_1[it];
+    var minValue = this.x8_1[it];
     do {
       var e = iterator.l();
-      var v = this.o8_1[e];
+      var v = this.x8_1[e];
       if (compareTo(minValue, v) > 0) {
         minElem = e;
         minValue = v;
@@ -4476,15 +4630,15 @@ protoOf(FlashBudget).p8 = function (now) {
     tmp$ret$2 = minElem;
   }
   var oldest = tmp$ret$2;
-  if (compare(subtract(now, this.o8_1[oldest]), new Long(1000, 0)) < 0)
+  if (compare(subtract(now, this.x8_1[oldest]), new Long(1000, 0)) < 0)
     return false;
-  this.o8_1[oldest] = now;
+  this.x8_1[oldest] = now;
   return true;
 };
-protoOf(FlashBudget).q8 = function (now) {
+protoOf(FlashBudget).z8 = function (now) {
   // Inline function 'kotlin.collections.count' call
   var count = 0;
-  var indexedObject = this.o8_1;
+  var indexedObject = this.x8_1;
   var inductionVariable = 0;
   var last = indexedObject.length;
   while (inductionVariable < last) {
@@ -4536,28 +4690,28 @@ function get_entries() {
 var $ENTRIES;
 function Genre(name, ordinal, label) {
   Enum.call(this, name, ordinal);
-  this.t8_1 = label;
+  this.c9_1 = label;
 }
 function PartyProfile(spike, particles, shake, strobe, density, softness) {
   density = density === VOID ? 1.0 : density;
   softness = softness === VOID ? 1.0 : softness;
-  this.u8_1 = spike;
-  this.v8_1 = particles;
-  this.w8_1 = shake;
-  this.x8_1 = strobe;
-  this.y8_1 = density;
-  this.z8_1 = softness;
+  this.d9_1 = spike;
+  this.e9_1 = particles;
+  this.f9_1 = shake;
+  this.g9_1 = strobe;
+  this.h9_1 = density;
+  this.i9_1 = softness;
 }
 protoOf(PartyProfile).toString = function () {
-  return 'PartyProfile(spike=' + this.u8_1 + ', particles=' + this.v8_1 + ', shake=' + this.w8_1 + ', strobe=' + this.x8_1 + ', density=' + this.y8_1 + ', softness=' + this.z8_1 + ')';
+  return 'PartyProfile(spike=' + this.d9_1 + ', particles=' + this.e9_1 + ', shake=' + this.f9_1 + ', strobe=' + this.g9_1 + ', density=' + this.h9_1 + ', softness=' + this.i9_1 + ')';
 };
 protoOf(PartyProfile).hashCode = function () {
-  var result = getNumberHashCode(this.u8_1);
-  result = imul_0(result, 31) + getNumberHashCode(this.v8_1) | 0;
-  result = imul_0(result, 31) + getNumberHashCode(this.w8_1) | 0;
-  result = imul_0(result, 31) + getNumberHashCode(this.x8_1) | 0;
-  result = imul_0(result, 31) + getNumberHashCode(this.y8_1) | 0;
-  result = imul_0(result, 31) + getNumberHashCode(this.z8_1) | 0;
+  var result = getNumberHashCode(this.d9_1);
+  result = imul_0(result, 31) + getNumberHashCode(this.e9_1) | 0;
+  result = imul_0(result, 31) + getNumberHashCode(this.f9_1) | 0;
+  result = imul_0(result, 31) + getNumberHashCode(this.g9_1) | 0;
+  result = imul_0(result, 31) + getNumberHashCode(this.h9_1) | 0;
+  result = imul_0(result, 31) + getNumberHashCode(this.i9_1) | 0;
   return result;
 };
 protoOf(PartyProfile).equals = function (other) {
@@ -4565,17 +4719,17 @@ protoOf(PartyProfile).equals = function (other) {
     return true;
   if (!(other instanceof PartyProfile))
     return false;
-  if (!equals(this.u8_1, other.u8_1))
+  if (!equals(this.d9_1, other.d9_1))
     return false;
-  if (!equals(this.v8_1, other.v8_1))
+  if (!equals(this.e9_1, other.e9_1))
     return false;
-  if (!equals(this.w8_1, other.w8_1))
+  if (!equals(this.f9_1, other.f9_1))
     return false;
-  if (!equals(this.x8_1, other.x8_1))
+  if (!equals(this.g9_1, other.g9_1))
     return false;
-  if (!equals(this.y8_1, other.y8_1))
+  if (!equals(this.h9_1, other.h9_1))
     return false;
-  if (!equals(this.z8_1, other.z8_1))
+  if (!equals(this.i9_1, other.i9_1))
     return false;
   return true;
 };
@@ -4617,45 +4771,45 @@ function shape(_this__u8e3s4, f) {
       tmp = f;
       break;
     case 1:
-      var strong = coerceIn_0((f.k7_1 - 0.6) / 0.3, 0.0, 1.0) * coerceAtMost_0(0.5 + f.x7_1, 1.0);
-      var tmp1_kick = f.l7_1 * strong;
+      var strong = coerceIn((f.t7_1 - 0.6) / 0.3, 0.0, 1.0) * coerceAtMost_0(0.5 + f.g8_1, 1.0);
+      var tmp1_kick = f.u7_1 * strong;
       var tmp2_heavy = strong * strong * 0.6;
-      var tmp3_bass = f.k7_1 * 0.9;
-      var tmp4_grit = f.x7_1 > 0.55 && strong > 0.6 ? 1.0 : 0.0;
-      tmp = f.a9(tmp3_bass, tmp1_kick, VOID, VOID, VOID, VOID, VOID, VOID, tmp2_heavy, tmp4_grit);
+      var tmp3_bass = f.t7_1 * 0.9;
+      var tmp4_grit = f.g8_1 > 0.55 && strong > 0.6 ? 1.0 : 0.0;
+      tmp = f.j9(tmp3_bass, tmp1_kick, VOID, VOID, VOID, VOID, VOID, VOID, tmp2_heavy, tmp4_grit);
       break;
     case 2:
-      var tmp0 = f.v7_1;
+      var tmp0 = f.e8_1;
       // Inline function 'kotlin.math.max' call
 
-      var b = f.l7_1 * 0.6;
+      var b = f.u7_1 * 0.6;
       var tmp5_kick = Math.max(tmp0, b);
-      var tmp6_heavy = coerceAtMost_0(f.v7_1 * 0.6 + f.t7_1 * 0.4, 1.0);
-      var tmp0_0 = f.k7_1 * 0.7;
+      var tmp6_heavy = coerceAtMost_0(f.e8_1 * 0.6 + f.c8_1 * 0.4, 1.0);
+      var tmp0_0 = f.t7_1 * 0.7;
       // Inline function 'kotlin.math.max' call
 
-      var b_0 = f.v7_1;
+      var b_0 = f.e8_1;
       var tmp7_bass = Math.max(tmp0_0, b_0);
-      var tmp8_grit = f.v7_1 > 0.7 ? 1.0 : 0.0;
-      tmp = f.a9(tmp7_bass, tmp5_kick, VOID, VOID, VOID, VOID, VOID, VOID, tmp6_heavy, tmp8_grit);
+      var tmp8_grit = f.e8_1 > 0.7 ? 1.0 : 0.0;
+      tmp = f.j9(tmp7_bass, tmp5_kick, VOID, VOID, VOID, VOID, VOID, VOID, tmp6_heavy, tmp8_grit);
       break;
     case 3:
-      var tmp0_1 = f.s7_1;
+      var tmp0_1 = f.b8_1;
       // Inline function 'kotlin.math.max' call
 
-      var b_1 = f.n7_1 * 0.6 * f.l7_1;
+      var b_1 = f.w7_1 * 0.6 * f.u7_1;
       var tmp$ret$2 = Math.max(tmp0_1, b_1);
-      tmp = f.a9(VOID, VOID, VOID, VOID, VOID, VOID, VOID, VOID, tmp$ret$2, f.s7_1 > 0.3 ? 1.0 : 0.0);
+      tmp = f.j9(VOID, VOID, VOID, VOID, VOID, VOID, VOID, VOID, tmp$ret$2, f.b8_1 > 0.3 ? 1.0 : 0.0);
       break;
     case 4:
-      var tmp9_kick = f.l7_1 * 0.5;
-      tmp = f.a9(VOID, tmp9_kick, VOID, VOID, VOID, VOID, VOID, VOID, 0.0, 0.0);
+      var tmp9_kick = f.u7_1 * 0.5;
+      tmp = f.j9(VOID, tmp9_kick, VOID, VOID, VOID, VOID, VOID, VOID, 0.0, 0.0);
       break;
     case 5:
     case 6:
     case 7:
-      var tmp10_kick = f.l7_1 * 0.6;
-      tmp = f.a9(VOID, tmp10_kick, VOID, VOID, VOID, VOID, VOID, VOID, 0.0, 0.0);
+      var tmp10_kick = f.u7_1 * 0.6;
+      tmp = f.j9(VOID, tmp10_kick, VOID, VOID, VOID, VOID, VOID, VOID, 0.0, 0.0);
       break;
     default:
       noWhenBranchMatchedException();
@@ -4665,7 +4819,7 @@ function shape(_this__u8e3s4, f) {
 }
 function blendFrames(a, b, t) {
   _init_properties_GenreDetector_kt__z0odbr();
-  return b.a9(blendFrames$l(t, a.k7_1, b.k7_1), blendFrames$l(t, a.l7_1, b.l7_1), VOID, VOID, VOID, VOID, VOID, VOID, blendFrames$l(t, a.s7_1, b.s7_1), blendFrames$l(t, a.t7_1, b.t7_1));
+  return b.j9(blendFrames$l(t, a.t7_1, b.t7_1), blendFrames$l(t, a.u7_1, b.u7_1), VOID, VOID, VOID, VOID, VOID, VOID, blendFrames$l(t, a.b8_1, b.b8_1), blendFrames$l(t, a.c8_1, b.c8_1));
 }
 function vibeTarget(_this__u8e3s4) {
   _init_properties_GenreDetector_kt__z0odbr();
@@ -4697,11 +4851,11 @@ function vibeTarget(_this__u8e3s4) {
 }
 function hardWeight(v) {
   _init_properties_GenreDetector_kt__z0odbr();
-  return coerceIn_0((v - 0.5) / 0.5, 0.0, 1.0);
+  return coerceIn((v - 0.5) / 0.5, 0.0, 1.0);
 }
 function structureWeight(v) {
   _init_properties_GenreDetector_kt__z0odbr();
-  return coerceIn_0((v - 0.25) / 0.25, 0.0, 1.0);
+  return coerceIn((v - 0.25) / 0.25, 0.0, 1.0);
 }
 function lerpF(a, b, t) {
   _init_properties_GenreDetector_kt__z0odbr();
@@ -4709,31 +4863,31 @@ function lerpF(a, b, t) {
 }
 function lerpProfile(a, b, t) {
   _init_properties_GenreDetector_kt__z0odbr();
-  return new PartyProfile(lerpF(a.u8_1, b.u8_1, t), lerpF(a.v8_1, b.v8_1, t), lerpF(a.w8_1, b.w8_1, t), lerpF(a.x8_1, b.x8_1, t), lerpF(a.y8_1, b.y8_1, t), lerpF(a.z8_1, b.z8_1, t));
+  return new PartyProfile(lerpF(a.d9_1, b.d9_1, t), lerpF(a.e9_1, b.e9_1, t), lerpF(a.f9_1, b.f9_1, t), lerpF(a.g9_1, b.g9_1, t), lerpF(a.h9_1, b.h9_1, t), lerpF(a.i9_1, b.i9_1, t));
 }
 function hardFusion(f, rockness) {
   _init_properties_GenreDetector_kt__z0odbr();
   var rock = shape(Genre_ROCK_getInstance(), f);
   var edm = shape(Genre_EDM_getInstance(), f);
-  var tmp0 = f.l7_1;
+  var tmp0 = f.u7_1;
   // Inline function 'kotlin.math.max' call
-  var b = rock.l7_1;
+  var b = rock.u7_1;
   var tmp0_kick = Math.max(tmp0, b);
-  var tmp0_0 = f.s7_1;
-  var tmp2 = rock.s7_1;
+  var tmp0_0 = f.b8_1;
+  var tmp2 = rock.b8_1;
   // Inline function 'kotlin.comparisons.maxOf' call
-  var c = edm.s7_1;
+  var c = edm.b8_1;
   var tmp1_heavy = Math.max(tmp0_0, tmp2, c);
-  var tmp0_1 = f.k7_1;
+  var tmp0_1 = f.t7_1;
   // Inline function 'kotlin.math.max' call
-  var b_0 = rock.k7_1;
+  var b_0 = rock.t7_1;
   var tmp2_bass = Math.max(tmp0_1, b_0);
-  var tmp0_2 = f.t7_1;
-  var tmp2_0 = rock.t7_1;
+  var tmp0_2 = f.c8_1;
+  var tmp2_0 = rock.c8_1;
   // Inline function 'kotlin.comparisons.maxOf' call
-  var c_0 = edm.t7_1;
+  var c_0 = edm.c8_1;
   var tmp3_grit = Math.max(tmp0_2, tmp2_0, c_0);
-  return f.a9(tmp2_bass, tmp0_kick, VOID, VOID, VOID, VOID, VOID, VOID, tmp1_heavy, tmp3_grit);
+  return f.j9(tmp2_bass, tmp0_kick, VOID, VOID, VOID, VOID, VOID, VOID, tmp1_heavy, tmp3_grit);
 }
 function vibeShape(f, v, rockness) {
   _init_properties_GenreDetector_kt__z0odbr();
@@ -4745,8 +4899,8 @@ function vibeShape(f, v, rockness) {
   } else {
     var h = hardWeight(v);
     var fused = hardFusion(f, rockness);
-    var scaled = fused.a9(VOID, fused.l7_1 * (0.7 + 0.3 * h), VOID, VOID, VOID, VOID, VOID, VOID, fused.s7_1 * (0.6 + 0.4 * h), fused.t7_1 * (0.8 + 0.2 * h));
-    tmp = blendFrames(shape(Genre_EDM_getInstance(), f), scaled, coerceIn_0((v - 0.5) / 0.15, 0.0, 1.0));
+    var scaled = fused.j9(VOID, fused.u7_1 * (0.7 + 0.3 * h), VOID, VOID, VOID, VOID, VOID, VOID, fused.b8_1 * (0.6 + 0.4 * h), fused.c8_1 * (0.8 + 0.2 * h));
+    tmp = blendFrames(shape(Genre_EDM_getInstance(), f), scaled, coerceIn((v - 0.5) / 0.15, 0.0, 1.0));
   }
   return tmp;
 }
@@ -4754,21 +4908,21 @@ function vibeProfile(v, rockness) {
   _init_properties_GenreDetector_kt__z0odbr();
   var hs = profile(Genre_HARDSTYLE_getInstance());
   var rk = profile(Genre_ROCK_getInstance());
-  var tmp0 = hs.u8_1;
+  var tmp0 = hs.d9_1;
   // Inline function 'kotlin.math.max' call
-  var b = rk.u8_1;
+  var b = rk.d9_1;
   var tmp = Math.max(tmp0, b);
-  var tmp0_0 = hs.v8_1;
+  var tmp0_0 = hs.e9_1;
   // Inline function 'kotlin.math.max' call
-  var b_0 = rk.v8_1;
+  var b_0 = rk.e9_1;
   var tmp_0 = Math.max(tmp0_0, b_0);
-  var tmp0_1 = hs.w8_1;
+  var tmp0_1 = hs.f9_1;
   // Inline function 'kotlin.math.max' call
-  var b_1 = rk.w8_1;
+  var b_1 = rk.f9_1;
   var tmp_1 = Math.max(tmp0_1, b_1);
-  var tmp0_2 = hs.x8_1;
+  var tmp0_2 = hs.g9_1;
   // Inline function 'kotlin.math.max' call
-  var b_2 = rk.x8_1;
+  var b_2 = rk.g9_1;
   var tmp$ret$3 = Math.max(tmp0_2, b_2);
   var hard = new PartyProfile(tmp, tmp_0, tmp_1, tmp$ret$3);
   return v <= 0.25 ? lerpProfile(profile(Genre_STANDARD_getInstance()), profile(Genre_RAP_getInstance()), v / 0.25) : v <= 0.5 ? lerpProfile(profile(Genre_RAP_getInstance()), profile(Genre_EDM_getInstance()), (v - 0.25) / 0.25) : lerpProfile(profile(Genre_EDM_getInstance()), hard, hardWeight(v));
@@ -4794,30 +4948,30 @@ function genreFromApple(name) {
   return contains_1(g, 'hardstyle') || contains_1(g, 'hardcore') || contains_1(g, 'hard dance') ? Genre_HARDSTYLE_getInstance() : contains_1(g, 'reggaeton') || contains_1(g, 'urbano') || contains_1(g, 'latin urban') || contains_1(g, 'dembow') ? Genre_REGGAETON_getInstance() : contains_1(g, 'reggae') || contains_1(g, 'dancehall') || g === 'ska' || g === 'dub' ? Genre_REGGAE_getInstance() : contains_1(g, 'hip-hop') || contains_1(g, 'hip hop') || contains_1(g, 'rap') || contains_1(g, 'trap') || contains_1(g, 'drill') ? Genre_RAP_getInstance() : contains_1(g, 'metal') || contains_1(g, 'rock') || contains_1(g, 'punk') || contains_1(g, 'alternative') || contains_1(g, 'grunge') ? Genre_ROCK_getInstance() : contains_1(g, 'dance') || contains_1(g, 'electro') || contains_1(g, 'house') || contains_1(g, 'techno') || contains_1(g, 'trance') || contains_1(g, 'edm') || contains_1(g, 'dubstep') || contains_1(g, 'drum') ? Genre_EDM_getInstance() : contains_1(g, 'pop') || contains_1(g, 'r&b') || contains_1(g, 'soul') ? Genre_POP_getInstance() : contains_1(g, 'singer') || contains_1(g, 'country') || contains_1(g, 'folk') || contains_1(g, 'jazz') || contains_1(g, 'classical') || contains_1(g, 'klassisk') || contains_1(g, 'acoustic') || contains_1(g, 'soundtrack') ? Genre_STANDARD_getInstance() : null;
 }
 function announce($this, now) {
-  $this.e9_1 = now;
-  $this.f9_1 = true;
+  $this.n9_1 = now;
+  $this.o9_1 = true;
 }
 function updateRockness($this, f, dt) {
   var tmp;
-  if ($this.fa_1 || equals($this.g9_1, Genre_HARDSTYLE_getInstance()) || equals($this.h9_1, Genre_RAP_getInstance()) || contains_0(get_CALM_LOCK(), $this.h9_1) || equals($this.h9_1, Genre_STANDARD_getInstance())) {
+  if ($this.oa_1 || equals($this.p9_1, Genre_HARDSTYLE_getInstance()) || equals($this.q9_1, Genre_RAP_getInstance()) || contains_0(get_CALM_LOCK(), $this.q9_1) || equals($this.q9_1, Genre_STANDARD_getInstance())) {
     tmp = 0.0;
   } else {
     var tmp_0;
-    var containsArg = f.u7_1;
+    var containsArg = f.d8_1;
     if (138.0 <= containsArg ? containsArg <= 250.0 : false) {
-      tmp_0 = $this.z9_1 > 2.2;
+      tmp_0 = $this.ia_1 > 2.2;
     } else {
       tmp_0 = false;
     }
     if (tmp_0) {
       tmp = 0.0;
     } else {
-      var fewKicks = coerceIn_0((2.5 - $this.z9_1) / 0.8, 0.0, 1.0);
-      var snares = coerceIn_0(($this.aa_1 - 0.6) / 1.0, 0.0, 1.0);
-      var lowSub = 1.0 - 0.5 * coerceIn_0(($this.y9_1 - 0.5) / 0.15, 0.0, 1.0);
+      var fewKicks = coerceIn((2.5 - $this.ia_1) / 0.8, 0.0, 1.0);
+      var snares = coerceIn(($this.ja_1 - 0.6) / 1.0, 0.0, 1.0);
+      var lowSub = 1.0 - 0.5 * coerceIn(($this.ha_1 - 0.5) / 0.15, 0.0, 1.0);
       var sound = fewKicks * (0.4 + 0.6 * snares) * lowSub;
       var tmp_1;
-      if (equals($this.g9_1, Genre_ROCK_getInstance())) {
+      if (equals($this.p9_1, Genre_ROCK_getInstance())) {
         // Inline function 'kotlin.math.max' call
         tmp_1 = Math.max(sound, 0.7);
       } else {
@@ -4827,103 +4981,103 @@ function updateRockness($this, f, dt) {
     }
   }
   var target = tmp;
-  if ($this.fa_1 || equals($this.g9_1, Genre_HARDSTYLE_getInstance()) || equals($this.h9_1, Genre_RAP_getInstance()) || contains_0(get_CALM_LOCK(), $this.h9_1) || equals($this.h9_1, Genre_STANDARD_getInstance()))
-    $this.ga_1 = 0.0;
-  else if (f.n7_1 > 0.4) {
+  if ($this.oa_1 || equals($this.p9_1, Genre_HARDSTYLE_getInstance()) || equals($this.q9_1, Genre_RAP_getInstance()) || contains_0(get_CALM_LOCK(), $this.q9_1) || equals($this.q9_1, Genre_STANDARD_getInstance()))
+    $this.pa_1 = 0.0;
+  else if (f.w7_1 > 0.4) {
     var tmp_2 = $this;
-    var tmp_3 = $this.ga_1;
-    var tmp_4 = target - $this.ga_1;
+    var tmp_3 = $this.pa_1;
+    var tmp_4 = target - $this.pa_1;
     // Inline function 'kotlin.math.exp' call
     var x = -dt / 4.0;
-    tmp_2.ga_1 = tmp_3 + tmp_4 * (1.0 - Math.exp(x));
+    tmp_2.pa_1 = tmp_3 + tmp_4 * (1.0 - Math.exp(x));
   }
 }
 function audioGuess($this, bpm) {
-  return $this.x9_1 > 0.25 && $this.z9_1 >= 2.3 && (138.0 <= bpm ? bpm <= 250.0 : false) ? Genre_HARDSTYLE_getInstance() : $this.x9_1 > 0.2 && $this.y9_1 > 0.53 && $this.z9_1 > 2.3 && (138.0 <= bpm ? bpm <= 250.0 : false) ? Genre_HARDSTYLE_getInstance() : $this.b9_1.equals(Genre_HARDSTYLE_getInstance()) && compare($this.d9_1, $this.t9_1) >= 0 && $this.x9_1 > 0.12 && $this.z9_1 >= 2.0 ? Genre_HARDSTYLE_getInstance() : $this.x9_1 > 0.2 && $this.z9_1 < 2.2 && $this.y9_1 < 0.5 && $this.aa_1 > 1.2 ? Genre_ROCK_getInstance() : $this.y9_1 > 0.6 && $this.x9_1 < 0.15 && (bpm < 110.0 || $this.z9_1 < 2.0) ? Genre_RAP_getInstance() : (118.0 <= bpm ? bpm <= 136.0 : false) && $this.z9_1 >= 1.8 && $this.x9_1 < 0.2 ? Genre_EDM_getInstance() : Genre_STANDARD_getInstance();
+  return $this.ga_1 > 0.25 && $this.ia_1 >= 2.3 && (138.0 <= bpm ? bpm <= 250.0 : false) ? Genre_HARDSTYLE_getInstance() : $this.ga_1 > 0.2 && $this.ha_1 > 0.53 && $this.ia_1 > 2.3 && (138.0 <= bpm ? bpm <= 250.0 : false) ? Genre_HARDSTYLE_getInstance() : $this.k9_1.equals(Genre_HARDSTYLE_getInstance()) && compare($this.m9_1, $this.ca_1) >= 0 && $this.ga_1 > 0.12 && $this.ia_1 >= 2.0 ? Genre_HARDSTYLE_getInstance() : $this.ga_1 > 0.2 && $this.ia_1 < 2.2 && $this.ha_1 < 0.5 && $this.ja_1 > 1.2 ? Genre_ROCK_getInstance() : $this.ha_1 > 0.6 && $this.ga_1 < 0.15 && (bpm < 110.0 || $this.ia_1 < 2.0) ? Genre_RAP_getInstance() : (118.0 <= bpm ? bpm <= 136.0 : false) && $this.ia_1 >= 1.8 && $this.ga_1 < 0.2 ? Genre_EDM_getInstance() : Genre_STANDARD_getInstance();
 }
 function commit($this, g, now, why) {
-  if (g.equals($this.b9_1))
+  if (g.equals($this.k9_1))
     return Unit_instance;
-  $this.c9_1 = $this.b9_1;
-  $this.b9_1 = g;
-  $this.d9_1 = now;
-  $this.v9_1 = g;
-  $this.w9_1 = now;
-  $this.e9_1 = now;
-  $this.j9_1 = why;
+  $this.l9_1 = $this.k9_1;
+  $this.k9_1 = g;
+  $this.m9_1 = now;
+  $this.ea_1 = g;
+  $this.fa_1 = now;
+  $this.n9_1 = now;
+  $this.s9_1 = why;
   if (g.equals(Genre_HARDSTYLE_getInstance()) && !(why === 'valgt'))
-    $this.fa_1 = true;
-  RaveLog_getInstance().ia('RaveGenre', fmt('\u2192 ' + g.t8_1 + ' (' + why + ') apple=' + $this.s9_1 + ' grit=%.2f sub=%.2f kick/s=%.2f snare/s=%.2f', [$this.x9_1, $this.y9_1, $this.z9_1, $this.aa_1]));
+    $this.oa_1 = true;
+  RaveLog_getInstance().ra('RaveGenre', fmt('\u2192 ' + g.c9_1 + ' (' + why + ') apple=' + $this.ba_1 + ' grit=%.2f sub=%.2f kick/s=%.2f snare/s=%.2f', [$this.ga_1, $this.ha_1, $this.ia_1, $this.ja_1]));
 }
 function update$avg(decay, old, v) {
   return old * decay + v * (1.0 - decay);
 }
 function GenreDetector() {
-  this.b9_1 = Genre_HARDSTYLE_getInstance();
-  this.c9_1 = Genre_HARDSTYLE_getInstance();
-  this.d9_1 = new Long(0, 0);
-  this.e9_1 = new Long(0, 0);
-  this.f9_1 = false;
-  this.g9_1 = null;
-  this.h9_1 = null;
-  this.i9_1 = false;
-  this.j9_1 = '';
-  this.k9_1 = 0.0;
-  this.l9_1 = 0.0;
-  this.m9_1 = 0.0;
-  this.n9_1 = 0.0;
-  this.o9_1 = new Float32Array(get_entries().q());
+  this.k9_1 = Genre_HARDSTYLE_getInstance();
+  this.l9_1 = Genre_HARDSTYLE_getInstance();
+  this.m9_1 = new Long(0, 0);
+  this.n9_1 = new Long(0, 0);
+  this.o9_1 = false;
   this.p9_1 = null;
   this.q9_1 = null;
-  this.r9_1 = null;
-  this.s9_1 = null;
-  this.t9_1 = new Long(0, 0);
-  this.u9_1 = new Long(0, 0);
-  this.v9_1 = Genre_HARDSTYLE_getInstance();
-  this.w9_1 = new Long(0, 0);
-  this.x9_1 = 0.0;
-  this.y9_1 = 0.0;
-  this.z9_1 = 0.0;
-  this.aa_1 = 0.0;
-  this.ba_1 = 0.0;
-  this.ca_1 = 0.0;
+  this.r9_1 = false;
+  this.s9_1 = '';
+  this.t9_1 = 0.0;
+  this.u9_1 = 0.0;
+  this.v9_1 = 0.0;
+  this.w9_1 = 0.0;
+  this.x9_1 = new Float32Array(get_entries().q());
+  this.y9_1 = null;
+  this.z9_1 = null;
+  this.aa_1 = null;
+  this.ba_1 = null;
+  this.ca_1 = new Long(0, 0);
   this.da_1 = new Long(0, 0);
-  this.ea_1 = new Long(0, 0);
-  this.fa_1 = false;
-  this.ga_1 = 0.1;
+  this.ea_1 = Genre_HARDSTYLE_getInstance();
+  this.fa_1 = new Long(0, 0);
+  this.ga_1 = 0.0;
+  this.ha_1 = 0.0;
+  this.ia_1 = 0.0;
+  this.ja_1 = 0.0;
+  this.ka_1 = 0.0;
+  this.la_1 = 0.0;
+  this.ma_1 = new Long(0, 0);
+  this.na_1 = new Long(0, 0);
+  this.oa_1 = false;
+  this.pa_1 = 0.1;
 }
-protoOf(GenreDetector).ja = function () {
-  return this.fa_1 && this.h9_1 == null;
+protoOf(GenreDetector).sa = function () {
+  return this.oa_1 && this.q9_1 == null;
 };
-protoOf(GenreDetector).ka = function (now) {
-  this.g9_1 = null;
-  this.s9_1 = null;
-  this.t9_1 = now;
-  this.f9_1 = false;
-  this.fa_1 = false;
-  this.h9_1 = null;
-  this.i9_1 = false;
-  this.ea_1 = new Long(0, 0);
-  fill_0(this.o9_1, 0.0);
-  this.j9_1 = '';
+protoOf(GenreDetector).ta = function (now) {
+  this.p9_1 = null;
+  this.ba_1 = null;
+  this.ca_1 = now;
+  this.o9_1 = false;
+  this.oa_1 = false;
   this.q9_1 = null;
-  this.r9_1 = null;
-  this.k9_1 = 0.0;
-  this.l9_1 = 0.0;
-  this.m9_1 = 0.0;
-  this.n9_1 = 0.0;
-  this.ga_1 = 0.1;
-  if (!this.b9_1.equals(Genre_STANDARD_getInstance())) {
-    this.c9_1 = this.b9_1;
-    this.b9_1 = Genre_STANDARD_getInstance();
-    this.d9_1 = now;
+  this.r9_1 = false;
+  this.na_1 = new Long(0, 0);
+  fill_0(this.x9_1, 0.0);
+  this.s9_1 = '';
+  this.z9_1 = null;
+  this.aa_1 = null;
+  this.t9_1 = 0.0;
+  this.u9_1 = 0.0;
+  this.v9_1 = 0.0;
+  this.w9_1 = 0.0;
+  this.pa_1 = 0.1;
+  if (!this.k9_1.equals(Genre_STANDARD_getInstance())) {
+    this.l9_1 = this.k9_1;
+    this.k9_1 = Genre_STANDARD_getInstance();
+    this.m9_1 = now;
   }
-  this.v9_1 = this.b9_1;
-  this.w9_1 = now;
+  this.ea_1 = this.k9_1;
+  this.fa_1 = now;
 };
-protoOf(GenreDetector).la = function (appleGenre, appleExact, deezerGenres, chosen, now) {
-  this.i9_1 = true;
-  this.s9_1 = appleGenre;
+protoOf(GenreDetector).ua = function (appleGenre, appleExact, deezerGenres, chosen, now) {
+  this.r9_1 = true;
+  this.ba_1 = appleGenre;
   var a = genreFromApple(appleGenre);
   var tmp$ret$0;
   $l$block: {
@@ -4956,7 +5110,7 @@ protoOf(GenreDetector).la = function (appleGenre, appleExact, deezerGenres, chos
   var tmp0_elvis_lhs = tmp$ret$2;
   var deezerName = tmp0_elvis_lhs == null ? firstOrNull(deezerGenres) : tmp0_elvis_lhs;
   var tmp = this;
-  tmp.g9_1 = a == null ? d : a;
+  tmp.p9_1 = a == null ? d : a;
   var danceGenres = setOf_0([Genre_EDM_getInstance(), Genre_HARDSTYLE_getInstance()]);
   var tmp_0;
   if (contains_0(danceGenres, a)) {
@@ -4989,11 +5143,11 @@ protoOf(GenreDetector).la = function (appleGenre, appleExact, deezerGenres, chos
   }
   var dance = tmp_0;
   var tmp_2;
-  if (!((chosen == null ? this.r9_1 : chosen) == null)) {
-    tmp_2 = to(ensureNotNull(chosen == null ? this.r9_1 : chosen), 'du');
+  if (!((chosen == null ? this.aa_1 : chosen) == null)) {
+    tmp_2 = to(ensureNotNull(chosen == null ? this.aa_1 : chosen), 'du');
   } else {
-    if (!(this.q9_1 == null)) {
-      tmp_2 = to(ensureNotNull(this.q9_1), 'stil-l\xE6rer');
+    if (!(this.z9_1 == null)) {
+      tmp_2 = to(ensureNotNull(this.z9_1), 'stil-l\xE6rer');
     } else {
       if (equals(a, Genre_RAP_getInstance()) && (appleExact || equals(d, Genre_RAP_getInstance())) && !dance) {
         tmp_2 = to(Genre_RAP_getInstance(), 'Apple: ' + appleGenre);
@@ -5018,21 +5172,21 @@ protoOf(GenreDetector).la = function (appleGenre, appleExact, deezerGenres, chos
   var lock = _destruct__k2r9zo.d7();
   var why = _destruct__k2r9zo.e7();
   if (!(lock == null)) {
-    this.h9_1 = lock;
+    this.q9_1 = lock;
     if (!equals(lock, Genre_HARDSTYLE_getInstance())) {
-      this.fa_1 = false;
-      this.ea_1 = new Long(0, 0);
+      this.oa_1 = false;
+      this.na_1 = new Long(0, 0);
     }
     if (equals(lock, Genre_RAP_getInstance()) || get_CALM_LOCK().o(lock))
-      this.ga_1 = 0.0;
-    if (this.p9_1 == null) {
+      this.pa_1 = 0.0;
+    if (this.y9_1 == null) {
       commit(this, lock, now, why);
       announce(this, now);
     }
-    this.j9_1 = why;
+    this.s9_1 = why;
     return Unit_instance;
   }
-  var tmp4_elvis_lhs = this.g9_1;
+  var tmp4_elvis_lhs = this.p9_1;
   var tmp_3;
   if (tmp4_elvis_lhs == null) {
     return Unit_instance;
@@ -5041,82 +5195,82 @@ protoOf(GenreDetector).la = function (appleGenre, appleExact, deezerGenres, chos
   }
   var g = tmp_3;
   var src = !(a == null) ? 'Apple: ' + appleGenre : 'Deezer: ' + deezerName;
-  if (this.p9_1 == null && !g.equals(Genre_EDM_getInstance())) {
+  if (this.y9_1 == null && !g.equals(Genre_EDM_getInstance())) {
     commit(this, g, now, src);
     announce(this, now);
-    this.j9_1 = src;
+    this.s9_1 = src;
   }
 };
-protoOf(GenreDetector).ma = function (f, now) {
+protoOf(GenreDetector).va = function (f, now) {
   var tmp;
-  if (equalsLong(this.u9_1, new Long(0, 0))) {
+  if (equalsLong(this.da_1, new Long(0, 0))) {
     tmp = 0.0;
   } else {
     // Inline function 'kotlin.Long.div' call
-    var this_0 = subtract(now, this.u9_1);
+    var this_0 = subtract(now, this.da_1);
     var tmp$ret$0 = toNumber(this_0) / 1000.0;
-    tmp = coerceIn_0(tmp$ret$0, 0.0, 0.2);
+    tmp = coerceIn(tmp$ret$0, 0.0, 0.2);
   }
   var dt = tmp;
-  this.u9_1 = now;
+  this.da_1 = now;
   // Inline function 'kotlin.math.exp' call
   var x = -dt / 8.0;
   var decay = Math.exp(x);
-  this.x9_1 = update$avg(decay, this.x9_1, f.t7_1);
-  this.y9_1 = update$avg(decay, this.y9_1, f.x7_1);
-  var kickHit = f.l7_1 > 0.95 && this.ba_1 <= 0.95 ? 1.0 : 0.0;
-  var snareHit = f.v7_1 > 0.95 && this.ca_1 <= 0.95 ? 1.0 : 0.0;
-  this.ba_1 = f.l7_1;
-  this.ca_1 = f.v7_1;
-  this.z9_1 = this.z9_1 * decay + kickHit / 8.0;
-  this.aa_1 = this.aa_1 * decay + snareHit / 8.0;
+  this.ga_1 = update$avg(decay, this.ga_1, f.c8_1);
+  this.ha_1 = update$avg(decay, this.ha_1, f.g8_1);
+  var kickHit = f.u7_1 > 0.95 && this.ka_1 <= 0.95 ? 1.0 : 0.0;
+  var snareHit = f.e8_1 > 0.95 && this.la_1 <= 0.95 ? 1.0 : 0.0;
+  this.ka_1 = f.u7_1;
+  this.la_1 = f.e8_1;
+  this.ia_1 = this.ia_1 * decay + kickHit / 8.0;
+  this.ja_1 = this.ja_1 * decay + snareHit / 8.0;
   updateRockness(this, f, dt);
-  var _array__4zh2yp = this.o9_1;
-  var _index_0__fvwizt = this.b9_1.y_1;
+  var _array__4zh2yp = this.x9_1;
+  var _index_0__fvwizt = this.k9_1.y_1;
   _array__4zh2yp[_index_0__fvwizt] = _array__4zh2yp[_index_0__fvwizt] + dt;
-  if (f.n7_1 > 0.05)
-    this.n9_1 = this.n9_1 + dt;
+  if (f.w7_1 > 0.05)
+    this.w9_1 = this.w9_1 + dt;
   var tmp_0 = this;
-  var tmp_1 = this.l9_1;
-  var tmp_2 = f.n7_1 - this.l9_1;
+  var tmp_1 = this.u9_1;
+  var tmp_2 = f.w7_1 - this.u9_1;
   // Inline function 'kotlin.math.exp' call
   var x_0 = -dt / 1.5;
-  tmp_0.l9_1 = tmp_1 + tmp_2 * (1.0 - Math.exp(x_0));
+  tmp_0.u9_1 = tmp_1 + tmp_2 * (1.0 - Math.exp(x_0));
   var tmp_3 = this;
-  var tmp_4 = this.m9_1;
-  var tmp_5 = f.n7_1 - this.m9_1;
+  var tmp_4 = this.v9_1;
+  var tmp_5 = f.w7_1 - this.v9_1;
   // Inline function 'kotlin.math.exp' call
-  var x_1 = -dt / (this.n9_1 < 10.0 ? 1.5 : 40.0);
-  tmp_3.m9_1 = tmp_4 + tmp_5 * (1.0 - Math.exp(x_1));
-  var lift = this.n9_1 < 10.0 ? 0.0 : coerceIn_0((this.l9_1 - this.m9_1 - 0.015) / 0.07, 0.0, 1.0);
+  var x_1 = -dt / (this.w9_1 < 10.0 ? 1.5 : 40.0);
+  tmp_3.v9_1 = tmp_4 + tmp_5 * (1.0 - Math.exp(x_1));
+  var lift = this.w9_1 < 10.0 ? 0.0 : coerceIn((this.u9_1 - this.v9_1 - 0.015) / 0.07, 0.0, 1.0);
   var tmp_6 = this;
-  var tmp_7 = this.k9_1;
-  var tmp_8 = lift - this.k9_1;
+  var tmp_7 = this.t9_1;
+  var tmp_8 = lift - this.t9_1;
   // Inline function 'kotlin.math.exp' call
   var x_2 = -dt / 0.8;
-  tmp_6.k9_1 = tmp_7 + tmp_8 * (1.0 - Math.exp(x_2));
-  if (compare(subtract(now, this.da_1), new Long(5000, 0)) >= 0) {
-    this.da_1 = now;
-    RaveLog_getInstance().ia('RaveGenre', fmt('n\xE5=' + this.b9_1.t8_1 + ' apple=' + this.s9_1 + ' bpm=%.0f grit=%.2f sub=%.2f kick/s=%.2f snare/s=%.2f rock=%.2f refreng=%.2f \u2192 lyd sier ' + audioGuess(this, f.u7_1).t8_1, [f.u7_1, this.x9_1, this.y9_1, this.z9_1, this.aa_1, this.ga_1, this.k9_1]));
+  tmp_6.t9_1 = tmp_7 + tmp_8 * (1.0 - Math.exp(x_2));
+  if (compare(subtract(now, this.ma_1), new Long(5000, 0)) >= 0) {
+    this.ma_1 = now;
+    RaveLog_getInstance().ra('RaveGenre', fmt('n\xE5=' + this.k9_1.c9_1 + ' apple=' + this.ba_1 + ' bpm=%.0f grit=%.2f sub=%.2f kick/s=%.2f snare/s=%.2f rock=%.2f refreng=%.2f \u2192 lyd sier ' + audioGuess(this, f.d8_1).c9_1, [f.d8_1, this.ga_1, this.ha_1, this.ia_1, this.ja_1, this.pa_1, this.t9_1]));
   }
-  var tmp0_safe_receiver = this.p9_1;
+  var tmp0_safe_receiver = this.y9_1;
   if (tmp0_safe_receiver == null)
     null;
   else {
     // Inline function 'kotlin.let' call
-    if (!tmp0_safe_receiver.equals(this.b9_1)) {
+    if (!tmp0_safe_receiver.equals(this.k9_1)) {
       commit(this, tmp0_safe_receiver, now, 'valgt');
     }
-    return this.b9_1;
+    return this.k9_1;
   }
-  var tmp1_safe_receiver = this.h9_1;
+  var tmp1_safe_receiver = this.q9_1;
   if (tmp1_safe_receiver == null)
     null;
   else {
     // Inline function 'kotlin.let' call
-    if (!tmp1_safe_receiver.equals(this.b9_1)) {
+    if (!tmp1_safe_receiver.equals(this.k9_1)) {
       // Inline function 'kotlin.text.ifBlank' call
-      var this_1 = this.j9_1;
+      var this_1 = this.s9_1;
       var tmp_9;
       if (isBlank(this_1)) {
         tmp_9 = 'l\xE5st';
@@ -5126,39 +5280,39 @@ protoOf(GenreDetector).ma = function (f, now) {
       var tmp$ret$9 = tmp_9;
       commit(this, tmp1_safe_receiver, now, tmp$ret$9);
     }
-    return this.b9_1;
+    return this.k9_1;
   }
-  var metaKnown = this.i9_1 || compare(subtract(now, this.t9_1), new Long(4000, 0)) >= 0;
-  if (!equals(this.g9_1, Genre_ROCK_getInstance()) && f.s7_1 > 0.45 && f.t7_1 > 0.3) {
-    if (equalsLong(this.ea_1, new Long(0, 0)))
-      this.ea_1 = now;
-  } else if (f.s7_1 < 0.2)
-    this.ea_1 = new Long(0, 0);
-  if (compare(this.ea_1, new Long(0, 0)) > 0 && compare(subtract(now, this.ea_1), new Long(800, 0)) >= 0 && !this.b9_1.equals(Genre_HARDSTYLE_getInstance()) && metaKnown) {
+  var metaKnown = this.r9_1 || compare(subtract(now, this.ca_1), new Long(4000, 0)) >= 0;
+  if (!equals(this.p9_1, Genre_ROCK_getInstance()) && f.b8_1 > 0.45 && f.c8_1 > 0.3) {
+    if (equalsLong(this.na_1, new Long(0, 0)))
+      this.na_1 = now;
+  } else if (f.b8_1 < 0.2)
+    this.na_1 = new Long(0, 0);
+  if (compare(this.na_1, new Long(0, 0)) > 0 && compare(subtract(now, this.na_1), new Long(800, 0)) >= 0 && !this.k9_1.equals(Genre_HARDSTYLE_getInstance()) && metaKnown) {
     commit(this, Genre_HARDSTYLE_getInstance(), now, 'r\xE5tt drop');
   }
-  if ((this.g9_1 == null || equals(this.g9_1, Genre_EDM_getInstance())) && compare(subtract(now, this.t9_1), new Long(8000, 0)) < 0)
-    return this.b9_1;
-  if (!this.f9_1) {
+  if ((this.p9_1 == null || equals(this.p9_1, Genre_EDM_getInstance())) && compare(subtract(now, this.ca_1), new Long(8000, 0)) < 0)
+    return this.k9_1;
+  if (!this.o9_1) {
     announce(this, now);
   }
-  var audio = audioGuess(this, f.u7_1);
-  var calm = f.n7_1 < 0.2;
-  var containsArg = f.u7_1;
+  var audio = audioGuess(this, f.d8_1);
+  var calm = f.w7_1 < 0.2;
+  var containsArg = f.d8_1;
   var hardstyleTempo = 138.0 <= containsArg ? containsArg <= 250.0 : false;
-  var obviousHardstyle = hardstyleTempo && this.z9_1 > 2.2;
-  var target = this.fa_1 ? Genre_HARDSTYLE_getInstance() : obviousHardstyle && !equals(this.g9_1, Genre_ROCK_getInstance()) && !(contains_0(get_CALM_LOCK(), this.g9_1) || equals(this.g9_1, Genre_RAP_getInstance())) ? Genre_HARDSTYLE_getInstance() : obviousHardstyle && this.x9_1 > 0.12 ? Genre_HARDSTYLE_getInstance() : equals(this.g9_1, Genre_EDM_getInstance()) && hardstyleTempo ? Genre_HARDSTYLE_getInstance() : equals(this.g9_1, Genre_EDM_getInstance()) && this.x9_1 > 0.25 ? Genre_HARDSTYLE_getInstance() : compare(this.ea_1, new Long(0, 0)) > 0 ? Genre_HARDSTYLE_getInstance() : calm ? Genre_STANDARD_getInstance() : audio.equals(Genre_HARDSTYLE_getInstance()) ? Genre_HARDSTYLE_getInstance() : !(this.g9_1 == null) ? ensureNotNull(this.g9_1) : audio;
-  if (target.equals(Genre_HARDSTYLE_getInstance()) && this.b9_1.equals(Genre_HARDSTYLE_getInstance()) && compare(this.d9_1, this.t9_1) >= 0)
-    this.fa_1 = true;
-  if (!target.equals(this.v9_1)) {
-    this.v9_1 = target;
-    this.w9_1 = now;
+  var obviousHardstyle = hardstyleTempo && this.ia_1 > 2.2;
+  var target = this.oa_1 ? Genre_HARDSTYLE_getInstance() : obviousHardstyle && !equals(this.p9_1, Genre_ROCK_getInstance()) && !(contains_0(get_CALM_LOCK(), this.p9_1) || equals(this.p9_1, Genre_RAP_getInstance())) ? Genre_HARDSTYLE_getInstance() : obviousHardstyle && this.ga_1 > 0.12 ? Genre_HARDSTYLE_getInstance() : equals(this.p9_1, Genre_EDM_getInstance()) && hardstyleTempo ? Genre_HARDSTYLE_getInstance() : equals(this.p9_1, Genre_EDM_getInstance()) && this.ga_1 > 0.25 ? Genre_HARDSTYLE_getInstance() : compare(this.na_1, new Long(0, 0)) > 0 ? Genre_HARDSTYLE_getInstance() : calm ? Genre_STANDARD_getInstance() : audio.equals(Genre_HARDSTYLE_getInstance()) ? Genre_HARDSTYLE_getInstance() : !(this.p9_1 == null) ? ensureNotNull(this.p9_1) : audio;
+  if (target.equals(Genre_HARDSTYLE_getInstance()) && this.k9_1.equals(Genre_HARDSTYLE_getInstance()) && compare(this.m9_1, this.ca_1) >= 0)
+    this.oa_1 = true;
+  if (!target.equals(this.ea_1)) {
+    this.ea_1 = target;
+    this.fa_1 = now;
   }
-  var needed = this.b9_1.equals(Genre_STANDARD_getInstance()) && !calm ? new Long(1500, 0) : this.v9_1.equals(Genre_HARDSTYLE_getInstance()) && this.x9_1 > 0.3 ? new Long(2000, 0) : this.v9_1.equals(Genre_STANDARD_getInstance()) ? new Long(5000, 0) : new Long(6000, 0);
-  if (!this.v9_1.equals(this.b9_1) && compare(subtract(now, this.w9_1), needed) >= 0) {
-    commit(this, this.v9_1, now, calm ? 'rolig del' : 'lyd');
+  var needed = this.k9_1.equals(Genre_STANDARD_getInstance()) && !calm ? new Long(1500, 0) : this.ea_1.equals(Genre_HARDSTYLE_getInstance()) && this.ga_1 > 0.3 ? new Long(2000, 0) : this.ea_1.equals(Genre_STANDARD_getInstance()) ? new Long(5000, 0) : new Long(6000, 0);
+  if (!this.ea_1.equals(this.k9_1) && compare(subtract(now, this.fa_1), needed) >= 0) {
+    commit(this, this.ea_1, now, calm ? 'rolig del' : 'lyd');
   }
-  return this.b9_1;
+  return this.k9_1;
 };
 var static_init_called_0;
 function static_init_0() {
@@ -5184,7 +5338,7 @@ var SongPart_OUTRO_instance;
 var SongPart_ANTI_CLIMAX_instance;
 function SongPart(name, ordinal, label) {
   Enum.call(this, name, ordinal);
-  this.pa_1 = label;
+  this.ya_1 = label;
 }
 var static_init_called_1;
 function static_init_1() {
@@ -5204,7 +5358,7 @@ var DropKind_MIDDLE_instance;
 var DropKind_LAST_instance;
 function DropKind(name, ordinal, label) {
   Enum.call(this, name, ordinal);
-  this.sa_1 = label;
+  this.bb_1 = label;
 }
 function StructureHud(part, barInPhrase, phrase, ready, subRelDb, airTrendDb, build, grit, screech, vocalHint, bpm) {
   part = part === VOID ? 'INTRO' : part;
@@ -5218,33 +5372,33 @@ function StructureHud(part, barInPhrase, phrase, ready, subRelDb, airTrendDb, bu
   screech = screech === VOID ? 0.0 : screech;
   vocalHint = vocalHint === VOID ? false : vocalHint;
   bpm = bpm === VOID ? 0.0 : bpm;
-  this.ta_1 = part;
-  this.ua_1 = barInPhrase;
-  this.va_1 = phrase;
-  this.wa_1 = ready;
-  this.xa_1 = subRelDb;
-  this.ya_1 = airTrendDb;
-  this.za_1 = build;
-  this.ab_1 = grit;
-  this.bb_1 = screech;
-  this.cb_1 = vocalHint;
-  this.db_1 = bpm;
+  this.cb_1 = part;
+  this.db_1 = barInPhrase;
+  this.eb_1 = phrase;
+  this.fb_1 = ready;
+  this.gb_1 = subRelDb;
+  this.hb_1 = airTrendDb;
+  this.ib_1 = build;
+  this.jb_1 = grit;
+  this.kb_1 = screech;
+  this.lb_1 = vocalHint;
+  this.mb_1 = bpm;
 }
 protoOf(StructureHud).toString = function () {
-  return 'StructureHud(part=' + this.ta_1 + ', barInPhrase=' + this.ua_1 + ', phrase=' + this.va_1 + ', ready=' + this.wa_1 + ', subRelDb=' + this.xa_1 + ', airTrendDb=' + this.ya_1 + ', build=' + this.za_1 + ', grit=' + this.ab_1 + ', screech=' + this.bb_1 + ', vocalHint=' + this.cb_1 + ', bpm=' + this.db_1 + ')';
+  return 'StructureHud(part=' + this.cb_1 + ', barInPhrase=' + this.db_1 + ', phrase=' + this.eb_1 + ', ready=' + this.fb_1 + ', subRelDb=' + this.gb_1 + ', airTrendDb=' + this.hb_1 + ', build=' + this.ib_1 + ', grit=' + this.jb_1 + ', screech=' + this.kb_1 + ', vocalHint=' + this.lb_1 + ', bpm=' + this.mb_1 + ')';
 };
 protoOf(StructureHud).hashCode = function () {
-  var result = getStringHashCode(this.ta_1);
-  result = imul_0(result, 31) + this.ua_1 | 0;
-  result = imul_0(result, 31) + this.va_1 | 0;
-  result = imul_0(result, 31) + getBooleanHashCode(this.wa_1) | 0;
-  result = imul_0(result, 31) + getNumberHashCode(this.xa_1) | 0;
-  result = imul_0(result, 31) + getNumberHashCode(this.ya_1) | 0;
-  result = imul_0(result, 31) + getNumberHashCode(this.za_1) | 0;
-  result = imul_0(result, 31) + getNumberHashCode(this.ab_1) | 0;
-  result = imul_0(result, 31) + getNumberHashCode(this.bb_1) | 0;
-  result = imul_0(result, 31) + getBooleanHashCode(this.cb_1) | 0;
-  result = imul_0(result, 31) + getNumberHashCode(this.db_1) | 0;
+  var result = getStringHashCode(this.cb_1);
+  result = imul_0(result, 31) + this.db_1 | 0;
+  result = imul_0(result, 31) + this.eb_1 | 0;
+  result = imul_0(result, 31) + getBooleanHashCode(this.fb_1) | 0;
+  result = imul_0(result, 31) + getNumberHashCode(this.gb_1) | 0;
+  result = imul_0(result, 31) + getNumberHashCode(this.hb_1) | 0;
+  result = imul_0(result, 31) + getNumberHashCode(this.ib_1) | 0;
+  result = imul_0(result, 31) + getNumberHashCode(this.jb_1) | 0;
+  result = imul_0(result, 31) + getNumberHashCode(this.kb_1) | 0;
+  result = imul_0(result, 31) + getBooleanHashCode(this.lb_1) | 0;
+  result = imul_0(result, 31) + getNumberHashCode(this.mb_1) | 0;
   return result;
 };
 protoOf(StructureHud).equals = function (other) {
@@ -5252,42 +5406,42 @@ protoOf(StructureHud).equals = function (other) {
     return true;
   if (!(other instanceof StructureHud))
     return false;
-  if (!(this.ta_1 === other.ta_1))
-    return false;
-  if (!(this.ua_1 === other.ua_1))
-    return false;
-  if (!(this.va_1 === other.va_1))
-    return false;
-  if (!(this.wa_1 === other.wa_1))
-    return false;
-  if (!equals(this.xa_1, other.xa_1))
-    return false;
-  if (!equals(this.ya_1, other.ya_1))
-    return false;
-  if (!equals(this.za_1, other.za_1))
-    return false;
-  if (!equals(this.ab_1, other.ab_1))
-    return false;
-  if (!equals(this.bb_1, other.bb_1))
-    return false;
   if (!(this.cb_1 === other.cb_1))
     return false;
-  if (!equals(this.db_1, other.db_1))
+  if (!(this.db_1 === other.db_1))
+    return false;
+  if (!(this.eb_1 === other.eb_1))
+    return false;
+  if (!(this.fb_1 === other.fb_1))
+    return false;
+  if (!equals(this.gb_1, other.gb_1))
+    return false;
+  if (!equals(this.hb_1, other.hb_1))
+    return false;
+  if (!equals(this.ib_1, other.ib_1))
+    return false;
+  if (!equals(this.jb_1, other.jb_1))
+    return false;
+  if (!equals(this.kb_1, other.kb_1))
+    return false;
+  if (!(this.lb_1 === other.lb_1))
+    return false;
+  if (!equals(this.mb_1, other.mb_1))
     return false;
   return true;
 };
 function PartyTuning() {
   PartyTuning_instance = this;
-  this.eb_1 = -2.5;
-  this.fb_1 = 2.0;
-  this.gb_1 = -3.0;
-  this.hb_1 = -1.5;
-  this.ib_1 = -4.0;
-  this.jb_1 = 2.0;
-  this.kb_1 = -99.0;
-  this.lb_1 = 0.02;
-  this.mb_1 = -0.04;
-  this.nb_1 = false;
+  this.nb_1 = -2.5;
+  this.ob_1 = 2.0;
+  this.pb_1 = -3.0;
+  this.qb_1 = -1.5;
+  this.rb_1 = -4.0;
+  this.sb_1 = 2.0;
+  this.tb_1 = -99.0;
+  this.ub_1 = 0.02;
+  this.vb_1 = -0.04;
+  this.wb_1 = false;
 }
 var PartyTuning_instance;
 function PartyTuning_getInstance() {
@@ -5303,43 +5457,43 @@ function db($this, x) {
 }
 function show($this, text, now, always) {
   always = always === VOID ? false : always;
-  if (!always && (text === $this.qb_1 || compare(subtract(now, $this.wd_1), new Long(6000, 0)) < 0))
+  if (!always && (text === $this.zb_1 || compare(subtract(now, $this.fe_1), new Long(6000, 0)) < 0))
     return Unit_instance;
-  $this.qb_1 = text;
-  $this.rb_1 = now;
-  $this.wd_1 = now;
+  $this.zb_1 = text;
+  $this.ac_1 = now;
+  $this.fe_1 = now;
 }
 function enter($this, next, now, why) {
-  if (next.equals($this.ob_1))
+  if (next.equals($this.xb_1))
     return Unit_instance;
-  RaveLog_getInstance().ia('RaveGenre', 'del: ' + $this.ob_1.pa_1 + ' \u2192 ' + next.pa_1 + ' (' + why + ')');
-  if ($this.ob_1.equals(SongPart_DROP_getInstance()))
-    $this.gd_1 = now;
+  RaveLog_getInstance().ra('RaveGenre', 'del: ' + $this.xb_1.ya_1 + ' \u2192 ' + next.ya_1 + ' (' + why + ')');
+  if ($this.xb_1.equals(SongPart_DROP_getInstance()))
+    $this.pd_1 = now;
   if (next.equals(SongPart_DROP_getInstance())) {
-    $this.ad_1 = new Long(0, 0);
-    $this.hd_1 = new Long(0, 0);
+    $this.jd_1 = new Long(0, 0);
+    $this.qd_1 = new Long(0, 0);
   }
-  $this.ob_1 = next;
-  $this.vb_1 = now;
+  $this.xb_1 = next;
+  $this.ec_1 = now;
   switch (next.y_1) {
     case 3:
-      $this.kd_1 = true;
-      $this.ld_1 = true;
+      $this.td_1 = true;
+      $this.ud_1 = true;
       show($this, 'BUILD-UP', now);
       break;
     case 2:
-      $this.kd_1 = true;
-      $this.ld_1 = true;
+      $this.td_1 = true;
+      $this.ud_1 = true;
       show($this, 'BREAKDOWN', now);
       break;
     case 1:
-      $this.kd_1 = true;
-      $this.ld_1 = true;
+      $this.td_1 = true;
+      $this.ud_1 = true;
       show($this, 'BREAKDOWN (SYNG?)', now);
       break;
     case 7:
-      $this.kd_1 = true;
-      $this.ld_1 = true;
+      $this.td_1 = true;
+      $this.ud_1 = true;
       show($this, 'ANTI-CLIMAX', now);
       break;
     default:
@@ -5347,7 +5501,7 @@ function enter($this, next, now, why) {
   }
 }
 function voteBoundary($this, beat) {
-  var _array__4zh2yp = $this.xd_1;
+  var _array__4zh2yp = $this.ge_1;
   var _index_0__fvwizt = ((beat % 32 | 0) + 32 | 0) % 32 | 0;
   _array__4zh2yp[_index_0__fvwizt] = _array__4zh2yp[_index_0__fvwizt] + 1 | 0;
 }
@@ -5358,206 +5512,206 @@ function update$ema(dt, old, v, s) {
   return old + tmp * (1.0 - Math.exp(x));
 }
 function HardstyleStructure() {
-  this.ob_1 = SongPart_INTRO_getInstance();
-  this.pb_1 = DropKind_NONE_getInstance();
-  this.qb_1 = '';
-  this.rb_1 = new Long(0, 0);
-  this.sb_1 = new StructureHud();
-  this.tb_1 = new Long(0, 0);
-  this.ub_1 = new Long(0, 0);
-  this.vb_1 = new Long(0, 0);
-  this.wb_1 = 0.0;
-  this.xb_1 = 0.0;
-  this.yb_1 = 0.0;
-  this.zb_1 = 0.0;
-  this.ac_1 = 0.0;
-  this.bc_1 = 0.0;
-  this.cc_1 = 0.0;
-  this.dc_1 = 0.0;
+  this.xb_1 = SongPart_INTRO_getInstance();
+  this.yb_1 = DropKind_NONE_getInstance();
+  this.zb_1 = '';
+  this.ac_1 = new Long(0, 0);
+  this.bc_1 = new StructureHud();
+  this.cc_1 = new Long(0, 0);
+  this.dc_1 = new Long(0, 0);
   this.ec_1 = new Long(0, 0);
-  this.fc_1 = new Long(0, 0);
+  this.fc_1 = 0.0;
   this.gc_1 = 0.0;
   this.hc_1 = 0.0;
   this.ic_1 = 0.0;
   this.jc_1 = 0.0;
   this.kc_1 = 0.0;
-  this.lc_1 = new Long(0, 0);
-  this.mc_1 = false;
-  this.nc_1 = false;
+  this.lc_1 = 0.0;
+  this.mc_1 = 0.0;
+  this.nc_1 = new Long(0, 0);
   this.oc_1 = new Long(0, 0);
-  this.pc_1 = true;
-  this.qc_1 = false;
-  this.rc_1 = false;
-  this.sc_1 = 1600.0;
-  this.tc_1 = -1.0;
-  this.uc_1 = 0.0;
-  this.vc_1 = 0.0;
-  this.wc_1 = 0.0;
-  this.xc_1 = 0.0;
-  this.yc_1 = 0.0;
-  this.zc_1 = 0.0;
-  this.ad_1 = new Long(0, 0);
-  this.bd_1 = null;
-  this.cd_1 = null;
+  this.pc_1 = 0.0;
+  this.qc_1 = 0.0;
+  this.rc_1 = 0.0;
+  this.sc_1 = 0.0;
+  this.tc_1 = 0.0;
+  this.uc_1 = new Long(0, 0);
+  this.vc_1 = false;
+  this.wc_1 = false;
+  this.xc_1 = new Long(0, 0);
+  this.yc_1 = true;
+  this.zc_1 = false;
+  this.ad_1 = false;
+  this.bd_1 = 1600.0;
+  this.cd_1 = -1.0;
   this.dd_1 = 0.0;
-  this.ed_1 = new Long(0, 0);
+  this.ed_1 = 0.0;
   this.fd_1 = 0.0;
-  this.gd_1 = new Long(0, 0);
-  this.hd_1 = new Long(0, 0);
+  this.gd_1 = 0.0;
+  this.hd_1 = 0.0;
   this.id_1 = 0.0;
-  this.jd_1 = 0.0;
-  this.kd_1 = false;
-  this.ld_1 = false;
-  this.md_1 = new Long(0, 0);
+  this.jd_1 = new Long(0, 0);
+  this.kd_1 = null;
+  this.ld_1 = null;
+  this.md_1 = 0.0;
   this.nd_1 = new Long(0, 0);
-  this.od_1 = new Long(0, 0);
-  this.pd_1 = 0.0;
-  this.qd_1 = 0.0;
-  this.rd_1 = new Long(0, 0);
-  this.sd_1 = 0;
+  this.od_1 = 0.0;
+  this.pd_1 = new Long(0, 0);
+  this.qd_1 = new Long(0, 0);
+  this.rd_1 = 0.0;
+  this.sd_1 = 0.0;
   this.td_1 = false;
-  this.ud_1 = 0.0;
-  this.vd_1 = 0.4;
+  this.ud_1 = false;
+  this.vd_1 = new Long(0, 0);
   this.wd_1 = new Long(0, 0);
-  this.xd_1 = new Int32Array(32);
-  this.yd_1 = -1;
+  this.xd_1 = new Long(0, 0);
+  this.yd_1 = 0.0;
+  this.zd_1 = 0.0;
+  this.ae_1 = new Long(0, 0);
+  this.be_1 = 0;
+  this.ce_1 = false;
+  this.de_1 = 0.0;
+  this.ee_1 = 0.4;
+  this.fe_1 = new Long(0, 0);
+  this.ge_1 = new Int32Array(32);
+  this.he_1 = -1;
 }
-protoOf(HardstyleStructure).zd = function () {
-  return this.ob_1.equals(SongPart_DROP_getInstance()) && !this.pb_1.equals(DropKind_PENDING_getInstance());
+protoOf(HardstyleStructure).ie = function () {
+  return this.xb_1.equals(SongPart_DROP_getInstance()) && !this.yb_1.equals(DropKind_PENDING_getInstance());
 };
-protoOf(HardstyleStructure).ae = function () {
-  return this.sd_1;
+protoOf(HardstyleStructure).je = function () {
+  return this.be_1;
 };
-protoOf(HardstyleStructure).ka = function (now) {
-  this.ob_1 = SongPart_INTRO_getInstance();
-  this.pb_1 = DropKind_NONE_getInstance();
-  this.qb_1 = '';
-  this.rb_1 = new Long(0, 0);
-  this.sb_1 = new StructureHud();
-  this.ub_1 = now;
-  this.vb_1 = now;
-  this.mc_1 = false;
-  this.nc_1 = false;
-  this.oc_1 = new Long(0, 0);
-  this.ad_1 = new Long(0, 0);
-  this.hd_1 = new Long(0, 0);
-  this.id_1 = 0.0;
-  this.jd_1 = 0.0;
-  this.gd_1 = new Long(0, 0);
-  this.cd_1 = null;
-  this.dd_1 = 0.0;
-  this.fd_1 = 0.0;
-  this.ed_1 = new Long(0, 0);
-  this.kd_1 = false;
-  this.ld_1 = false;
-  this.md_1 = new Long(0, 0);
+protoOf(HardstyleStructure).ta = function (now) {
+  this.xb_1 = SongPart_INTRO_getInstance();
+  this.yb_1 = DropKind_NONE_getInstance();
+  this.zb_1 = '';
+  this.ac_1 = new Long(0, 0);
+  this.bc_1 = new StructureHud();
+  this.dc_1 = now;
+  this.ec_1 = now;
+  this.vc_1 = false;
+  this.wc_1 = false;
+  this.xc_1 = new Long(0, 0);
+  this.jd_1 = new Long(0, 0);
+  this.qd_1 = new Long(0, 0);
+  this.rd_1 = 0.0;
+  this.sd_1 = 0.0;
+  this.pd_1 = new Long(0, 0);
+  this.ld_1 = null;
+  this.md_1 = 0.0;
+  this.od_1 = 0.0;
   this.nd_1 = new Long(0, 0);
-  this.od_1 = new Long(0, 0);
-  this.rd_1 = new Long(0, 0);
-  this.sd_1 = 0;
   this.td_1 = false;
-  this.ud_1 = 0.0;
-  this.vd_1 = 0.4;
+  this.ud_1 = false;
+  this.vd_1 = new Long(0, 0);
   this.wd_1 = new Long(0, 0);
-  fill(this.xd_1, 0);
-  this.yd_1 = -1;
-  this.lc_1 = new Long(0, 0);
-  this.ic_1 = 0.0;
-  this.bc_1 = 0.0;
-  this.cc_1 = 0.0;
-  this.dc_1 = 0.0;
-  this.ec_1 = new Long(0, 0);
-  this.fc_1 = new Long(0, 0);
+  this.xd_1 = new Long(0, 0);
+  this.ae_1 = new Long(0, 0);
+  this.be_1 = 0;
+  this.ce_1 = false;
+  this.de_1 = 0.0;
+  this.ee_1 = 0.4;
+  this.fe_1 = new Long(0, 0);
+  fill(this.ge_1, 0);
+  this.he_1 = -1;
+  this.uc_1 = new Long(0, 0);
+  this.rc_1 = 0.0;
+  this.kc_1 = 0.0;
+  this.lc_1 = 0.0;
+  this.mc_1 = 0.0;
+  this.nc_1 = new Long(0, 0);
+  this.oc_1 = new Long(0, 0);
 };
-protoOf(HardstyleStructure).be = function (f, now, positionMs, durationMs) {
+protoOf(HardstyleStructure).ke = function (f, now, positionMs, durationMs) {
   var tmp;
-  if (equalsLong(this.tb_1, new Long(0, 0))) {
+  if (equalsLong(this.cc_1, new Long(0, 0))) {
     tmp = 0.0;
   } else {
     // Inline function 'kotlin.Long.div' call
-    var this_0 = subtract(now, this.tb_1);
+    var this_0 = subtract(now, this.cc_1);
     var tmp$ret$0 = toNumber(this_0) / 1000.0;
-    tmp = coerceIn_0(tmp$ret$0, 0.0, 0.2);
+    tmp = coerceIn(tmp$ret$0, 0.0, 0.2);
   }
   var dt = tmp;
-  this.tb_1 = now;
-  if (equalsLong(this.ub_1, new Long(0, 0))) {
-    this.ub_1 = now;
-    this.vb_1 = now;
+  this.cc_1 = now;
+  if (equalsLong(this.dc_1, new Long(0, 0))) {
+    this.dc_1 = now;
+    this.ec_1 = now;
   }
-  var subDb = db(this, f.c8_1);
-  var airDb = db(this, f.b8_1);
-  if (!this.mc_1) {
-    this.wb_1 = subDb;
-    this.xb_1 = subDb;
-    this.yb_1 = subDb;
-    this.zb_1 = airDb;
-    this.ac_1 = airDb;
+  var subDb = db(this, f.l8_1);
+  var airDb = db(this, f.k8_1);
+  if (!this.vc_1) {
+    this.fc_1 = subDb;
     this.gc_1 = subDb;
     this.hc_1 = subDb;
-    this.cc_1 = f.i8_1;
-    this.dc_1 = f.i8_1;
-    this.mc_1 = true;
-    this.uc_1 = subDb;
-    this.vc_1 = airDb;
-    this.wc_1 = db(this, f.d8_1);
-    this.xc_1 = this.uc_1;
-    this.yc_1 = this.vc_1;
-    this.zc_1 = this.wc_1;
+    this.ic_1 = airDb;
+    this.jc_1 = airDb;
+    this.pc_1 = subDb;
+    this.qc_1 = subDb;
+    this.lc_1 = f.r8_1;
+    this.mc_1 = f.r8_1;
+    this.vc_1 = true;
+    this.dd_1 = subDb;
+    this.ed_1 = airDb;
+    this.fd_1 = db(this, f.m8_1);
+    this.gd_1 = this.dd_1;
+    this.hd_1 = this.ed_1;
+    this.id_1 = this.fd_1;
   }
-  if (!this.nc_1 && compare(subtract(now, this.ub_1), new Long(1500, 0)) >= 0 && compare(positionMs, new Long(0, 0)) >= 0) {
-    this.nc_1 = true;
-    if (compare(subtract(positionMs, subtract(now, this.ub_1)), new Long(30000, 0)) > 0) {
-      this.ld_1 = true;
-      this.kd_1 = true;
+  if (!this.wc_1 && compare(subtract(now, this.dc_1), new Long(1500, 0)) >= 0 && compare(positionMs, new Long(0, 0)) >= 0) {
+    this.wc_1 = true;
+    if (compare(subtract(positionMs, subtract(now, this.dc_1)), new Long(30000, 0)) > 0) {
+      this.ud_1 = true;
+      this.td_1 = true;
     }
   }
-  this.wb_1 = update$ema(dt, this.wb_1, subDb, 0.25);
-  this.xb_1 = update$ema(dt, this.xb_1, subDb, 1.0);
-  this.yb_1 = update$ema(dt, this.yb_1, subDb, 8.0);
+  this.fc_1 = update$ema(dt, this.fc_1, subDb, 0.25);
+  this.gc_1 = update$ema(dt, this.gc_1, subDb, 1.0);
+  this.hc_1 = update$ema(dt, this.hc_1, subDb, 8.0);
   var tmp_0 = this;
-  var tmp0 = this.xb_1;
+  var tmp0 = this.gc_1;
   // Inline function 'kotlin.math.max' call
-  var b = this.gc_1 - dt * (6.0 / 25.0);
-  tmp_0.gc_1 = Math.max(tmp0, b);
+  var b = this.pc_1 - dt * (6.0 / 25.0);
+  tmp_0.pc_1 = Math.max(tmp0, b);
   var tmp_1 = this;
-  var tmp0_0 = this.xb_1;
+  var tmp0_0 = this.gc_1;
   // Inline function 'kotlin.comparisons.minOf' call
-  var b_0 = this.hc_1 + dt * 1.5;
-  tmp_1.hc_1 = Math.min(tmp0_0, b_0);
-  this.zb_1 = update$ema(dt, this.zb_1, airDb, 1.0);
-  this.ac_1 = update$ema(dt, this.ac_1, airDb, 8.0);
-  this.bc_1 = update$ema(dt, this.bc_1, f.t7_1, 1.0);
-  this.uc_1 = update$ema(dt, this.uc_1, subDb, 2.0);
-  this.vc_1 = update$ema(dt, this.vc_1, airDb, 2.0);
-  this.wc_1 = update$ema(dt, this.wc_1, db(this, f.d8_1), 2.0);
+  var b_0 = this.qc_1 + dt * 1.5;
+  tmp_1.qc_1 = Math.min(tmp0_0, b_0);
+  this.ic_1 = update$ema(dt, this.ic_1, airDb, 1.0);
+  this.jc_1 = update$ema(dt, this.jc_1, airDb, 8.0);
+  this.kc_1 = update$ema(dt, this.kc_1, f.c8_1, 1.0);
+  this.dd_1 = update$ema(dt, this.dd_1, subDb, 2.0);
+  this.ed_1 = update$ema(dt, this.ed_1, airDb, 2.0);
+  this.fd_1 = update$ema(dt, this.fd_1, db(this, f.m8_1), 2.0);
   var fall = dt * 0.05;
   var tmp_2 = this;
-  var tmp0_1 = this.uc_1;
+  var tmp0_1 = this.dd_1;
   // Inline function 'kotlin.math.max' call
-  var b_1 = this.xc_1 - fall;
-  tmp_2.xc_1 = Math.max(tmp0_1, b_1);
+  var b_1 = this.gd_1 - fall;
+  tmp_2.gd_1 = Math.max(tmp0_1, b_1);
   var tmp_3 = this;
-  var tmp0_2 = this.vc_1;
+  var tmp0_2 = this.ed_1;
   // Inline function 'kotlin.math.max' call
-  var b_2 = this.yc_1 - fall;
-  tmp_3.yc_1 = Math.max(tmp0_2, b_2);
+  var b_2 = this.hd_1 - fall;
+  tmp_3.hd_1 = Math.max(tmp0_2, b_2);
   var tmp_4 = this;
-  var tmp0_3 = this.wc_1;
+  var tmp0_3 = this.fd_1;
   // Inline function 'kotlin.math.max' call
-  var b_3 = this.zc_1 - fall;
-  tmp_4.zc_1 = Math.max(tmp0_3, b_3);
-  this.id_1 = (this.vc_1 - this.yc_1 + (this.wc_1 - this.zc_1)) / 2.0;
-  this.jd_1 = this.uc_1 - this.xc_1;
-  var warmedUp = compare(subtract(now, this.ub_1), new Long(20000, 0)) > 0;
-  var print = this.bd_1;
-  if (!(print == null) && PartyTuning_getInstance().nb_1 && f.q7_1.q() === print.length) {
-    var tmp0_elvis_lhs = this.cd_1;
+  var b_3 = this.id_1 - fall;
+  tmp_4.id_1 = Math.max(tmp0_3, b_3);
+  this.rd_1 = (this.ed_1 - this.hd_1 + (this.fd_1 - this.id_1)) / 2.0;
+  this.sd_1 = this.dd_1 - this.gd_1;
+  var warmedUp = compare(subtract(now, this.dc_1), new Long(20000, 0)) > 0;
+  var print = this.kd_1;
+  if (!(print == null) && PartyTuning_getInstance().wb_1 && f.z7_1.q() === print.length) {
+    var tmp0_elvis_lhs = this.ld_1;
     var tmp_5;
     if (tmp0_elvis_lhs == null) {
       // Inline function 'kotlin.also' call
       var this_1 = new Float32Array(print.length);
-      this.cd_1 = this_1;
+      this.ld_1 = this_1;
       tmp_5 = this_1;
     } else {
       tmp_5 = tmp0_elvis_lhs;
@@ -5575,7 +5729,7 @@ protoOf(HardstyleStructure).be = function (f, now, positionMs, durationMs) {
       do {
         var i = inductionVariable;
         inductionVariable = inductionVariable + 1 | 0;
-        e[i] = e[i] + (f.q7_1.m(i) - e[i]) * a;
+        e[i] = e[i] + (f.z7_1.m(i) - e[i]) * a;
         d = d + e[i] * print[i];
         na = na + e[i] * e[i];
         nb = nb + print[i] * print[i];
@@ -5593,140 +5747,140 @@ protoOf(HardstyleStructure).be = function (f, now, positionMs, durationMs) {
     var like = tmp_6;
     var tmp_8 = this;
     var tmp_9;
-    if (this.dd_1 === 0.0) {
+    if (this.md_1 === 0.0) {
       tmp_9 = like;
     } else {
-      var tmp_10 = this.dd_1;
-      var tmp_11 = like - this.dd_1;
+      var tmp_10 = this.md_1;
+      var tmp_11 = like - this.md_1;
       // Inline function 'kotlin.math.exp' call
       var x_1 = -dt / 30.0;
       tmp_9 = tmp_10 + tmp_11 * (1.0 - Math.exp(x_1));
     }
-    tmp_8.dd_1 = tmp_9;
-    this.fd_1 = like - this.dd_1;
+    tmp_8.md_1 = tmp_9;
+    this.od_1 = like - this.md_1;
   }
-  var printOk = !(print == null) && PartyTuning_getInstance().nb_1 && warmedUp;
-  this.cc_1 = update$ema(dt, this.cc_1, f.i8_1, 1.0);
-  this.dc_1 = update$ema(dt, this.dc_1, f.i8_1, 8.0);
-  var kickHit = f.l7_1 > 0.95 && this.kc_1 <= 0.95;
-  var snareHit = f.v7_1 > 0.95 && this.jc_1 <= 0.95;
-  this.kc_1 = f.l7_1;
-  this.jc_1 = f.v7_1;
+  var printOk = !(print == null) && PartyTuning_getInstance().wb_1 && warmedUp;
+  this.lc_1 = update$ema(dt, this.lc_1, f.r8_1, 1.0);
+  this.mc_1 = update$ema(dt, this.mc_1, f.r8_1, 8.0);
+  var kickHit = f.u7_1 > 0.95 && this.tc_1 <= 0.95;
+  var snareHit = f.e8_1 > 0.95 && this.sc_1 <= 0.95;
+  this.tc_1 = f.u7_1;
+  this.sc_1 = f.e8_1;
   if (kickHit)
-    this.lc_1 = now;
+    this.uc_1 = now;
   var tmp_12 = this;
-  var tmp_13 = this.ic_1;
+  var tmp_13 = this.rc_1;
   // Inline function 'kotlin.math.exp' call
   var x_2 = -dt / 2.0;
-  tmp_12.ic_1 = tmp_13 * Math.exp(x_2) + (snareHit ? 1.0 : 0.0) / 2.0;
+  tmp_12.rc_1 = tmp_13 * Math.exp(x_2) + (snareHit ? 1.0 : 0.0) / 2.0;
   var tmp_14;
-  var containsArg = f.u7_1;
+  var containsArg = f.d8_1;
   if (100.0 <= containsArg ? containsArg <= 260.0 : false) {
-    tmp_14 = 240000.0 / f.u7_1;
+    tmp_14 = 240000.0 / f.d8_1;
   } else {
     tmp_14 = 1600.0;
   }
   var barMs = tmp_14;
-  this.sc_1 = barMs;
-  var forced = this.qc_1 || compare(now, this.oc_1) < 0;
-  this.rc_1 = (!this.qc_1 && compare(now, this.oc_1) < 0);
-  var subRel = this.xb_1 - this.yb_1;
-  var subHitRel = this.wb_1 - this.yb_1;
-  var airTrend = this.zb_1 - this.ac_1;
+  this.bd_1 = barMs;
+  var forced = this.zc_1 || compare(now, this.xc_1) < 0;
+  this.ad_1 = (!this.zc_1 && compare(now, this.xc_1) < 0);
+  var subRel = this.gc_1 - this.hc_1;
+  var subHitRel = this.fc_1 - this.hc_1;
+  var airTrend = this.ic_1 - this.jc_1;
   var songFraction = compare(durationMs, new Long(0, 0)) > 0 && compare(positionMs, new Long(0, 0)) >= 0 ? toNumber(positionMs) / toNumber(durationMs) : -1.0;
-  this.tc_1 = songFraction;
+  this.cd_1 = songFraction;
   var remainingMs = compare(durationMs, new Long(0, 0)) > 0 && compare(positionMs, new Long(0, 0)) >= 0 ? subtract(durationMs, positionMs) : new Long(-1, -1);
-  var kickGone = equalsLong(this.lc_1, new Long(0, 0)) || toNumber(subtract(now, this.lc_1)) > barMs;
-  if (!this.ld_1 && toNumber(subtract(now, this.ub_1)) > 32 * barMs)
-    this.ld_1 = true;
-  var riser = airTrend > 0.0 ? coerceIn_0((this.cc_1 - this.dc_1) / 0.12, 0.0, 1.0) : 0.0;
-  var build = 0.4 * coerceIn_0(-subRel / 6.0, 0.0, 1.0) + 0.25 * coerceIn_0(airTrend / 4.0, 0.0, 1.0) + 0.15 * coerceIn_0((this.ic_1 - 1.0) / 3.0, 0.0, 1.0) + 0.2 * riser;
-  var buildEvidence = build >= 0.55 && subRel < -3.0 && (airTrend > 1.5 || this.ic_1 > 2.0 || riser > 0.5);
+  var kickGone = equalsLong(this.uc_1, new Long(0, 0)) || toNumber(subtract(now, this.uc_1)) > barMs;
+  if (!this.ud_1 && toNumber(subtract(now, this.dc_1)) > 32 * barMs)
+    this.ud_1 = true;
+  var riser = airTrend > 0.0 ? coerceIn((this.lc_1 - this.mc_1) / 0.12, 0.0, 1.0) : 0.0;
+  var build = 0.4 * coerceIn(-subRel / 6.0, 0.0, 1.0) + 0.25 * coerceIn(airTrend / 4.0, 0.0, 1.0) + 0.15 * coerceIn((this.rc_1 - 1.0) / 3.0, 0.0, 1.0) + 0.2 * riser;
+  var buildEvidence = build >= 0.55 && subRel < -3.0 && (airTrend > 1.5 || this.rc_1 > 2.0 || riser > 0.5);
   if (buildEvidence) {
-    if (equalsLong(this.md_1, new Long(0, 0)))
-      this.md_1 = now;
-    this.nd_1 = new Long(0, 0);
+    if (equalsLong(this.vd_1, new Long(0, 0)))
+      this.vd_1 = now;
+    this.wd_1 = new Long(0, 0);
   } else {
-    if (equalsLong(this.nd_1, new Long(0, 0)))
-      this.nd_1 = now;
-    if (compare(subtract(now, this.nd_1), new Long(1000, 0)) > 0)
-      this.md_1 = new Long(0, 0);
+    if (equalsLong(this.wd_1, new Long(0, 0)))
+      this.wd_1 = now;
+    if (compare(subtract(now, this.wd_1), new Long(1000, 0)) > 0)
+      this.vd_1 = new Long(0, 0);
   }
-  if (this.ob_1.y_1 === 4) {
-    if (!forced && this.pb_1.equals(DropKind_PENDING_getInstance()) && toNumber(subtract(now, this.od_1)) >= barMs) {
-      var atLoudLevel = this.xb_1 >= this.gc_1 - 3.0 && !kickGone && this.xb_1 - this.pd_1 >= 1.5;
-      var fullEnough = !warmedUp || (this.id_1 >= PartyTuning_getInstance().ib_1 && this.jd_1 >= PartyTuning_getInstance().kb_1);
+  if (this.xb_1.y_1 === 4) {
+    if (!forced && this.yb_1.equals(DropKind_PENDING_getInstance()) && toNumber(subtract(now, this.xd_1)) >= barMs) {
+      var atLoudLevel = this.gc_1 >= this.pc_1 - 3.0 && !kickGone && this.gc_1 - this.yd_1 >= 1.5;
+      var fullEnough = !warmedUp || (this.rd_1 >= PartyTuning_getInstance().rb_1 && this.sd_1 >= PartyTuning_getInstance().tb_1);
       if (!fullEnough) {
-        this.pb_1 = DropKind_NONE_getInstance();
-        this.hc_1 = this.xb_1;
-        RaveLog_getInstance().ia('RaveGenre', fmt('ikke drop: diskant/vokal %.1f dB under toppen', [-this.id_1]));
+        this.yb_1 = DropKind_NONE_getInstance();
+        this.qc_1 = this.gc_1;
+        RaveLog_getInstance().ra('RaveGenre', fmt('ikke drop: diskant/vokal %.1f dB under toppen', [-this.rd_1]));
         enter(this, SongPart_BREAKDOWN_getInstance(), now, 'ikke fullt nok for drop');
-      } else if (this.xb_1 - this.pd_1 >= 3.0 || atLoudLevel || (printOk && !kickGone && this.fd_1 >= PartyTuning_getInstance().lb_1)) {
-        this.sd_1 = this.sd_1 + 1 | 0;
-        this.ec_1 = this.od_1;
-        this.kd_1 = false;
-        this.ud_1 = this.td_1 ? 0.1 : 0.0;
+      } else if (this.gc_1 - this.yd_1 >= 3.0 || atLoudLevel || (printOk && !kickGone && this.od_1 >= PartyTuning_getInstance().ub_1)) {
+        this.be_1 = this.be_1 + 1 | 0;
+        this.nc_1 = this.xd_1;
         this.td_1 = false;
-        this.pb_1 = songFraction >= 0.6 ? DropKind_LAST_getInstance() : this.sd_1 === 1 ? DropKind_FIRST_getInstance() : DropKind_MIDDLE_getInstance();
-        show(this, this.pb_1.sa_1, now, true);
-        RaveLog_getInstance().ia('RaveGenre', fmt('ekte drop #' + this.sd_1 + ' \u2192 ' + this.pb_1.sa_1 + ' (%.0f%% ut, sub +%.1f dB)', [songFraction * 100.0, this.xb_1 - this.pd_1]));
+        this.de_1 = this.ce_1 ? 0.1 : 0.0;
+        this.ce_1 = false;
+        this.yb_1 = songFraction >= 0.6 ? DropKind_LAST_getInstance() : this.be_1 === 1 ? DropKind_FIRST_getInstance() : DropKind_MIDDLE_getInstance();
+        show(this, this.yb_1.bb_1, now, true);
+        RaveLog_getInstance().ra('RaveGenre', fmt('ekte drop #' + this.be_1 + ' \u2192 ' + this.yb_1.bb_1 + ' (%.0f%% ut, sub +%.1f dB)', [songFraction * 100.0, this.gc_1 - this.yd_1]));
       } else {
-        this.td_1 = true;
-        this.pb_1 = DropKind_NONE_getInstance();
-        if (f.z7_1 > 0.35 && this.bc_1 > 0.25) {
-          RaveLog_getInstance().ia('RaveGenre', fmt('ANTI-CLIMAX (sub bare +%.1f dB, screech %.2f)', [this.xb_1 - this.pd_1, f.z7_1]));
+        this.ce_1 = true;
+        this.yb_1 = DropKind_NONE_getInstance();
+        if (f.i8_1 > 0.35 && this.kc_1 > 0.25) {
+          RaveLog_getInstance().ra('RaveGenre', fmt('ANTI-CLIMAX (sub bare +%.1f dB, screech %.2f)', [this.gc_1 - this.yd_1, f.i8_1]));
           enter(this, SongPart_ANTI_CLIMAX_getInstance(), now, 'anti-climax');
         } else {
-          show(this, 'FAKE DROP', now, compare(subtract(now, this.fc_1), new Long(8000, 0)) > 0);
-          RaveLog_getInstance().ia('RaveGenre', fmt('FAKE DROP (sub bare +%.1f dB etter 1 takt)', [this.xb_1 - this.pd_1]));
+          show(this, 'FAKE DROP', now, compare(subtract(now, this.oc_1), new Long(8000, 0)) > 0);
+          RaveLog_getInstance().ra('RaveGenre', fmt('FAKE DROP (sub bare +%.1f dB etter 1 takt)', [this.gc_1 - this.yd_1]));
           enter(this, kickGone ? SongPart_BREAKDOWN_getInstance() : SongPart_BUILDUP_getInstance(), now, 'fake drop');
         }
-        this.fc_1 = now;
-        this.hc_1 = this.xb_1;
-        this.kd_1 = true;
+        this.oc_1 = now;
+        this.qc_1 = this.gc_1;
+        this.td_1 = true;
       }
     }
-    if (!forced && this.ob_1.equals(SongPart_DROP_getInstance()) && !this.pb_1.equals(DropKind_PENDING_getInstance())) {
-      if (this.xb_1 < this.qd_1 - 6.0 || kickGone) {
-        if (equalsLong(this.rd_1, new Long(0, 0)))
-          this.rd_1 = now;
+    if (!forced && this.xb_1.equals(SongPart_DROP_getInstance()) && !this.yb_1.equals(DropKind_PENDING_getInstance())) {
+      if (this.gc_1 < this.zd_1 - 6.0 || kickGone) {
+        if (equalsLong(this.ae_1, new Long(0, 0)))
+          this.ae_1 = now;
       } else
-        this.rd_1 = new Long(0, 0);
-      if (compare(this.rd_1, new Long(0, 0)) > 0 && toNumber(subtract(now, this.rd_1)) >= barMs) {
-        this.pb_1 = DropKind_NONE_getInstance();
-        this.ud_1 = 0.0;
-        this.rd_1 = new Long(0, 0);
-        enter(this, kickGone ? SongPart_BREAKDOWN_getInstance() : compare(this.md_1, new Long(0, 0)) > 0 ? SongPart_BUILDUP_getInstance() : SongPart_GROOVE_getInstance(), now, 'bassen borte i 1 takt');
-      } else if (compare(this.md_1, new Long(0, 0)) > 0 && compare(subtract(now, this.md_1), new Long(2000, 0)) >= 0) {
-        this.pb_1 = DropKind_NONE_getInstance();
-        this.ud_1 = 0.0;
-        this.rd_1 = new Long(0, 0);
+        this.ae_1 = new Long(0, 0);
+      if (compare(this.ae_1, new Long(0, 0)) > 0 && toNumber(subtract(now, this.ae_1)) >= barMs) {
+        this.yb_1 = DropKind_NONE_getInstance();
+        this.de_1 = 0.0;
+        this.ae_1 = new Long(0, 0);
+        enter(this, kickGone ? SongPart_BREAKDOWN_getInstance() : compare(this.vd_1, new Long(0, 0)) > 0 ? SongPart_BUILDUP_getInstance() : SongPart_GROOVE_getInstance(), now, 'bassen borte i 1 takt');
+      } else if (compare(this.vd_1, new Long(0, 0)) > 0 && compare(subtract(now, this.vd_1), new Long(2000, 0)) >= 0) {
+        this.yb_1 = DropKind_NONE_getInstance();
+        this.de_1 = 0.0;
+        this.ae_1 = new Long(0, 0);
         enter(this, SongPart_BUILDUP_getInstance(), now, 'build-up inni dropet');
       } else if (warmedUp) {
-        var buildSig = this.jd_1 < PartyTuning_getInstance().gb_1 && this.id_1 > PartyTuning_getInstance().hb_1;
-        var unlike = printOk && PartyTuning_getInstance().mb_1 < 0.0 && this.fd_1 < PartyTuning_getInstance().mb_1;
-        var dull = this.id_1 < PartyTuning_getInstance().eb_1 || unlike;
-        this.hd_1 = buildSig ? equalsLong(this.hd_1, new Long(0, 0)) ? now : this.hd_1 : new Long(0, 0);
-        this.ad_1 = dull ? equalsLong(this.ad_1, new Long(0, 0)) ? now : this.ad_1 : new Long(0, 0);
-        if (compare(this.hd_1, new Long(0, 0)) > 0 && toNumber(subtract(now, this.hd_1)) >= barMs) {
-          this.pb_1 = DropKind_NONE_getInstance();
-          this.ud_1 = 0.0;
-          this.hd_1 = new Long(0, 0);
-          this.ad_1 = new Long(0, 0);
+        var buildSig = this.sd_1 < PartyTuning_getInstance().pb_1 && this.rd_1 > PartyTuning_getInstance().qb_1;
+        var unlike = printOk && PartyTuning_getInstance().vb_1 < 0.0 && this.od_1 < PartyTuning_getInstance().vb_1;
+        var dull = this.rd_1 < PartyTuning_getInstance().nb_1 || unlike;
+        this.qd_1 = buildSig ? equalsLong(this.qd_1, new Long(0, 0)) ? now : this.qd_1 : new Long(0, 0);
+        this.jd_1 = dull ? equalsLong(this.jd_1, new Long(0, 0)) ? now : this.jd_1 : new Long(0, 0);
+        if (compare(this.qd_1, new Long(0, 0)) > 0 && toNumber(subtract(now, this.qd_1)) >= barMs) {
+          this.yb_1 = DropKind_NONE_getInstance();
+          this.de_1 = 0.0;
+          this.qd_1 = new Long(0, 0);
+          this.jd_1 = new Long(0, 0);
           enter(this, SongPart_BUILDUP_getInstance(), now, 'lite sub, full diskant');
-        } else if (compare(this.ad_1, new Long(0, 0)) > 0 && toNumber(subtract(now, this.ad_1)) >= PartyTuning_getInstance().fb_1 * barMs) {
-          this.pb_1 = DropKind_NONE_getInstance();
-          this.ud_1 = 0.0;
-          this.hd_1 = new Long(0, 0);
-          this.ad_1 = new Long(0, 0);
-          enter(this, SongPart_BREAKDOWN_getInstance(), now, fmt('diskant/vokal ned %.1f dB', [this.id_1]));
+        } else if (compare(this.jd_1, new Long(0, 0)) > 0 && toNumber(subtract(now, this.jd_1)) >= PartyTuning_getInstance().ob_1 * barMs) {
+          this.yb_1 = DropKind_NONE_getInstance();
+          this.de_1 = 0.0;
+          this.qd_1 = new Long(0, 0);
+          this.jd_1 = new Long(0, 0);
+          enter(this, SongPart_BREAKDOWN_getInstance(), now, fmt('diskant/vokal ned %.1f dB', [this.rd_1]));
         }
       }
     }
   } else {
     var tmp_15;
-    if (compare(this.ec_1, new Long(0, 0)) > 0) {
-      var tmp_16 = subtract(now, this.ec_1);
+    if (compare(this.nc_1, new Long(0, 0)) > 0) {
+      var tmp_16 = subtract(now, this.nc_1);
       var tmp0_4 = new Long(16000, 0);
       // Inline function 'kotlin.comparisons.minOf' call
       var b_4 = numberToLong(8 * barMs);
@@ -5736,36 +5890,36 @@ protoOf(HardstyleStructure).be = function (f, now, positionMs, durationMs) {
       tmp_15 = false;
     }
     var lockedOut = tmp_15;
-    var afterFake = compare(this.fc_1, new Long(0, 0)) > 0 && compare(subtract(now, this.fc_1), numberToLong(2 * barMs)) < 0;
-    var unprepared = !this.kd_1 && (this.ob_1.equals(SongPart_INTRO_getInstance()) || this.ob_1.equals(SongPart_GROOVE_getInstance()) || this.ob_1.equals(SongPart_BREAKDOWN_getInstance()));
-    var introDropOk = unprepared && toNumber(subtract(now, this.ub_1)) > 16 * barMs;
-    var blockedByCorrection = this.qc_1 || (forced && !this.pc_1) || (compare(this.gd_1, new Long(0, 0)) > 0 && toNumber(subtract(now, this.gd_1)) < PartyTuning_getInstance().jb_1 * barMs);
-    var mayDrop = !lockedOut && !afterFake && !blockedByCorrection && (this.kd_1 || introDropOk || this.ob_1.equals(SongPart_BUILDUP_getInstance()) || this.ob_1.equals(SongPart_BREAKDOWN_getInstance()) || this.ob_1.equals(SongPart_VOCAL_getInstance()) || this.ob_1.equals(SongPart_ANTI_CLIMAX_getInstance()));
-    var backFromDip = this.wb_1 - this.hc_1 >= 6.0 && this.wb_1 >= this.gc_1 - 3.0;
+    var afterFake = compare(this.oc_1, new Long(0, 0)) > 0 && compare(subtract(now, this.oc_1), numberToLong(2 * barMs)) < 0;
+    var unprepared = !this.td_1 && (this.xb_1.equals(SongPart_INTRO_getInstance()) || this.xb_1.equals(SongPart_GROOVE_getInstance()) || this.xb_1.equals(SongPart_BREAKDOWN_getInstance()));
+    var introDropOk = unprepared && toNumber(subtract(now, this.dc_1)) > 16 * barMs;
+    var blockedByCorrection = this.zc_1 || (forced && !this.yc_1) || (compare(this.pd_1, new Long(0, 0)) > 0 && toNumber(subtract(now, this.pd_1)) < PartyTuning_getInstance().sb_1 * barMs);
+    var mayDrop = !lockedOut && !afterFake && !blockedByCorrection && (this.td_1 || introDropOk || this.xb_1.equals(SongPart_BUILDUP_getInstance()) || this.xb_1.equals(SongPart_BREAKDOWN_getInstance()) || this.xb_1.equals(SongPart_VOCAL_getInstance()) || this.xb_1.equals(SongPart_ANTI_CLIMAX_getInstance()));
+    var backFromDip = this.fc_1 - this.qc_1 >= 6.0 && this.fc_1 >= this.pc_1 - 3.0;
     var hit = unprepared ? backFromDip : subHitRel >= 6.0 || backFromDip;
-    if (mayDrop && hit && f.c8_1 > 8.0 && compare(subtract(now, this.lc_1), new Long(300, 0)) < 0) {
-      this.od_1 = now;
+    if (mayDrop && hit && f.l8_1 > 8.0 && compare(subtract(now, this.uc_1), new Long(300, 0)) < 0) {
+      this.xd_1 = now;
       var tmp_17 = this;
-      var tmp0_5 = this.yb_1;
+      var tmp0_5 = this.hc_1;
       // Inline function 'kotlin.comparisons.minOf' call
-      var b_5 = this.hc_1 + 3.0;
-      tmp_17.pd_1 = Math.min(tmp0_5, b_5);
-      this.qd_1 = this.wb_1;
-      this.pb_1 = DropKind_PENDING_getInstance();
-      this.ld_1 = true;
-      this.oc_1 = new Long(0, 0);
-      voteBoundary(this, f.e8_1);
+      var b_5 = this.qc_1 + 3.0;
+      tmp_17.yd_1 = Math.min(tmp0_5, b_5);
+      this.zd_1 = this.fc_1;
+      this.yb_1 = DropKind_PENDING_getInstance();
+      this.ud_1 = true;
+      this.xc_1 = new Long(0, 0);
+      voteBoundary(this, f.n8_1);
       enter(this, SongPart_DROP_getInstance(), now, fmt('sub +%.1f dB', [subHitRel]));
     } else {
-      var next = (compare(new Long(0, 0), remainingMs) <= 0 ? compare(remainingMs, numberToLong(16 * barMs)) <= 0 : false) && compare(subtract(now, this.ub_1), new Long(30000, 0)) > 0 ? SongPart_OUTRO_getInstance() : compare(this.md_1, new Long(0, 0)) > 0 && compare(subtract(now, this.md_1), new Long(2000, 0)) >= 0 ? SongPart_BUILDUP_getInstance() : this.ob_1.equals(SongPart_BUILDUP_getInstance()) && compare(this.md_1, new Long(0, 0)) > 0 ? SongPart_BUILDUP_getInstance() : this.kd_1 && (this.ob_1.equals(SongPart_BUILDUP_getInstance()) || this.ob_1.equals(SongPart_BREAKDOWN_getInstance()) || this.ob_1.equals(SongPart_ANTI_CLIMAX_getInstance())) && f.z7_1 > 0.35 && subRel < -2.0 && !kickGone && this.bc_1 > 0.25 ? SongPart_ANTI_CLIMAX_getInstance() : kickGone && !this.ob_1.equals(SongPart_INTRO_getInstance()) ? f.d8_1 > 3.0 && f.m7_1 > 0.08 ? SongPart_VOCAL_getInstance() : SongPart_BREAKDOWN_getInstance() : kickGone && this.ob_1.equals(SongPart_INTRO_getInstance()) && compare(subtract(now, this.ub_1), new Long(8000, 0)) > 0 ? SongPart_BREAKDOWN_getInstance() : !this.ld_1 ? SongPart_INTRO_getInstance() : SongPart_BREAKDOWN_getInstance();
-      if (!forced && !next.equals(this.ob_1) && compare(subtract(now, this.vb_1), numberToLong(barMs)) >= 0) {
+      var next = (compare(new Long(0, 0), remainingMs) <= 0 ? compare(remainingMs, numberToLong(16 * barMs)) <= 0 : false) && compare(subtract(now, this.dc_1), new Long(30000, 0)) > 0 ? SongPart_OUTRO_getInstance() : compare(this.vd_1, new Long(0, 0)) > 0 && compare(subtract(now, this.vd_1), new Long(2000, 0)) >= 0 ? SongPart_BUILDUP_getInstance() : this.xb_1.equals(SongPart_BUILDUP_getInstance()) && compare(this.vd_1, new Long(0, 0)) > 0 ? SongPart_BUILDUP_getInstance() : this.td_1 && (this.xb_1.equals(SongPart_BUILDUP_getInstance()) || this.xb_1.equals(SongPart_BREAKDOWN_getInstance()) || this.xb_1.equals(SongPart_ANTI_CLIMAX_getInstance())) && f.i8_1 > 0.35 && subRel < -2.0 && !kickGone && this.kc_1 > 0.25 ? SongPart_ANTI_CLIMAX_getInstance() : kickGone && !this.xb_1.equals(SongPart_INTRO_getInstance()) ? f.m8_1 > 3.0 && f.v7_1 > 0.08 ? SongPart_VOCAL_getInstance() : SongPart_BREAKDOWN_getInstance() : kickGone && this.xb_1.equals(SongPart_INTRO_getInstance()) && compare(subtract(now, this.dc_1), new Long(8000, 0)) > 0 ? SongPart_BREAKDOWN_getInstance() : !this.ud_1 ? SongPart_INTRO_getInstance() : SongPart_BREAKDOWN_getInstance();
+      if (!forced && !next.equals(this.xb_1) && compare(subtract(now, this.ec_1), numberToLong(barMs)) >= 0) {
         enter(this, next, now, 'takt-bevis');
         if (next.equals(SongPart_BREAKDOWN_getInstance()) && !kickGone)
-          this.kd_1 = false;
+          this.td_1 = false;
       }
     }
   }
-  var tmp0_6 = get_indices(this.xd_1);
+  var tmp0_6 = get_indices(this.ge_1);
   var tmp$ret$14;
   $l$block_0: {
     // Inline function 'kotlin.collections.maxByOrNull' call
@@ -5780,10 +5934,10 @@ protoOf(HardstyleStructure).be = function (f, now, positionMs, durationMs) {
       break $l$block_0;
     }
     var it = maxElem;
-    var maxValue = this.xd_1[it];
+    var maxValue = this.ge_1[it];
     do {
       var e_0 = iterator.l();
-      var v = this.xd_1[e_0];
+      var v = this.ge_1[e_0];
       if (compareTo(maxValue, v) < 0) {
         maxElem = e_0;
         maxValue = v;
@@ -5794,24 +5948,24 @@ protoOf(HardstyleStructure).be = function (f, now, positionMs, durationMs) {
   }
   var tmp2_elvis_lhs = tmp$ret$14;
   var phase = tmp2_elvis_lhs == null ? 0 : tmp2_elvis_lhs;
-  var pos = (((f.e8_1 - phase | 0) % 32 | 0) + 32 | 0) % 32 | 0;
+  var pos = (((f.n8_1 - phase | 0) % 32 | 0) + 32 | 0) % 32 | 0;
   var barInPhrase = (pos / 4 | 0) + 1 | 0;
   // Inline function 'kotlin.floorDiv' call
-  var this_2 = f.e8_1 - phase | 0;
+  var this_2 = f.n8_1 - phase | 0;
   var q = this_2 / 32 | 0;
   if ((this_2 ^ 32) < 0 && !(imul_0(q, 32) === this_2)) {
     q = q - 1 | 0;
   }
   var phrase = q + 1 | 0;
   var tmp_18;
-  switch (this.ob_1.y_1) {
+  switch (this.xb_1.y_1) {
     case 4:
       var tmp_19;
-      if (this.pb_1.equals(DropKind_PENDING_getInstance())) {
+      if (this.yb_1.equals(DropKind_PENDING_getInstance())) {
         tmp_19 = 'DROP?';
       } else {
         // Inline function 'kotlin.text.ifBlank' call
-        var this_3 = this.pb_1.sa_1;
+        var this_3 = this.yb_1.bb_1;
         var tmp_20;
         if (isBlank(this_3)) {
           tmp_20 = 'DROP';
@@ -5834,19 +5988,19 @@ protoOf(HardstyleStructure).be = function (f, now, positionMs, durationMs) {
 
       // Inline function 'kotlin.js.asDynamic' call
 
-      tmp_18 = this.ob_1.pa_1.toUpperCase();
+      tmp_18 = this.xb_1.ya_1.toUpperCase();
       break;
   }
   var partName = tmp_18;
-  this.sb_1 = new StructureHud(partName, barInPhrase, phrase, this.kd_1, subRel, airTrend, build, this.bc_1, f.z7_1, this.ob_1.equals(SongPart_VOCAL_getInstance()), f.u7_1);
-  var bar = f.e8_1 / 4 | 0;
-  if (!(bar === this.yd_1)) {
-    this.yd_1 = bar;
-    RaveLog_getInstance().ia('RaveGenre', fmt('takt %d/8 frase %d | %s | sub %+.1f dB (treff %+.1f) diskant %+.1f dB build %.0f%% grit %.2f snare/s %.1f klar=%b', [barInPhrase, phrase, partName, subRel, subHitRel, airTrend, build * 100.0, this.bc_1, this.ic_1, this.kd_1]));
+  this.bc_1 = new StructureHud(partName, barInPhrase, phrase, this.td_1, subRel, airTrend, build, this.kc_1, f.i8_1, this.xb_1.equals(SongPart_VOCAL_getInstance()), f.d8_1);
+  var bar = f.n8_1 / 4 | 0;
+  if (!(bar === this.he_1)) {
+    this.he_1 = bar;
+    RaveLog_getInstance().ra('RaveGenre', fmt('takt %d/8 frase %d | %s | sub %+.1f dB (treff %+.1f) diskant %+.1f dB build %.0f%% grit %.2f snare/s %.1f klar=%b', [barInPhrase, phrase, partName, subRel, subHitRel, airTrend, build * 100.0, this.kc_1, this.rc_1, this.td_1]));
   }
-  var boost = this.ud_1;
+  var boost = this.de_1;
   var tmp_21;
-  switch (this.ob_1.y_1) {
+  switch (this.xb_1.y_1) {
     case 0:
       tmp_21 = 0.4;
       break;
@@ -5855,11 +6009,11 @@ protoOf(HardstyleStructure).be = function (f, now, positionMs, durationMs) {
       tmp_21 = 0.5;
       break;
     case 3:
-      tmp_21 = coerceIn_0(0.55 + build * 0.25, 0.55, 0.8);
+      tmp_21 = coerceIn(0.55 + build * 0.25, 0.55, 0.8);
       break;
     case 4:
       var tmp_22;
-      switch (this.pb_1.y_1) {
+      switch (this.yb_1.y_1) {
         case 1:
           tmp_22 = 0.9;
           break;
@@ -5896,14 +6050,14 @@ protoOf(HardstyleStructure).be = function (f, now, positionMs, durationMs) {
       break;
   }
   var target = tmp_21;
-  var rate = target > this.vd_1 && this.ob_1.equals(SongPart_DROP_getInstance()) ? 0.05 : 0.6;
+  var rate = target > this.ee_1 && this.xb_1.equals(SongPart_DROP_getInstance()) ? 0.05 : 0.6;
   var tmp_23 = this;
-  var tmp_24 = this.vd_1;
-  var tmp_25 = target - this.vd_1;
+  var tmp_24 = this.ee_1;
+  var tmp_25 = target - this.ee_1;
   // Inline function 'kotlin.math.exp' call
   var x_3 = -dt / rate;
-  tmp_23.vd_1 = tmp_24 + tmp_25 * (1.0 - Math.exp(x_3));
-  return this.vd_1;
+  tmp_23.ee_1 = tmp_24 + tmp_25 * (1.0 - Math.exp(x_3));
+  return this.ee_1;
 };
 var static_init_called_2;
 function static_init_2() {
@@ -5923,85 +6077,85 @@ var HardSub_UPTEMPO_instance;
 var HardSub_FRENCHCORE_instance;
 function HardSub(name, ordinal, label, shake, strobe, spike, particles, screech) {
   Enum.call(this, name, ordinal);
-  this.ee_1 = label;
-  this.fe_1 = shake;
-  this.ge_1 = strobe;
-  this.he_1 = spike;
-  this.ie_1 = particles;
-  this.je_1 = screech;
+  this.ne_1 = label;
+  this.oe_1 = shake;
+  this.pe_1 = strobe;
+  this.qe_1 = spike;
+  this.re_1 = particles;
+  this.se_1 = screech;
 }
 function HardSubDetector() {
-  this.ke_1 = HardSub_RAW_getInstance();
-  this.le_1 = new Long(0, 0);
-  this.me_1 = new Float32Array(12);
-  this.ne_1 = 0;
-  this.oe_1 = 0;
-  this.pe_1 = new Long(0, 0);
-  this.qe_1 = 0.0;
-  this.re_1 = 0.0;
-  this.se_1 = 0.0;
-  this.te_1 = new Long(0, 0);
-  this.ue_1 = HardSub_RAW_getInstance();
-  this.ve_1 = new Long(0, 0);
-  this.we_1 = false;
-  this.xe_1 = null;
+  this.te_1 = HardSub_RAW_getInstance();
+  this.ue_1 = new Long(0, 0);
+  this.ve_1 = new Float32Array(12);
+  this.we_1 = 0;
+  this.xe_1 = 0;
+  this.ye_1 = new Long(0, 0);
+  this.ze_1 = 0.0;
+  this.af_1 = 0.0;
+  this.bf_1 = 0.0;
+  this.cf_1 = new Long(0, 0);
+  this.df_1 = HardSub_RAW_getInstance();
+  this.ef_1 = new Long(0, 0);
+  this.ff_1 = false;
+  this.gf_1 = null;
 }
-protoOf(HardSubDetector).ye = function () {
-  this.ne_1 = 0;
-  this.oe_1 = 0;
-  this.qe_1 = 0.0;
-  this.re_1 = 0.0;
-  this.we_1 = false;
-  this.xe_1 = null;
+protoOf(HardSubDetector).hf = function () {
+  this.we_1 = 0;
+  this.xe_1 = 0;
+  this.ze_1 = 0.0;
+  this.af_1 = 0.0;
+  this.ff_1 = false;
+  this.gf_1 = null;
 };
-protoOf(HardSubDetector).ma = function (f, now) {
+protoOf(HardSubDetector).va = function (f, now) {
   var tmp;
-  if (equalsLong(this.te_1, new Long(0, 0))) {
+  if (equalsLong(this.cf_1, new Long(0, 0))) {
     tmp = 0.0;
   } else {
     // Inline function 'kotlin.Long.div' call
-    var this_0 = subtract(now, this.te_1);
+    var this_0 = subtract(now, this.cf_1);
     var tmp$ret$0 = toNumber(this_0) / 1000.0;
-    tmp = coerceIn_0(tmp$ret$0, 0.0, 0.2);
+    tmp = coerceIn(tmp$ret$0, 0.0, 0.2);
   }
   var dt = tmp;
-  this.te_1 = now;
+  this.cf_1 = now;
   // Inline function 'kotlin.math.exp' call
   var x = -dt / 8.0;
   var d = Math.exp(x);
-  this.qe_1 = this.qe_1 * d + f.t7_1 * (1.0 - d);
-  this.re_1 = this.re_1 * d + f.z7_1 * (1.0 - d);
-  this.se_1 = this.se_1 * d + f.k8_1 * (1.0 - d);
-  if (f.u7_1 > 0.0 && compare(subtract(now, this.pe_1), new Long(1000, 0)) >= 0) {
-    this.pe_1 = now;
-    this.me_1[this.oe_1] = f.u7_1;
-    this.oe_1 = (this.oe_1 + 1 | 0) % this.me_1.length | 0;
+  this.ze_1 = this.ze_1 * d + f.c8_1 * (1.0 - d);
+  this.af_1 = this.af_1 * d + f.i8_1 * (1.0 - d);
+  this.bf_1 = this.bf_1 * d + f.t8_1 * (1.0 - d);
+  if (f.d8_1 > 0.0 && compare(subtract(now, this.ye_1), new Long(1000, 0)) >= 0) {
+    this.ye_1 = now;
+    this.ve_1[this.xe_1] = f.d8_1;
+    this.xe_1 = (this.xe_1 + 1 | 0) % this.ve_1.length | 0;
     var tmp_0 = this;
-    var tmp0 = this.ne_1 + 1 | 0;
+    var tmp0 = this.we_1 + 1 | 0;
     // Inline function 'kotlin.comparisons.minOf' call
-    var b = this.me_1.length;
-    tmp_0.ne_1 = Math.min(tmp0, b);
+    var b = this.ve_1.length;
+    tmp_0.we_1 = Math.min(tmp0, b);
   }
-  if (!(this.xe_1 == null))
-    return this.ke_1;
-  if (this.ne_1 < 5)
-    return this.ke_1;
-  var bpm = sorted(copyOf_1(this.me_1, this.ne_1)).m(this.ne_1 / 2 | 0);
-  var guess = bpm >= 222.0 ? HardSub_FRENCHCORE_getInstance() : bpm >= 188.0 ? HardSub_UPTEMPO_getInstance() : bpm >= 162.0 ? HardSub_HARDCORE_getInstance() : this.se_1 > 0.5 && this.qe_1 < 0.35 ? HardSub_EUPHORIC_getInstance() : this.qe_1 > 0.22 || this.re_1 > 0.08 ? HardSub_RAW_getInstance() : HardSub_EUPHORIC_getInstance();
-  if (!guess.equals(this.ue_1)) {
-    this.ue_1 = guess;
-    this.ve_1 = now;
+  if (!(this.gf_1 == null))
+    return this.te_1;
+  if (this.we_1 < 5)
+    return this.te_1;
+  var bpm = sorted(copyOf_1(this.ve_1, this.we_1)).m(this.we_1 / 2 | 0);
+  var guess = bpm >= 222.0 ? HardSub_FRENCHCORE_getInstance() : bpm >= 188.0 ? HardSub_UPTEMPO_getInstance() : bpm >= 162.0 ? HardSub_HARDCORE_getInstance() : this.bf_1 > 0.5 && this.ze_1 < 0.35 ? HardSub_EUPHORIC_getInstance() : this.ze_1 > 0.22 || this.af_1 > 0.08 ? HardSub_RAW_getInstance() : HardSub_EUPHORIC_getInstance();
+  if (!guess.equals(this.df_1)) {
+    this.df_1 = guess;
+    this.ef_1 = now;
   }
-  var needed = this.we_1 ? new Long(40000, 0) : new Long(12000, 0);
-  if (!this.ue_1.equals(this.ke_1) && compare(subtract(now, this.ve_1), needed) >= 0 || (!this.we_1 && this.ue_1.equals(this.ke_1) && compare(subtract(now, this.ve_1), new Long(12000, 0)) >= 0)) {
-    this.we_1 = true;
-    if (this.ue_1.equals(this.ke_1))
-      return this.ke_1;
-    this.ke_1 = this.ue_1;
-    this.le_1 = now;
-    RaveLog_getInstance().ia('RaveGenre', fmt('undersjanger \u2192 ' + this.ke_1.ee_1 + ' (bpm=%.0f grit=%.2f screech=%.2f)', [bpm, this.qe_1, this.re_1]));
+  var needed = this.ff_1 ? new Long(40000, 0) : new Long(12000, 0);
+  if (!this.df_1.equals(this.te_1) && compare(subtract(now, this.ef_1), needed) >= 0 || (!this.ff_1 && this.df_1.equals(this.te_1) && compare(subtract(now, this.ef_1), new Long(12000, 0)) >= 0)) {
+    this.ff_1 = true;
+    if (this.df_1.equals(this.te_1))
+      return this.te_1;
+    this.te_1 = this.df_1;
+    this.ue_1 = now;
+    RaveLog_getInstance().ra('RaveGenre', fmt('undersjanger \u2192 ' + this.te_1.ne_1 + ' (bpm=%.0f grit=%.2f screech=%.2f)', [bpm, this.ze_1, this.af_1]));
   }
-  return this.ke_1;
+  return this.te_1;
 };
 function blendFrames$l($t, x, y) {
   return x + (y - x) * $t;
@@ -6147,128 +6301,110 @@ function HardstyleFrame(bass, kick, highs, energy, burst, build, spectrum, highM
   offbeat = offbeat === VOID ? 0.0 : offbeat;
   vocal = vocal === VOID ? 0.0 : vocal;
   vocalHit = vocalHit === VOID ? 0.0 : vocalHit;
-  this.k7_1 = bass;
-  this.l7_1 = kick;
-  this.m7_1 = highs;
-  this.n7_1 = energy;
-  this.o7_1 = burst;
-  this.p7_1 = build;
-  this.q7_1 = spectrum;
-  this.r7_1 = highMotion;
-  this.s7_1 = heavy;
-  this.t7_1 = grit;
-  this.u7_1 = bpm;
-  this.v7_1 = snare;
-  this.w7_1 = crash;
-  this.x7_1 = sub;
-  this.y7_1 = level;
-  this.z7_1 = screech;
-  this.a8_1 = bassLevel;
-  this.b8_1 = air;
-  this.c8_1 = subLevel;
-  this.d8_1 = presence;
-  this.e8_1 = beat;
-  this.f8_1 = beatAt;
-  this.g8_1 = beatPeriod;
-  this.h8_1 = beatConfidence;
-  this.i8_1 = noise;
-  this.j8_1 = centroid;
-  this.k8_1 = offbeat;
-  this.l8_1 = vocal;
-  this.m8_1 = vocalHit;
+  this.t7_1 = bass;
+  this.u7_1 = kick;
+  this.v7_1 = highs;
+  this.w7_1 = energy;
+  this.x7_1 = burst;
+  this.y7_1 = build;
+  this.z7_1 = spectrum;
+  this.a8_1 = highMotion;
+  this.b8_1 = heavy;
+  this.c8_1 = grit;
+  this.d8_1 = bpm;
+  this.e8_1 = snare;
+  this.f8_1 = crash;
+  this.g8_1 = sub;
+  this.h8_1 = level;
+  this.i8_1 = screech;
+  this.j8_1 = bassLevel;
+  this.k8_1 = air;
+  this.l8_1 = subLevel;
+  this.m8_1 = presence;
+  this.n8_1 = beat;
+  this.o8_1 = beatAt;
+  this.p8_1 = beatPeriod;
+  this.q8_1 = beatConfidence;
+  this.r8_1 = noise;
+  this.s8_1 = centroid;
+  this.t8_1 = offbeat;
+  this.u8_1 = vocal;
+  this.v8_1 = vocalHit;
 }
-protoOf(HardstyleFrame).ze = function (bass, kick, highs, energy, burst, build, spectrum, highMotion, heavy, grit, bpm, snare, crash, sub, level, screech, bassLevel, air, subLevel, presence, beat, beatAt, beatPeriod, beatConfidence, noise, centroid, offbeat, vocal, vocalHit) {
+protoOf(HardstyleFrame).if = function (bass, kick, highs, energy, burst, build, spectrum, highMotion, heavy, grit, bpm, snare, crash, sub, level, screech, bassLevel, air, subLevel, presence, beat, beatAt, beatPeriod, beatConfidence, noise, centroid, offbeat, vocal, vocalHit) {
   return new HardstyleFrame(bass, kick, highs, energy, burst, build, spectrum, highMotion, heavy, grit, bpm, snare, crash, sub, level, screech, bassLevel, air, subLevel, presence, beat, beatAt, beatPeriod, beatConfidence, noise, centroid, offbeat, vocal, vocalHit);
 };
-protoOf(HardstyleFrame).a9 = function (bass, kick, highs, energy, burst, build, spectrum, highMotion, heavy, grit, bpm, snare, crash, sub, level, screech, bassLevel, air, subLevel, presence, beat, beatAt, beatPeriod, beatConfidence, noise, centroid, offbeat, vocal, vocalHit, $super) {
-  bass = bass === VOID ? this.k7_1 : bass;
-  kick = kick === VOID ? this.l7_1 : kick;
-  highs = highs === VOID ? this.m7_1 : highs;
-  energy = energy === VOID ? this.n7_1 : energy;
-  burst = burst === VOID ? this.o7_1 : burst;
-  build = build === VOID ? this.p7_1 : build;
-  spectrum = spectrum === VOID ? this.q7_1 : spectrum;
-  highMotion = highMotion === VOID ? this.r7_1 : highMotion;
-  heavy = heavy === VOID ? this.s7_1 : heavy;
-  grit = grit === VOID ? this.t7_1 : grit;
-  bpm = bpm === VOID ? this.u7_1 : bpm;
-  snare = snare === VOID ? this.v7_1 : snare;
-  crash = crash === VOID ? this.w7_1 : crash;
-  sub = sub === VOID ? this.x7_1 : sub;
-  level = level === VOID ? this.y7_1 : level;
-  screech = screech === VOID ? this.z7_1 : screech;
-  bassLevel = bassLevel === VOID ? this.a8_1 : bassLevel;
-  air = air === VOID ? this.b8_1 : air;
-  subLevel = subLevel === VOID ? this.c8_1 : subLevel;
-  presence = presence === VOID ? this.d8_1 : presence;
-  beat = beat === VOID ? this.e8_1 : beat;
-  beatAt = beatAt === VOID ? this.f8_1 : beatAt;
-  beatPeriod = beatPeriod === VOID ? this.g8_1 : beatPeriod;
-  beatConfidence = beatConfidence === VOID ? this.h8_1 : beatConfidence;
-  noise = noise === VOID ? this.i8_1 : noise;
-  centroid = centroid === VOID ? this.j8_1 : centroid;
-  offbeat = offbeat === VOID ? this.k8_1 : offbeat;
-  vocal = vocal === VOID ? this.l8_1 : vocal;
-  vocalHit = vocalHit === VOID ? this.m8_1 : vocalHit;
-  return $super === VOID ? this.ze(bass, kick, highs, energy, burst, build, spectrum, highMotion, heavy, grit, bpm, snare, crash, sub, level, screech, bassLevel, air, subLevel, presence, beat, beatAt, beatPeriod, beatConfidence, noise, centroid, offbeat, vocal, vocalHit) : $super.ze.call(this, bass, kick, highs, energy, burst, build, spectrum, highMotion, heavy, grit, bpm, snare, crash, sub, level, screech, bassLevel, air, subLevel, presence, beat, beatAt, beatPeriod, beatConfidence, noise, centroid, offbeat, vocal, vocalHit);
+protoOf(HardstyleFrame).j9 = function (bass, kick, highs, energy, burst, build, spectrum, highMotion, heavy, grit, bpm, snare, crash, sub, level, screech, bassLevel, air, subLevel, presence, beat, beatAt, beatPeriod, beatConfidence, noise, centroid, offbeat, vocal, vocalHit, $super) {
+  bass = bass === VOID ? this.t7_1 : bass;
+  kick = kick === VOID ? this.u7_1 : kick;
+  highs = highs === VOID ? this.v7_1 : highs;
+  energy = energy === VOID ? this.w7_1 : energy;
+  burst = burst === VOID ? this.x7_1 : burst;
+  build = build === VOID ? this.y7_1 : build;
+  spectrum = spectrum === VOID ? this.z7_1 : spectrum;
+  highMotion = highMotion === VOID ? this.a8_1 : highMotion;
+  heavy = heavy === VOID ? this.b8_1 : heavy;
+  grit = grit === VOID ? this.c8_1 : grit;
+  bpm = bpm === VOID ? this.d8_1 : bpm;
+  snare = snare === VOID ? this.e8_1 : snare;
+  crash = crash === VOID ? this.f8_1 : crash;
+  sub = sub === VOID ? this.g8_1 : sub;
+  level = level === VOID ? this.h8_1 : level;
+  screech = screech === VOID ? this.i8_1 : screech;
+  bassLevel = bassLevel === VOID ? this.j8_1 : bassLevel;
+  air = air === VOID ? this.k8_1 : air;
+  subLevel = subLevel === VOID ? this.l8_1 : subLevel;
+  presence = presence === VOID ? this.m8_1 : presence;
+  beat = beat === VOID ? this.n8_1 : beat;
+  beatAt = beatAt === VOID ? this.o8_1 : beatAt;
+  beatPeriod = beatPeriod === VOID ? this.p8_1 : beatPeriod;
+  beatConfidence = beatConfidence === VOID ? this.q8_1 : beatConfidence;
+  noise = noise === VOID ? this.r8_1 : noise;
+  centroid = centroid === VOID ? this.s8_1 : centroid;
+  offbeat = offbeat === VOID ? this.t8_1 : offbeat;
+  vocal = vocal === VOID ? this.u8_1 : vocal;
+  vocalHit = vocalHit === VOID ? this.v8_1 : vocalHit;
+  return $super === VOID ? this.if(bass, kick, highs, energy, burst, build, spectrum, highMotion, heavy, grit, bpm, snare, crash, sub, level, screech, bassLevel, air, subLevel, presence, beat, beatAt, beatPeriod, beatConfidence, noise, centroid, offbeat, vocal, vocalHit) : $super.if.call(this, bass, kick, highs, energy, burst, build, spectrum, highMotion, heavy, grit, bpm, snare, crash, sub, level, screech, bassLevel, air, subLevel, presence, beat, beatAt, beatPeriod, beatConfidence, noise, centroid, offbeat, vocal, vocalHit);
 };
 protoOf(HardstyleFrame).toString = function () {
-  return 'HardstyleFrame(bass=' + this.k7_1 + ', kick=' + this.l7_1 + ', highs=' + this.m7_1 + ', energy=' + this.n7_1 + ', burst=' + this.o7_1 + ', build=' + this.p7_1 + ', spectrum=' + toString_1(this.q7_1) + ', highMotion=' + this.r7_1 + ', heavy=' + this.s7_1 + ', grit=' + this.t7_1 + ', bpm=' + this.u7_1 + ', snare=' + this.v7_1 + ', crash=' + this.w7_1 + ', sub=' + this.x7_1 + ', level=' + this.y7_1 + ', screech=' + this.z7_1 + ', bassLevel=' + this.a8_1 + ', air=' + this.b8_1 + ', subLevel=' + this.c8_1 + ', presence=' + this.d8_1 + ', beat=' + this.e8_1 + ', beatAt=' + this.f8_1.toString() + ', beatPeriod=' + this.g8_1 + ', beatConfidence=' + this.h8_1 + ', noise=' + this.i8_1 + ', centroid=' + this.j8_1 + ', offbeat=' + this.k8_1 + ', vocal=' + this.l8_1 + ', vocalHit=' + this.m8_1 + ')';
+  return 'HardstyleFrame(bass=' + this.t7_1 + ', kick=' + this.u7_1 + ', highs=' + this.v7_1 + ', energy=' + this.w7_1 + ', burst=' + this.x7_1 + ', build=' + this.y7_1 + ', spectrum=' + toString_1(this.z7_1) + ', highMotion=' + this.a8_1 + ', heavy=' + this.b8_1 + ', grit=' + this.c8_1 + ', bpm=' + this.d8_1 + ', snare=' + this.e8_1 + ', crash=' + this.f8_1 + ', sub=' + this.g8_1 + ', level=' + this.h8_1 + ', screech=' + this.i8_1 + ', bassLevel=' + this.j8_1 + ', air=' + this.k8_1 + ', subLevel=' + this.l8_1 + ', presence=' + this.m8_1 + ', beat=' + this.n8_1 + ', beatAt=' + this.o8_1.toString() + ', beatPeriod=' + this.p8_1 + ', beatConfidence=' + this.q8_1 + ', noise=' + this.r8_1 + ', centroid=' + this.s8_1 + ', offbeat=' + this.t8_1 + ', vocal=' + this.u8_1 + ', vocalHit=' + this.v8_1 + ')';
 };
 protoOf(HardstyleFrame).hashCode = function () {
-  var result = getNumberHashCode(this.k7_1);
-  result = imul_0(result, 31) + getNumberHashCode(this.l7_1) | 0;
-  result = imul_0(result, 31) + getNumberHashCode(this.m7_1) | 0;
-  result = imul_0(result, 31) + getNumberHashCode(this.n7_1) | 0;
-  result = imul_0(result, 31) + getNumberHashCode(this.o7_1) | 0;
-  result = imul_0(result, 31) + getNumberHashCode(this.p7_1) | 0;
-  result = imul_0(result, 31) + hashCode_0(this.q7_1) | 0;
-  result = imul_0(result, 31) + getNumberHashCode(this.r7_1) | 0;
-  result = imul_0(result, 31) + getNumberHashCode(this.s7_1) | 0;
-  result = imul_0(result, 31) + getNumberHashCode(this.t7_1) | 0;
+  var result = getNumberHashCode(this.t7_1);
   result = imul_0(result, 31) + getNumberHashCode(this.u7_1) | 0;
   result = imul_0(result, 31) + getNumberHashCode(this.v7_1) | 0;
   result = imul_0(result, 31) + getNumberHashCode(this.w7_1) | 0;
   result = imul_0(result, 31) + getNumberHashCode(this.x7_1) | 0;
   result = imul_0(result, 31) + getNumberHashCode(this.y7_1) | 0;
-  result = imul_0(result, 31) + getNumberHashCode(this.z7_1) | 0;
+  result = imul_0(result, 31) + hashCode_0(this.z7_1) | 0;
   result = imul_0(result, 31) + getNumberHashCode(this.a8_1) | 0;
   result = imul_0(result, 31) + getNumberHashCode(this.b8_1) | 0;
   result = imul_0(result, 31) + getNumberHashCode(this.c8_1) | 0;
   result = imul_0(result, 31) + getNumberHashCode(this.d8_1) | 0;
-  result = imul_0(result, 31) + this.e8_1 | 0;
-  result = imul_0(result, 31) + this.f8_1.hashCode() | 0;
+  result = imul_0(result, 31) + getNumberHashCode(this.e8_1) | 0;
+  result = imul_0(result, 31) + getNumberHashCode(this.f8_1) | 0;
   result = imul_0(result, 31) + getNumberHashCode(this.g8_1) | 0;
-  result = imul_0(result, 31) + this.h8_1 | 0;
+  result = imul_0(result, 31) + getNumberHashCode(this.h8_1) | 0;
   result = imul_0(result, 31) + getNumberHashCode(this.i8_1) | 0;
   result = imul_0(result, 31) + getNumberHashCode(this.j8_1) | 0;
   result = imul_0(result, 31) + getNumberHashCode(this.k8_1) | 0;
   result = imul_0(result, 31) + getNumberHashCode(this.l8_1) | 0;
   result = imul_0(result, 31) + getNumberHashCode(this.m8_1) | 0;
+  result = imul_0(result, 31) + this.n8_1 | 0;
+  result = imul_0(result, 31) + this.o8_1.hashCode() | 0;
+  result = imul_0(result, 31) + getNumberHashCode(this.p8_1) | 0;
+  result = imul_0(result, 31) + this.q8_1 | 0;
+  result = imul_0(result, 31) + getNumberHashCode(this.r8_1) | 0;
+  result = imul_0(result, 31) + getNumberHashCode(this.s8_1) | 0;
+  result = imul_0(result, 31) + getNumberHashCode(this.t8_1) | 0;
+  result = imul_0(result, 31) + getNumberHashCode(this.u8_1) | 0;
+  result = imul_0(result, 31) + getNumberHashCode(this.v8_1) | 0;
   return result;
 };
 protoOf(HardstyleFrame).equals = function (other) {
   if (this === other)
     return true;
   if (!(other instanceof HardstyleFrame))
-    return false;
-  if (!equals(this.k7_1, other.k7_1))
-    return false;
-  if (!equals(this.l7_1, other.l7_1))
-    return false;
-  if (!equals(this.m7_1, other.m7_1))
-    return false;
-  if (!equals(this.n7_1, other.n7_1))
-    return false;
-  if (!equals(this.o7_1, other.o7_1))
-    return false;
-  if (!equals(this.p7_1, other.p7_1))
-    return false;
-  if (!equals(this.q7_1, other.q7_1))
-    return false;
-  if (!equals(this.r7_1, other.r7_1))
-    return false;
-  if (!equals(this.s7_1, other.s7_1))
     return false;
   if (!equals(this.t7_1, other.t7_1))
     return false;
@@ -6292,13 +6428,13 @@ protoOf(HardstyleFrame).equals = function (other) {
     return false;
   if (!equals(this.d8_1, other.d8_1))
     return false;
-  if (!(this.e8_1 === other.e8_1))
+  if (!equals(this.e8_1, other.e8_1))
     return false;
-  if (!equalsLong(this.f8_1, other.f8_1))
+  if (!equals(this.f8_1, other.f8_1))
     return false;
   if (!equals(this.g8_1, other.g8_1))
     return false;
-  if (!(this.h8_1 === other.h8_1))
+  if (!equals(this.h8_1, other.h8_1))
     return false;
   if (!equals(this.i8_1, other.i8_1))
     return false;
@@ -6310,6 +6446,24 @@ protoOf(HardstyleFrame).equals = function (other) {
     return false;
   if (!equals(this.m8_1, other.m8_1))
     return false;
+  if (!(this.n8_1 === other.n8_1))
+    return false;
+  if (!equalsLong(this.o8_1, other.o8_1))
+    return false;
+  if (!equals(this.p8_1, other.p8_1))
+    return false;
+  if (!(this.q8_1 === other.q8_1))
+    return false;
+  if (!equals(this.r8_1, other.r8_1))
+    return false;
+  if (!equals(this.s8_1, other.s8_1))
+    return false;
+  if (!equals(this.t8_1, other.t8_1))
+    return false;
+  if (!equals(this.u8_1, other.u8_1))
+    return false;
+  if (!equals(this.v8_1, other.v8_1))
+    return false;
   return true;
 };
 function accept$smooth(dt, old, target, seconds) {
@@ -6319,66 +6473,83 @@ function accept$smooth(dt, old, target, seconds) {
   return old + tmp * (1 - Math.exp(x));
 }
 function HardstyleAudio() {
-  this.af_1 = new HardstyleSpectrum();
-  this.bf_1 = 8.0;
-  this.cf_1 = 0.0;
-  this.df_1 = 0.0;
-  this.ef_1 = new Long(0, 0);
-  this.ff_1 = new Long(-1000, -1);
-  this.gf_1 = new Long(-5000, -1);
-  this.hf_1 = 0.0;
-  this.if_1 = 0.0;
-  this.jf_1 = 0.0;
-  this.kf_1 = 0.0;
-  this.lf_1 = 0.0;
-  this.mf_1 = new Long(-1000, -1);
+  this.jf_1 = new HardstyleSpectrum();
+  this.kf_1 = new DisplaySpectrum();
+  this.lf_1 = 8.0;
+  this.mf_1 = 0.0;
   this.nf_1 = 0.0;
-  this.of_1 = 0.0;
+  this.of_1 = new Long(0, 0);
   this.pf_1 = new Long(-1000, -1);
-  this.qf_1 = 0.0;
+  this.qf_1 = new Long(-5000, -1);
   this.rf_1 = 0.0;
   this.sf_1 = 0.0;
   this.tf_1 = 0.0;
   this.uf_1 = 0.0;
   this.vf_1 = 0.0;
   this.wf_1 = new Long(-1000, -1);
-  this.xf_1 = new BeatTracker();
+  this.xf_1 = 0.0;
   this.yf_1 = 0.0;
   this.zf_1 = new Long(-1000, -1);
-  this.ag_1 = new HardstyleFrame();
+  this.ag_1 = 0.0;
+  this.bg_1 = 0.0;
+  this.cg_1 = 0.0;
+  this.dg_1 = 0.0;
+  this.eg_1 = 0.0;
+  this.fg_1 = 0.0;
+  this.gg_1 = new Long(-1000, -1);
+  this.hg_1 = new BeatTracker();
+  this.ig_1 = 0.0;
+  this.jg_1 = new Long(-1000, -1);
+  this.kg_1 = new HardstyleFrame();
 }
-protoOf(HardstyleAudio).i7 = function () {
-  this.af_1.i7();
-  this.bf_1 = 8.0;
-  this.cf_1 = 0.0;
-  this.df_1 = 0.0;
-  this.ef_1 = new Long(0, 0);
-  this.ff_1 = new Long(-1000, -1);
-  this.gf_1 = new Long(-5000, -1);
-  this.hf_1 = 0.0;
-  this.if_1 = 0.0;
-  this.jf_1 = 0.0;
-  this.uf_1 = 0.0;
-  this.vf_1 = 0.0;
-  this.wf_1 = new Long(-1000, -1);
-  this.kf_1 = 0.0;
-  this.lf_1 = 0.0;
-  this.mf_1 = new Long(-1000, -1);
+protoOf(HardstyleAudio).lg = function (into) {
+  var tmp0 = this.kf_1.f7_1;
+  // Inline function 'kotlin.comparisons.minOf' call
+  var a = into.length;
+  // Inline function 'kotlin.collections.copyInto' call
+  var endIndex = Math.min(a, 96);
+  // Inline function 'kotlin.js.unsafeCast' call
+  // Inline function 'kotlin.js.asDynamic' call
+  var tmp = tmp0;
+  // Inline function 'kotlin.js.unsafeCast' call
+  // Inline function 'kotlin.js.asDynamic' call
+  arrayCopy(tmp, into, 0, 0, endIndex);
+  return this.kf_1.g7_1;
+};
+protoOf(HardstyleAudio).n7 = function () {
+  this.jf_1.n7();
+  this.kf_1.n7();
+  this.lf_1 = 8.0;
+  this.mf_1 = 0.0;
   this.nf_1 = 0.0;
-  this.of_1 = 0.0;
+  this.of_1 = new Long(0, 0);
   this.pf_1 = new Long(-1000, -1);
-  this.qf_1 = 0.0;
+  this.qf_1 = new Long(-5000, -1);
   this.rf_1 = 0.0;
   this.sf_1 = 0.0;
   this.tf_1 = 0.0;
-  this.xf_1.i7();
+  this.eg_1 = 0.0;
+  this.fg_1 = 0.0;
+  this.gg_1 = new Long(-1000, -1);
+  this.uf_1 = 0.0;
+  this.vf_1 = 0.0;
+  this.wf_1 = new Long(-1000, -1);
+  this.xf_1 = 0.0;
   this.yf_1 = 0.0;
   this.zf_1 = new Long(-1000, -1);
-  this.ag_1 = new HardstyleFrame();
+  this.ag_1 = 0.0;
+  this.bg_1 = 0.0;
+  this.cg_1 = 0.0;
+  this.dg_1 = 0.0;
+  this.hg_1.n7();
+  this.ig_1 = 0.0;
+  this.jg_1 = new Long(-1000, -1);
+  this.kg_1 = new HardstyleFrame();
 };
-protoOf(HardstyleAudio).sg = function (fft, sampleRate, now) {
+protoOf(HardstyleAudio).dh = function (fft, sampleRate, now) {
   if (sampleRate <= 0 || fft.length < 4)
     return new HardstyleFrame();
+  this.kf_1.o7(fft, sampleRate);
   var low = 0.0;
   var bass = 0.0;
   var high = 0.0;
@@ -6500,7 +6671,7 @@ protoOf(HardstyleAudio).sg = function (fft, sampleRate, now) {
     // Inline function 'kotlin.math.exp' call
     var x_1 = tmp_10 / Math.max(1, b_7);
     var tmp$ret$12 = Math.exp(x_1);
-    tmp_9 = coerceIn_0(1.0 - (tmp$ret$12 - 1.0) / voice, 0.0, 1.0);
+    tmp_9 = coerceIn(1.0 - (tmp$ret$12 - 1.0) / voice, 0.0, 1.0);
   } else {
     tmp_9 = 0.0;
   }
@@ -6510,186 +6681,186 @@ protoOf(HardstyleAudio).sg = function (fft, sampleRate, now) {
   var b_8 = bass;
   var value = Math.max(tmp0_0, b_8);
   var tmp_11;
-  if (equalsLong(this.ef_1, new Long(0, 0))) {
+  if (equalsLong(this.of_1, new Long(0, 0))) {
     tmp_11 = 0.016;
   } else {
     // Inline function 'kotlin.Long.div' call
-    var this_0 = subtract(now, this.ef_1);
+    var this_0 = subtract(now, this.of_1);
     var tmp$ret$14 = toNumber(this_0) / 1000.0;
-    tmp_11 = coerceIn_0(tmp$ret$14, 0.001, 0.2);
+    tmp_11 = coerceIn(tmp$ret$14, 0.001, 0.2);
   }
   var dt = tmp_11;
-  this.ef_1 = now;
+  this.of_1 = now;
   var tmp_12 = this;
-  var tmp_13 = this.bf_1;
+  var tmp_13 = this.lf_1;
   // Inline function 'kotlin.math.exp' call
   var x_2 = -dt / 3.0;
   // Inline function 'kotlin.math.max' call
   var b_9 = tmp_13 * Math.exp(x_2);
   // Inline function 'kotlin.math.max' call
   var b_10 = Math.max(value, b_9);
-  tmp_12.bf_1 = Math.max(8.0, b_10);
+  tmp_12.lf_1 = Math.max(8.0, b_10);
   var tmp_14 = this;
   var tmp_15;
-  if (value > this.rf_1) {
-    var tmp_16 = this.rf_1;
-    var tmp_17 = value - this.rf_1;
+  if (value > this.bg_1) {
+    var tmp_16 = this.bg_1;
+    var tmp_17 = value - this.bg_1;
     // Inline function 'kotlin.math.exp' call
     var x_3 = -dt / 2.0;
     tmp_15 = tmp_16 + tmp_17 * (1.0 - Math.exp(x_3));
   } else {
-    var tmp_18 = this.rf_1;
+    var tmp_18 = this.bg_1;
     // Inline function 'kotlin.math.exp' call
     var x_4 = -dt / 25.0;
     tmp_15 = tmp_18 * Math.exp(x_4);
   }
-  tmp_14.rf_1 = tmp_15;
-  var tmp0_1 = this.bf_1;
+  tmp_14.bg_1 = tmp_15;
+  var tmp0_1 = this.lf_1;
   // Inline function 'kotlin.math.max' call
-  var b_11 = this.rf_1 * 0.55;
+  var b_11 = this.bg_1 * 0.55;
   var reference = Math.max(tmp0_1, b_11);
-  var norm = value < 2.0 || value < this.rf_1 * 0.1 ? 0.0 : coerceIn_0(value / (reference * 1.3), 0.0, 1.0);
-  var flatWeight = nf > 0 ? coerceIn_0((flatSum / nf - 2.0) / 3.0, 0.0, 1.0) : 0.0;
+  var norm = value < 2.0 || value < this.bg_1 * 0.1 ? 0.0 : coerceIn(value / (reference * 1.3), 0.0, 1.0);
+  var flatWeight = nf > 0 ? coerceIn((flatSum / nf - 2.0) / 3.0, 0.0, 1.0) : 0.0;
   var tmp_19;
   if (flatWeight > 0.0) {
     // Inline function 'kotlin.math.exp' call
     var x_5 = flatLog / nf;
     var tmp$ret$21 = Math.exp(x_5);
-    tmp_19 = coerceIn_0(tmp$ret$21 / (flatSum / nf), 0.0, 1.0) * flatWeight;
+    tmp_19 = coerceIn(tmp$ret$21 / (flatSum / nf), 0.0, 1.0) * flatWeight;
   } else {
     tmp_19 = 0.0;
   }
   var noise = tmp_19;
   var centroid = centDen > 1.0 ? centNum / centDen : 0.0;
-  var onset = value > 3.0 && value > this.df_1 * 1.12 && value > this.cf_1 * 1.15 && compare(subtract(now, this.ff_1), new Long(120, 0)) >= 0;
+  var onset = value > 3.0 && value > this.nf_1 * 1.12 && value > this.mf_1 * 1.15 && compare(subtract(now, this.pf_1), new Long(120, 0)) >= 0;
   if (onset) {
-    var gap = toNumber(subtract(now, this.ff_1));
+    var gap = toNumber(subtract(now, this.pf_1));
     if (250.0 <= gap ? gap <= 1500.0 : false)
-      this.jf_1 = this.jf_1 === 0.0 ? gap : this.jf_1 * 0.85 + gap * 0.15;
-    this.ff_1 = now;
-  }
-  var snareOnset = snareBand > 3.0 && snareBand > this.kf_1 * 1.45 && snareBand > this.lf_1 * 1.15 && compare(subtract(now, this.mf_1), new Long(90, 0)) >= 0;
-  if (snareOnset)
-    this.mf_1 = now;
-  var vocalOnset = voice > 2.5 && tonality > 0.35 && voice > this.uf_1 * 1.3 && voice > this.vf_1 * 1.12 && !onset && !snareOnset && compare(subtract(now, this.ff_1), new Long(80, 0)) > 0 && this.ag_1.z7_1 < 0.3 && compare(subtract(now, this.wf_1), new Long(180, 0)) >= 0;
-  if (vocalOnset)
-    this.wf_1 = now;
-  var crashOnset = air > 2.0 && air > this.nf_1 * 1.8 && air > this.of_1 * 1.3 && compare(subtract(now, this.pf_1), new Long(400, 0)) >= 0;
-  if (crashOnset)
+      this.tf_1 = this.tf_1 === 0.0 ? gap : this.tf_1 * 0.85 + gap * 0.15;
     this.pf_1 = now;
+  }
+  var snareOnset = snareBand > 3.0 && snareBand > this.uf_1 * 1.45 && snareBand > this.vf_1 * 1.15 && compare(subtract(now, this.wf_1), new Long(90, 0)) >= 0;
+  if (snareOnset)
+    this.wf_1 = now;
+  var vocalOnset = voice > 2.5 && tonality > 0.35 && voice > this.eg_1 * 1.3 && voice > this.fg_1 * 1.12 && !onset && !snareOnset && compare(subtract(now, this.pf_1), new Long(80, 0)) > 0 && this.kg_1.i8_1 < 0.3 && compare(subtract(now, this.gg_1), new Long(180, 0)) >= 0;
+  if (vocalOnset)
+    this.gg_1 = now;
+  var crashOnset = air > 2.0 && air > this.xf_1 * 1.8 && air > this.yf_1 * 1.3 && compare(subtract(now, this.zf_1), new Long(400, 0)) >= 0;
+  if (crashOnset)
+    this.zf_1 = now;
   // Inline function 'kotlin.math.max' call
-  var b_12 = value - this.df_1;
+  var b_12 = value - this.nf_1;
   var flux = Math.max(0.0, b_12);
   var tmp_20;
   var tmp_21;
   if (value > 3.0) {
     // Inline function 'kotlin.math.max' call
-    var b_13 = this.yf_1 * 1.6;
+    var b_13 = this.ig_1 * 1.6;
     tmp_21 = flux > Math.max(1.5, b_13);
   } else {
     tmp_21 = false;
   }
   if (tmp_21) {
-    tmp_20 = compare(subtract(now, this.zf_1), new Long(100, 0)) >= 0;
+    tmp_20 = compare(subtract(now, this.jg_1), new Long(100, 0)) >= 0;
   } else {
     tmp_20 = false;
   }
   var candidate = tmp_20;
   if (candidate)
-    this.zf_1 = now;
-  this.yf_1 = this.yf_1 * 0.9 + flux * 0.1;
-  if (onset && this.xf_1.lg_1 > 0.0 && compare(this.xf_1.mg_1, new Long(0, 0)) > 0 && this.xf_1.og_1 >= 3) {
-    var phase = toNumber(modulo(subtract(now, this.xf_1.mg_1), numberToLong(this.xf_1.lg_1))) / this.xf_1.lg_1;
+    this.jg_1 = now;
+  this.ig_1 = this.ig_1 * 0.9 + flux * 0.1;
+  if (onset && this.hg_1.wg_1 > 0.0 && compare(this.hg_1.xg_1, new Long(0, 0)) > 0 && this.hg_1.zg_1 >= 3) {
+    var phase = toNumber(modulo(subtract(now, this.hg_1.xg_1), numberToLong(this.hg_1.wg_1))) / this.hg_1.wg_1;
     var off = (0.4 <= phase ? phase <= 0.6 : false) ? 1.0 : 0.0;
-    this.tf_1 = this.tf_1 * 0.92 + off * 0.08;
+    this.dg_1 = this.dg_1 * 0.92 + off * 0.08;
   }
-  var beat = this.xf_1.tg(now, candidate || onset, norm > 0.3, norm > 0.55);
-  var burst = onset && norm > 0.55 && this.ag_1.n7_1 < 0.35 && compare(subtract(now, this.gf_1), new Long(1800, 0)) >= 0;
+  var beat = this.hg_1.eh(now, candidate || onset, norm > 0.3, norm > 0.55);
+  var burst = onset && norm > 0.55 && this.kg_1.w7_1 < 0.35 && compare(subtract(now, this.qf_1), new Long(1800, 0)) >= 0;
   if (burst)
-    this.gf_1 = now;
-  this.hf_1 = accept$smooth(dt, this.hf_1, value, 0.3);
-  this.if_1 = this.if_1 === 0.0 ? value : accept$smooth(dt, this.if_1, value, 12.0);
-  var bassPresent = this.rf_1 > 0.0 ? coerceIn_0((value / this.rf_1 - 0.45) / 0.3, 0.0, 1.0) : 0.0;
+    this.qf_1 = now;
+  this.rf_1 = accept$smooth(dt, this.rf_1, value, 0.3);
+  this.sf_1 = this.sf_1 === 0.0 ? value : accept$smooth(dt, this.sf_1, value, 12.0);
+  var bassPresent = this.bg_1 > 0.0 ? coerceIn((value / this.bg_1 - 0.45) / 0.3, 0.0, 1.0) : 0.0;
   var tmp_22 = mid;
   // Inline function 'kotlin.math.max' call
   var tmp$ret$24 = Math.max(value, 12.0);
-  var gritNow = coerceIn_0((tmp_22 / tmp$ret$24 - 0.35) / 0.5, 0.0, 1.0) * coerceIn_0(value / 20.0, 0.0, 1.0) * bassPresent;
-  var tmp0_2 = this.ff_1;
+  var gritNow = coerceIn((tmp_22 / tmp$ret$24 - 0.35) / 0.5, 0.0, 1.0) * coerceIn(value / 20.0, 0.0, 1.0) * bassPresent;
+  var tmp0_2 = this.pf_1;
   // Inline function 'kotlin.math.max' call
-  var b_14 = this.xf_1.mg_1;
+  var b_14 = this.hg_1.xg_1;
   var anchor = compare(tmp0_2, b_14) >= 0 ? tmp0_2 : b_14;
   var sinceKick = subtract(now, anchor);
   var tmp_23;
   if (compare(sinceKick, new Long(600, 0)) > 0) {
-    var tmp_24 = this.sf_1;
+    var tmp_24 = this.cg_1;
     // Inline function 'kotlin.math.exp' call
     var x_6 = -dt / 0.3;
     tmp_23 = tmp_24 * Math.exp(x_6);
   } else if (compare(new Long(50, 0), sinceKick) <= 0 ? compare(sinceKick, new Long(250, 0)) <= 0 : false) {
     tmp_23 = gritNow;
   } else {
-    var tmp_25 = this.sf_1;
+    var tmp_25 = this.cg_1;
     // Inline function 'kotlin.math.exp' call
     var x_7 = -dt / 0.6;
     tmp_23 = tmp_25 * Math.exp(x_7);
   }
   var grit = tmp_23;
-  this.sf_1 = grit;
-  var tmp_26 = this.hf_1;
+  this.cg_1 = grit;
+  var tmp_26 = this.rf_1;
   // Inline function 'kotlin.math.max' call
-  var b_15 = this.if_1;
+  var b_15 = this.sf_1;
   var tmp$ret$28 = Math.max(4.0, b_15);
-  var lift = coerceIn_0((tmp_26 / tmp$ret$28 - 1.0) / 0.8, 0.0, 1.0);
-  var loudRel = this.rf_1 > 0.0 ? coerceIn_0((this.hf_1 / this.rf_1 - 0.45) / 0.45, 0.0, 1.0) : 0.0;
+  var lift = coerceIn((tmp_26 / tmp$ret$28 - 1.0) / 0.8, 0.0, 1.0);
+  var loudRel = this.bg_1 > 0.0 ? coerceIn((this.rf_1 / this.bg_1 - 0.45) / 0.45, 0.0, 1.0) : 0.0;
   var heavyRaw = norm * norm * (0.4 * grit + 0.15 * lift + 0.25 * loudRel + 0.2 * norm);
-  var heavyTarget = coerceIn_0((heavyRaw - 0.12) / 0.4, 0.0, 1.0);
+  var heavyTarget = coerceIn((heavyRaw - 0.12) / 0.4, 0.0, 1.0);
   var tmp_27 = this;
-  var tmp_28 = accept$smooth(dt, this.ag_1.k7_1, norm, norm > this.ag_1.k7_1 ? 0.025 : 0.18);
+  var tmp_28 = accept$smooth(dt, this.kg_1.t7_1, norm, norm > this.kg_1.t7_1 ? 0.025 : 0.18);
   var tmp_29;
   if (beat) {
-    tmp_29 = this.xf_1.ug() ? 0.85 : 1.0;
+    tmp_29 = this.hg_1.fh() ? 0.85 : 1.0;
   } else if (onset) {
-    var tmp_30 = this.ag_1.l7_1;
+    var tmp_30 = this.kg_1.u7_1;
     // Inline function 'kotlin.math.exp' call
     var x_8 = -dt / 0.085;
     // Inline function 'kotlin.math.max' call
     var b_16 = tmp_30 * Math.exp(x_8);
     tmp_29 = Math.max(0.7, b_16);
   } else {
-    var tmp_31 = this.ag_1.l7_1;
+    var tmp_31 = this.kg_1.u7_1;
     // Inline function 'kotlin.math.exp' call
     var x_9 = -dt / 0.085;
     tmp_29 = tmp_31 * Math.exp(x_9);
   }
   var tmp_32 = tmp_29;
-  var tmp_33 = this.ag_1.m7_1;
+  var tmp_33 = this.kg_1.v7_1;
   var tmp_34 = high;
   // Inline function 'kotlin.math.max' call
-  var b_17 = this.bf_1;
+  var b_17 = this.lf_1;
   var tmp$ret$32 = Math.max(8.0, b_17);
-  var tmp_35 = accept$smooth(dt, tmp_33, coerceIn_0(tmp_34 / tmp$ret$32, 0.0, 1.0), 0.08);
-  var tmp_36 = accept$smooth(dt, this.ag_1.n7_1, norm, 0.8);
+  var tmp_35 = accept$smooth(dt, tmp_33, coerceIn(tmp_34 / tmp$ret$32, 0.0, 1.0), 0.08);
+  var tmp_36 = accept$smooth(dt, this.kg_1.w7_1, norm, 0.8);
   var tmp_37;
   if (burst) {
     tmp_37 = 1.0;
   } else {
-    var tmp_38 = this.ag_1.o7_1;
+    var tmp_38 = this.kg_1.x7_1;
     // Inline function 'kotlin.math.exp' call
     var x_10 = -dt / 0.35;
     tmp_37 = tmp_38 * Math.exp(x_10);
   }
   var tmp_39 = tmp_37;
-  var tmp_40 = accept$smooth(dt, this.ag_1.p7_1, burst || this.ag_1.o7_1 > 0.1 ? 0.0 : coerceIn_0((norm - this.ag_1.n7_1) / 0.35, 0.0, 1.0), 0.3);
-  var tmp_41 = this.af_1.vg(fft, sampleRate, dt);
-  var tmp_42 = this.af_1.gg_1;
-  var tmp_43 = accept$smooth(dt, this.ag_1.s7_1, heavyTarget, heavyTarget > this.ag_1.s7_1 ? 0.02 : 0.5);
-  var tmp_44 = accept$smooth(dt, this.ag_1.t7_1, grit, grit > this.ag_1.t7_1 ? 0.02 : 0.25);
-  var tmp_45 = this.xf_1.lg_1 > 0.0 ? 60000.0 / this.xf_1.lg_1 : 0.0;
+  var tmp_40 = accept$smooth(dt, this.kg_1.y7_1, burst || this.kg_1.x7_1 > 0.1 ? 0.0 : coerceIn((norm - this.kg_1.w7_1) / 0.35, 0.0, 1.0), 0.3);
+  var tmp_41 = this.jf_1.gh(fft, sampleRate, dt);
+  var tmp_42 = this.jf_1.rg_1;
+  var tmp_43 = accept$smooth(dt, this.kg_1.b8_1, heavyTarget, heavyTarget > this.kg_1.b8_1 ? 0.02 : 0.5);
+  var tmp_44 = accept$smooth(dt, this.kg_1.c8_1, grit, grit > this.kg_1.c8_1 ? 0.02 : 0.25);
+  var tmp_45 = this.hg_1.wg_1 > 0.0 ? 60000.0 / this.hg_1.wg_1 : 0.0;
   var tmp_46;
   if (snareOnset) {
     tmp_46 = 1.0;
   } else {
-    var tmp_47 = this.ag_1.v7_1;
+    var tmp_47 = this.kg_1.e8_1;
     // Inline function 'kotlin.math.exp' call
     var x_11 = -dt / 0.09;
     tmp_46 = tmp_47 * Math.exp(x_11);
@@ -6699,87 +6870,87 @@ protoOf(HardstyleAudio).sg = function (fft, sampleRate, now) {
   if (crashOnset) {
     tmp_49 = 1.0;
   } else {
-    var tmp_50 = this.ag_1.w7_1;
+    var tmp_50 = this.kg_1.f8_1;
     // Inline function 'kotlin.math.exp' call
     var x_12 = -dt / 0.18;
     tmp_49 = tmp_50 * Math.exp(x_12);
   }
   var tmp_51 = tmp_49;
-  var tmp_52 = this.ag_1.x7_1;
+  var tmp_52 = this.kg_1.g8_1;
   var tmp_53;
   if (value > 3.0) {
     var tmp_54 = low;
     // Inline function 'kotlin.math.max' call
     var b_18 = low + bass;
     var tmp$ret$36 = Math.max(1.0, b_18);
-    tmp_53 = coerceIn_0(tmp_54 / tmp$ret$36, 0.0, 1.0);
+    tmp_53 = coerceIn(tmp_54 / tmp$ret$36, 0.0, 1.0);
   } else {
-    tmp_53 = this.ag_1.x7_1;
+    tmp_53 = this.kg_1.g8_1;
   }
   var tmp_55 = accept$smooth(dt, tmp_52, tmp_53, 0.4);
   var tmp_56 = value + mid;
   // Inline function 'kotlin.run' call
-  var target = scr > 3.0 && this.qf_1 > 0.0 ? coerceIn_0((scr / this.qf_1 - 1.5) / 1.2, 0.0, 1.0) : 0.0;
-  var tmp_57 = accept$smooth(dt, this.ag_1.z7_1, target, target > this.ag_1.z7_1 ? 0.12 : 0.3);
+  var target = scr > 3.0 && this.ag_1 > 0.0 ? coerceIn((scr / this.ag_1 - 1.5) / 1.2, 0.0, 1.0) : 0.0;
+  var tmp_57 = accept$smooth(dt, this.kg_1.i8_1, target, target > this.kg_1.i8_1 ? 0.12 : 0.3);
   var tmp_58 = air;
   var tmp_59 = low;
   var tmp_60 = scr;
-  var tmp_61 = this.xf_1.rg_1;
-  var tmp_62 = this.xf_1.mg_1;
-  var tmp_63 = this.xf_1.lg_1;
-  var tmp_64 = this.xf_1.og_1;
-  var tmp_65 = accept$smooth(dt, this.ag_1.i8_1, noise, 0.3);
-  var tmp_66 = accept$smooth(dt, this.ag_1.j8_1, centroid, 0.3);
-  var tmp_67 = this.tf_1;
+  var tmp_61 = this.hg_1.ch_1;
+  var tmp_62 = this.hg_1.xg_1;
+  var tmp_63 = this.hg_1.wg_1;
+  var tmp_64 = this.hg_1.zg_1;
+  var tmp_65 = accept$smooth(dt, this.kg_1.r8_1, noise, 0.3);
+  var tmp_66 = accept$smooth(dt, this.kg_1.s8_1, centroid, 0.3);
+  var tmp_67 = this.dg_1;
   // Inline function 'kotlin.run' call
-  var target_0 = voice > 2.0 && this.uf_1 > 0.0 ? coerceIn_0((voice / this.uf_1 - 1.0) / 0.6, 0.0, 1.0) * coerceIn_0((tonality - 0.25) / 0.35, 0.0, 1.0) * (1.0 - this.ag_1.z7_1) : 0.0;
-  var tmp_68 = accept$smooth(dt, this.ag_1.l8_1, target_0, target_0 > this.ag_1.l8_1 ? 0.08 : 0.4);
+  var target_0 = voice > 2.0 && this.eg_1 > 0.0 ? coerceIn((voice / this.eg_1 - 1.0) / 0.6, 0.0, 1.0) * coerceIn((tonality - 0.25) / 0.35, 0.0, 1.0) * (1.0 - this.kg_1.i8_1) : 0.0;
+  var tmp_68 = accept$smooth(dt, this.kg_1.u8_1, target_0, target_0 > this.kg_1.u8_1 ? 0.08 : 0.4);
   var tmp_69;
   if (vocalOnset) {
     tmp_69 = 1.0;
   } else {
-    var tmp_70 = this.ag_1.m8_1;
+    var tmp_70 = this.kg_1.v8_1;
     // Inline function 'kotlin.math.exp' call
     var x_13 = -dt / 0.3;
     tmp_69 = tmp_70 * Math.exp(x_13);
   }
-  tmp_27.ag_1 = new HardstyleFrame(tmp_28, tmp_32, tmp_35, tmp_36, tmp_39, tmp_40, tmp_41, tmp_42, tmp_43, tmp_44, tmp_45, tmp_48, tmp_51, tmp_55, tmp_56, tmp_57, value, tmp_58, tmp_59, tmp_60, tmp_61, tmp_62, tmp_63, tmp_64, tmp_65, tmp_66, tmp_67, tmp_68, tmp_69);
-  this.cf_1 = accept$smooth(dt, this.cf_1, value, 0.5);
-  this.df_1 = value;
-  this.uf_1 = this.uf_1 === 0.0 ? voice : accept$smooth(dt, this.uf_1, voice, 8.0);
-  this.vf_1 = voice;
-  this.qf_1 = this.qf_1 === 0.0 ? scr : accept$smooth(dt, this.qf_1, scr, 6.0);
-  this.kf_1 = accept$smooth(dt, this.kf_1, snareBand, 0.6);
-  this.lf_1 = snareBand;
-  this.nf_1 = accept$smooth(dt, this.nf_1, air, 0.8);
-  this.of_1 = air;
-  return this.ag_1;
+  tmp_27.kg_1 = new HardstyleFrame(tmp_28, tmp_32, tmp_35, tmp_36, tmp_39, tmp_40, tmp_41, tmp_42, tmp_43, tmp_44, tmp_45, tmp_48, tmp_51, tmp_55, tmp_56, tmp_57, value, tmp_58, tmp_59, tmp_60, tmp_61, tmp_62, tmp_63, tmp_64, tmp_65, tmp_66, tmp_67, tmp_68, tmp_69);
+  this.mf_1 = accept$smooth(dt, this.mf_1, value, 0.5);
+  this.nf_1 = value;
+  this.eg_1 = this.eg_1 === 0.0 ? voice : accept$smooth(dt, this.eg_1, voice, 8.0);
+  this.fg_1 = voice;
+  this.ag_1 = this.ag_1 === 0.0 ? scr : accept$smooth(dt, this.ag_1, scr, 6.0);
+  this.uf_1 = accept$smooth(dt, this.uf_1, snareBand, 0.6);
+  this.vf_1 = snareBand;
+  this.xf_1 = accept$smooth(dt, this.xf_1, air, 0.8);
+  this.yf_1 = air;
+  return this.kg_1;
 };
 function addOnset($this, now) {
-  $this.hg_1[$this.jg_1] = now;
-  $this.jg_1 = ($this.jg_1 + 1 | 0) % $this.hg_1.length | 0;
+  $this.sg_1[$this.ug_1] = now;
+  $this.ug_1 = ($this.ug_1 + 1 | 0) % $this.sg_1.length | 0;
   var tmp = $this;
-  var tmp0 = $this.ig_1 + 1 | 0;
+  var tmp0 = $this.tg_1 + 1 | 0;
   // Inline function 'kotlin.comparisons.minOf' call
-  var b = $this.hg_1.length;
-  tmp.ig_1 = Math.min(tmp0, b);
-  fill_0($this.kg_1, 0.0);
+  var b = $this.sg_1.length;
+  tmp.tg_1 = Math.min(tmp0, b);
+  fill_0($this.vg_1, 0.0);
   var inductionVariable = 0;
-  var last = $this.ig_1;
+  var last = $this.tg_1;
   if (inductionVariable < last)
     $l$loop: do {
       var i = inductionVariable;
       inductionVariable = inductionVariable + 1 | 0;
-      var a = $this.hg_1[i];
+      var a = $this.sg_1[i];
       if (compare(subtract(now, a), new Long(6000, 0)) > 0)
         continue $l$loop;
       var inductionVariable_0 = 0;
-      var last_0 = $this.ig_1;
+      var last_0 = $this.tg_1;
       if (inductionVariable_0 < last_0)
         $l$loop_0: do {
           var j = inductionVariable_0;
           inductionVariable_0 = inductionVariable_0 + 1 | 0;
-          var d = toNumber(subtract($this.hg_1[j], a));
+          var d = toNumber(subtract($this.sg_1[j], a));
           if (d <= 0.0 || d > 1600.0)
             continue $l$loop_0;
           var inductionVariable_1 = 1;
@@ -6790,7 +6961,7 @@ function addOnset($this, now) {
               var p = d / k;
               if (p < 240.0 || p >= 530.0)
                 continue $l$loop_1;
-              var _array__4zh2yp = $this.kg_1;
+              var _array__4zh2yp = $this.vg_1;
               var _index_0__fvwizt = numberToInt((p - 240.0) / 10.0);
               _array__4zh2yp[_index_0__fvwizt] = _array__4zh2yp[_index_0__fvwizt] + 1.0 / k;
             }
@@ -6802,7 +6973,7 @@ function addOnset($this, now) {
   var best = -1;
   var bestScore = 0.0;
   var inductionVariable_2 = 0;
-  var last_1 = $this.kg_1.length - 1 | 0;
+  var last_1 = $this.vg_1.length - 1 | 0;
   if (inductionVariable_2 <= last_1)
     do {
       var b_0 = inductionVariable_2;
@@ -6815,11 +6986,11 @@ function addOnset($this, now) {
     }
      while (inductionVariable_2 <= last_1);
   var hinted = false;
-  if ($this.qg_1 > 0.0 && best >= 0) {
+  if ($this.bh_1 > 0.0 && best >= 0) {
     // Inline function 'kotlin.math.roundToInt' call
-    var this_0 = ($this.qg_1 - 245.0) / 10.0;
+    var this_0 = ($this.bh_1 - 245.0) / 10.0;
     var tmp$ret$1 = roundToInt(this_0);
-    var hb = coerceIn(tmp$ret$1, 0, $this.kg_1.length - 1 | 0);
+    var hb = coerceIn_0(tmp$ret$1, 0, $this.vg_1.length - 1 | 0);
     var hBest = -1;
     var hScore = 0.0;
     var inductionVariable_3 = hb - 2 | 0;
@@ -6828,13 +6999,13 @@ function addOnset($this, now) {
       do {
         var b_1 = inductionVariable_3;
         inductionVariable_3 = inductionVariable_3 + 1 | 0;
-        if ((0 <= b_1 ? b_1 <= ($this.kg_1.length - 1 | 0) : false) && addOnset$score($this, b_1) > hScore) {
+        if ((0 <= b_1 ? b_1 <= ($this.vg_1.length - 1 | 0) : false) && addOnset$score($this, b_1) > hScore) {
           hScore = addOnset$score($this, b_1);
           hBest = b_1;
         }
       }
        while (!(b_1 === last_2));
-    if (hBest >= 0 && $this.ig_1 >= 6 && hScore >= 2.5 && hScore >= bestScore * 0.3) {
+    if (hBest >= 0 && $this.tg_1 >= 6 && hScore >= 2.5 && hScore >= bestScore * 0.3) {
       best = hBest;
       // Inline function 'kotlin.comparisons.maxOf' call
       var a_0 = bestScore;
@@ -6845,16 +7016,16 @@ function addOnset($this, now) {
   if (best >= 0 && bestScore >= 3.0) {
     if (best < 4 && !hinted) {
       var double = imul_0(best, 2) + 24 | 0;
-      if (double < $this.kg_1.length && $this.kg_1[double] >= $this.kg_1[best] * 0.5)
+      if (double < $this.vg_1.length && $this.vg_1[double] >= $this.vg_1[best] * 0.5)
         best = double;
     }
     var estimate = 245.0 + best * 10.0;
-    $this.lg_1 = $this.lg_1 === 0.0 ? estimate : $this.lg_1 * 0.8 + estimate * 0.2;
+    $this.wg_1 = $this.wg_1 === 0.0 ? estimate : $this.wg_1 * 0.8 + estimate * 0.2;
   }
 }
 function addOnset$score(this$0, b) {
-  var tmp = this$0.kg_1[b];
-  var tmp0 = this$0.kg_1;
+  var tmp = this$0.vg_1[b];
+  var tmp0 = this$0.vg_1;
   // Inline function 'kotlin.collections.getOrElse' call
   var index = b - 1 | 0;
   var tmp_0;
@@ -6864,7 +7035,7 @@ function addOnset$score(this$0, b) {
     tmp_0 = 0.0;
   }
   var tmp_1 = tmp_0;
-  var tmp0_0 = this$0.kg_1;
+  var tmp0_0 = this$0.vg_1;
   // Inline function 'kotlin.collections.getOrElse' call
   var index_0 = b + 1 | 0;
   var tmp_2;
@@ -6876,72 +7047,72 @@ function addOnset$score(this$0, b) {
   return tmp + 0.5 * (tmp_1 + tmp_2);
 }
 function BeatTracker() {
-  this.hg_1 = longArray(48);
-  this.ig_1 = 0;
-  this.jg_1 = 0;
-  this.kg_1 = new Float32Array(29);
-  this.lg_1 = 0.0;
-  this.mg_1 = new Long(0, 0);
-  this.ng_1 = new Long(0, 0);
-  this.og_1 = 0;
-  this.pg_1 = 0;
-  this.qg_1 = 0.0;
-  this.rg_1 = 0;
+  this.sg_1 = longArray(48);
+  this.tg_1 = 0;
+  this.ug_1 = 0;
+  this.vg_1 = new Float32Array(29);
+  this.wg_1 = 0.0;
+  this.xg_1 = new Long(0, 0);
+  this.yg_1 = new Long(0, 0);
+  this.zg_1 = 0;
+  this.ah_1 = 0;
+  this.bh_1 = 0.0;
+  this.ch_1 = 0;
 }
-protoOf(BeatTracker).ug = function () {
-  return this.pg_1 > 2;
+protoOf(BeatTracker).fh = function () {
+  return this.ah_1 > 2;
 };
-protoOf(BeatTracker).i7 = function () {
-  this.ig_1 = 0;
-  this.jg_1 = 0;
-  this.lg_1 = 0.0;
-  this.mg_1 = new Long(0, 0);
-  this.ng_1 = new Long(0, 0);
-  this.og_1 = 0;
-  this.pg_1 = 0;
-  this.rg_1 = 0;
+protoOf(BeatTracker).n7 = function () {
+  this.tg_1 = 0;
+  this.ug_1 = 0;
+  this.wg_1 = 0.0;
+  this.xg_1 = new Long(0, 0);
+  this.yg_1 = new Long(0, 0);
+  this.zg_1 = 0;
+  this.ah_1 = 0;
+  this.ch_1 = 0;
 };
-protoOf(BeatTracker).tg = function (now, onset, bassPresent, strongBass) {
+protoOf(BeatTracker).eh = function (now, onset, bassPresent, strongBass) {
   var beat = false;
   if (onset) {
     addOnset(this, now);
-    this.ng_1 = now;
-    if (this.lg_1 > 0.0 && compare(this.mg_1, new Long(0, 0)) > 0) {
-      var since = toNumber(subtract(now, this.mg_1));
-      var err = (since + this.lg_1 / 2.0) % this.lg_1 - this.lg_1 / 2.0;
+    this.yg_1 = now;
+    if (this.wg_1 > 0.0 && compare(this.xg_1, new Long(0, 0)) > 0) {
+      var since = toNumber(subtract(now, this.xg_1));
+      var err = (since + this.wg_1 / 2.0) % this.wg_1 - this.wg_1 / 2.0;
       // Inline function 'kotlin.math.abs' call
-      if (Math.abs(err) < this.lg_1 * 0.22) {
-        if (since > this.lg_1 * 0.5) {
+      if (Math.abs(err) < this.wg_1 * 0.22) {
+        if (since > this.wg_1 * 0.5) {
           beat = true;
           var tmp = this;
           // Inline function 'kotlin.comparisons.minOf' call
-          var a = this.og_1 + 1 | 0;
-          tmp.og_1 = Math.min(a, 8);
-          this.pg_1 = 0;
+          var a = this.zg_1 + 1 | 0;
+          tmp.zg_1 = Math.min(a, 8);
+          this.ah_1 = 0;
         }
-        this.mg_1 = now;
+        this.xg_1 = now;
       } else {
-        if (this.og_1 < 2) {
+        if (this.zg_1 < 2) {
           beat = true;
-          this.mg_1 = now;
+          this.xg_1 = now;
         }
       }
     } else {
       beat = true;
-      this.mg_1 = now;
+      this.xg_1 = now;
     }
   }
-  if (!beat && this.lg_1 > 0.0 && compare(this.mg_1, new Long(0, 0)) > 0 && this.og_1 >= 3 && bassPresent && this.pg_1 < (strongBass ? 8 : 2) && toNumber(subtract(now, this.mg_1)) >= this.lg_1 - 25.0) {
+  if (!beat && this.wg_1 > 0.0 && compare(this.xg_1, new Long(0, 0)) > 0 && this.zg_1 >= 3 && bassPresent && this.ah_1 < (strongBass ? 8 : 2) && toNumber(subtract(now, this.xg_1)) >= this.wg_1 - 25.0) {
     beat = true;
-    this.mg_1 = add(this.mg_1, numberToLong(this.lg_1));
-    if (!strongBass || (this.pg_1 % 4 | 0) === 0)
-      this.og_1 = this.og_1 - 1 | 0;
-    this.pg_1 = this.pg_1 + 1 | 0;
+    this.xg_1 = add(this.xg_1, numberToLong(this.wg_1));
+    if (!strongBass || (this.ah_1 % 4 | 0) === 0)
+      this.zg_1 = this.zg_1 - 1 | 0;
+    this.ah_1 = this.ah_1 + 1 | 0;
   }
-  if (this.lg_1 > 0.0 && compare(this.mg_1, new Long(0, 0)) > 0 && toNumber(subtract(now, this.mg_1)) > this.lg_1 * 2.5)
-    this.og_1 = 0;
+  if (this.wg_1 > 0.0 && compare(this.xg_1, new Long(0, 0)) > 0 && toNumber(subtract(now, this.xg_1)) > this.wg_1 * 2.5)
+    this.zg_1 = 0;
   if (beat) {
-    this.rg_1 = this.rg_1 + 1 | 0;
+    this.ch_1 = this.ch_1 + 1 | 0;
   }
   return beat;
 };
@@ -6963,26 +7134,26 @@ function accept$magnitude(lastBin, $fft, bin) {
   return tmp;
 }
 function HardstyleSpectrum() {
-  this.bg_1 = new Float32Array(48);
-  this.cg_1 = new Float32Array(48);
-  this.dg_1 = new Float32Array(48);
-  this.eg_1 = 8.0;
-  this.fg_1 = 0.0;
-  this.gg_1 = 0.0;
+  this.mg_1 = new Float32Array(48);
+  this.ng_1 = new Float32Array(48);
+  this.og_1 = new Float32Array(48);
+  this.pg_1 = 8.0;
+  this.qg_1 = 0.0;
+  this.rg_1 = 0.0;
 }
-protoOf(HardstyleSpectrum).i7 = function () {
-  fill_0(this.bg_1, 0.0);
-  fill_0(this.cg_1, 0.0);
-  fill_0(this.dg_1, 0.0);
-  this.eg_1 = 8.0;
-  this.fg_1 = 0.0;
-  this.gg_1 = 0.0;
+protoOf(HardstyleSpectrum).n7 = function () {
+  fill_0(this.mg_1, 0.0);
+  fill_0(this.ng_1, 0.0);
+  fill_0(this.og_1, 0.0);
+  this.pg_1 = 8.0;
+  this.qg_1 = 0.0;
+  this.rg_1 = 0.0;
 };
-protoOf(HardstyleSpectrum).vg = function (fft, sampleRate, dt) {
+protoOf(HardstyleSpectrum).gh = function (fft, sampleRate, dt) {
   var binHz = sampleRate / fft.length;
   var lastBin = (fft.length / 2 | 0) - 1 | 0;
   var inductionVariable = 0;
-  var last = this.cg_1.length - 1 | 0;
+  var last = this.ng_1.length - 1 | 0;
   if (inductionVariable <= last)
     do {
       var i = inductionVariable;
@@ -7030,7 +7201,7 @@ protoOf(HardstyleSpectrum).vg = function (fft, sampleRate, dt) {
         var b_2 = value - 2.0;
         tmp = Math.max(0.0, b_2);
       }
-      this.cg_1[i] = tmp;
+      this.ng_1[i] = tmp;
     }
      while (inductionVariable <= last);
   var positiveFlux = 0.0;
@@ -7041,19 +7212,19 @@ protoOf(HardstyleSpectrum).vg = function (fft, sampleRate, dt) {
       inductionVariable_1 = inductionVariable_1 + 1 | 0;
       var tmp_0 = positiveFlux;
       // Inline function 'kotlin.math.max' call
-      var b_3 = this.cg_1[i_0] - this.dg_1[i_0];
+      var b_3 = this.ng_1[i_0] - this.og_1[i_0];
       positiveFlux = tmp_0 + Math.max(0.0, b_3);
     }
      while (inductionVariable_1 < 48);
   var tmp_1 = this;
   var tmp_2 = positiveFlux / 16.0;
   // Inline function 'kotlin.math.max' call
-  var b_4 = this.eg_1;
+  var b_4 = this.pg_1;
   var tmp$ret$10 = Math.max(8.0, b_4);
-  tmp_1.gg_1 = coerceIn_0(tmp_2 / tmp$ret$10 * 3.0, 0.0, 1.0);
-  var tmp0_0 = this.cg_1;
+  tmp_1.rg_1 = coerceIn(tmp_2 / tmp$ret$10 * 3.0, 0.0, 1.0);
+  var tmp0_0 = this.ng_1;
   // Inline function 'kotlin.collections.copyInto' call
-  var destination = this.dg_1;
+  var destination = this.og_1;
   var endIndex = tmp0_0.length;
   // Inline function 'kotlin.js.unsafeCast' call
   // Inline function 'kotlin.js.asDynamic' call
@@ -7061,35 +7232,35 @@ protoOf(HardstyleSpectrum).vg = function (fft, sampleRate, dt) {
   // Inline function 'kotlin.js.unsafeCast' call
   // Inline function 'kotlin.js.asDynamic' call
   arrayCopy(tmp_3, destination, 0, 0, endIndex);
-  var tmp0_elvis_lhs = maxOrNull(this.cg_1);
+  var tmp0_elvis_lhs = maxOrNull(this.ng_1);
   var loudest = tmp0_elvis_lhs == null ? 0.0 : tmp0_elvis_lhs;
   var tmp_4 = this;
   var tmp_5;
-  if (loudest > this.fg_1) {
-    var tmp_6 = this.fg_1;
-    var tmp_7 = loudest - this.fg_1;
+  if (loudest > this.qg_1) {
+    var tmp_6 = this.qg_1;
+    var tmp_7 = loudest - this.qg_1;
     // Inline function 'kotlin.math.exp' call
     var x_3 = -dt / 2.0;
     tmp_5 = tmp_6 + tmp_7 * (1.0 - Math.exp(x_3));
   } else {
-    var tmp_8 = this.fg_1;
+    var tmp_8 = this.qg_1;
     // Inline function 'kotlin.math.exp' call
     var x_4 = -dt / 25.0;
     tmp_5 = tmp_8 * Math.exp(x_4);
   }
-  tmp_4.fg_1 = tmp_5;
+  tmp_4.qg_1 = tmp_5;
   var tmp_9 = this;
-  var tmp_10 = this.eg_1;
+  var tmp_10 = this.pg_1;
   // Inline function 'kotlin.math.exp' call
   var x_5 = -dt / 3.0;
   var tmp2 = tmp_10 * Math.exp(x_5);
   // Inline function 'kotlin.comparisons.maxOf' call
-  var c = this.fg_1 * 0.55;
+  var c = this.qg_1 * 0.55;
   // Inline function 'kotlin.math.max' call
   var b_5 = Math.max(loudest, tmp2, c);
-  tmp_9.eg_1 = Math.max(8.0, b_5);
+  tmp_9.pg_1 = Math.max(8.0, b_5);
   var inductionVariable_2 = 0;
-  var last_0 = this.bg_1.length - 1 | 0;
+  var last_0 = this.mg_1.length - 1 | 0;
   if (inductionVariable_2 <= last_0)
     do {
       var i_1 = inductionVariable_2;
@@ -7097,32 +7268,32 @@ protoOf(HardstyleSpectrum).vg = function (fft, sampleRate, dt) {
       // Inline function 'kotlin.math.max' call
       var b_6 = i_1 - 1 | 0;
       var tmp$ret$21 = Math.max(0, b_6);
-      var tmp_11 = this.cg_1[tmp$ret$21] * 0.15 + this.cg_1[i_1] * 0.7;
-      var tmp0_1 = get_lastIndex_2(this.cg_1);
+      var tmp_11 = this.ng_1[tmp$ret$21] * 0.15 + this.ng_1[i_1] * 0.7;
+      var tmp0_1 = get_lastIndex_2(this.ng_1);
       // Inline function 'kotlin.math.min' call
       var b_7 = i_1 + 1 | 0;
       var tmp$ret$22 = Math.min(tmp0_1, b_7);
-      var neighbor = tmp_11 + this.cg_1[tmp$ret$22] * 0.15;
-      var ratio = neighbor / this.eg_1;
+      var neighbor = tmp_11 + this.ng_1[tmp$ret$22] * 0.15;
+      var ratio = neighbor / this.pg_1;
       // Inline function 'kotlin.math.ln' call
       var x_6 = 1.0 + 3.0 * ratio;
       var tmp_12 = Math.log(x_6);
       // Inline function 'kotlin.math.ln' call
       var tmp$ret$24 = Math.log(5.0);
-      var target = coerceIn_0(tmp_12 / tmp$ret$24, 0.0, 1.0);
-      var seconds = target > this.bg_1[i_1] ? 0.01 : 0.07;
-      var _array__4zh2yp = this.bg_1;
+      var target = coerceIn(tmp_12 / tmp$ret$24, 0.0, 1.0);
+      var seconds = target > this.mg_1[i_1] ? 0.01 : 0.07;
+      var _array__4zh2yp = this.mg_1;
       var tmp_13 = _array__4zh2yp[i_1];
-      var tmp_14 = target - this.bg_1[i_1];
+      var tmp_14 = target - this.mg_1[i_1];
       // Inline function 'kotlin.math.exp' call
       var x_7 = -dt / seconds;
       _array__4zh2yp[i_1] = tmp_13 + tmp_14 * (1.0 - Math.exp(x_7));
-      if (this.bg_1[i_1] < 1.0E-4) {
-        this.bg_1[i_1] = 0.0;
+      if (this.mg_1[i_1] < 1.0E-4) {
+        this.mg_1[i_1] = 0.0;
       }
     }
      while (inductionVariable_2 <= last_0);
-  return toList(this.bg_1);
+  return toList(this.mg_1);
 };
 var properties_initialized_HardstyleSpectrum_kt_p97tt3;
 function _init_properties_HardstyleSpectrum_kt__r0hi3f() {
@@ -7141,6 +7312,755 @@ function _init_properties_HardstyleSpectrum_kt__r0hi3f() {
       }
        while (inductionVariable < 48);
     SILENT_SPECTRUM = list;
+  }
+}
+function get_ORB_BANDS() {
+  _init_properties_OrbGeometry_kt__mo1801();
+  return ORB_BANDS;
+}
+var ORB_BANDS;
+function get_ORB_LAYERS() {
+  _init_properties_OrbGeometry_kt__mo1801();
+  return ORB_LAYERS;
+}
+var ORB_LAYERS;
+function OrbBandSpec(fromHz, toHz, span, attackS, releaseS, share) {
+  this.hh_1 = fromHz;
+  this.ih_1 = toHz;
+  this.jh_1 = span;
+  this.kh_1 = attackS;
+  this.lh_1 = releaseS;
+  this.mh_1 = share;
+}
+function OrbLayerSpec(slow, smoothPasses, size, restAlpha) {
+  this.nh_1 = slow;
+  this.oh_1 = smoothPasses;
+  this.ph_1 = size;
+  this.qh_1 = restAlpha;
+}
+var static_init_called_3;
+function static_init_3() {
+  if (static_init_called_3)
+    return Unit_instance;
+  static_init_called_3 = true;
+  OrbSource_PCM_instance = new OrbSource('PCM', 0, 1.5, 5.0, 4.0);
+  OrbSource_VISUALIZER_instance = new OrbSource('VISUALIZER', 1, 2.5, 12.0, 10.0);
+}
+var OrbSource_PCM_instance;
+var OrbSource_VISUALIZER_instance;
+function OrbSource(name, ordinal, noiseFloor, refFloor, openMinLevel) {
+  Enum.call(this, name, ordinal);
+  this.th_1 = noiseFloor;
+  this.uh_1 = refFloor;
+  this.vh_1 = openMinLevel;
+}
+function auraLayerAlpha(layer) {
+  _init_properties_OrbGeometry_kt__mo1801();
+  // Inline function 'kotlin.math.pow' call
+  return 0.5 * Math.pow(0.6, layer);
+}
+function auraLayerColorShift(layer) {
+  _init_properties_OrbGeometry_kt__mo1801();
+  return imul_0(layer, 1);
+}
+function auraLayerDrift(layer) {
+  _init_properties_OrbGeometry_kt__mo1801();
+  return true && (layer % 2 | 0) === 1 ? -1.0 : 1.0;
+}
+function coverPulseScale(breath, kick, heavy, volume, phaseLevel) {
+  _init_properties_OrbGeometry_kt__mo1801();
+  return coerceIn(1.0 + breath * 0.05 + kick * (0.015 + heavy * 0.025) * volumeGain(volume) * (0.4 + 0.6 * phaseLevel), 1.0, 1.0899999);
+}
+function easeCoverKick(eased, kick, dt) {
+  _init_properties_OrbGeometry_kt__mo1801();
+  if (!(dt > 0.0))
+    return eased;
+  var tau = kick > eased ? 0.03 : 0.14;
+  var tmp = kick - eased;
+  // Inline function 'kotlin.math.min' call
+  // Inline function 'kotlin.math.exp' call
+  var x = -Math.min(dt, 0.1) / tau;
+  return eased + tmp * (1.0 - Math.exp(x));
+}
+function sane($this, value) {
+  return isFinite(value) ? value : 0.0;
+}
+function rate($this, seconds, tau) {
+  var tmp;
+  if (seconds > 0.0) {
+    // Inline function 'kotlin.math.exp' call
+    var x = -seconds / tau;
+    tmp = 1.0 - Math.exp(x);
+  } else {
+    tmp = 0.0;
+  }
+  return tmp;
+}
+function listen($this, bands, dt) {
+  var lastBand = bands.length - 1 | 0;
+  var floors = $this.zh_1;
+  fill_0($this.aj_1, 0.0);
+  if (lastBand < 0) {
+    fill_0($this.mi_1, 0.0);
+  } else {
+    var inductionVariable = 0;
+    var last = $this.ei_1;
+    if (inductionVariable <= last)
+      do {
+        var j = inductionVariable;
+        inductionVariable = inductionVariable + 1 | 0;
+        var position = coerceIn($this.ii_1[j], 0.0, lastBand);
+        var index = numberToInt(position);
+        // Inline function 'kotlin.math.min' call
+        var a = index + 1 | 0;
+        var next = Math.min(a, lastBand);
+        var heard = bands[index] + (bands[next] - bands[index]) * (position - index) - floors.th_1;
+        $this.mi_1[j] = heard > 0.0 && isFinite(heard) ? heard : 0.0;
+        var tmp = $this.hi_1[j];
+        var tmp0 = $this.aj_1[$this.hi_1[j]];
+        // Inline function 'kotlin.math.max' call
+        var b = $this.mi_1[j];
+        var tmp$ret$1 = Math.max(tmp0, b);
+        $this.aj_1[tmp] = tmp$ret$1;
+      }
+       while (!(j === last));
+  }
+  var total = 0.0;
+  var inductionVariable_0 = 0;
+  var last_0 = $this.gi_1;
+  if (inductionVariable_0 < last_0)
+    do {
+      var r = inductionVariable_0;
+      inductionVariable_0 = inductionVariable_0 + 1 | 0;
+      var peak = $this.aj_1[r];
+      $this.zi_1[r] = follow($this, $this.zi_1[r], peak, dt);
+      var tmp0_0 = floors.uh_1;
+      var tmp_0 = $this.yi_1[r];
+      // Inline function 'kotlin.math.exp' call
+      var x = -dt / 3.0;
+      var tmp0_1 = tmp_0 * Math.exp(x);
+      // Inline function 'kotlin.math.max' call
+      var b_0 = $this.zi_1[r] * 0.55;
+      // Inline function 'kotlin.math.max' call
+      var b_1 = Math.max(tmp0_1, b_0);
+      // Inline function 'kotlin.math.max' call
+      var b_2 = Math.max(peak, b_1);
+      var tmp$ret$5 = Math.max(tmp0_0, b_2);
+      $this.yi_1[r] = tmp$ret$5;
+      total = total + peak;
+    }
+     while (inductionVariable_0 < last_0);
+  $this.ej_1 = follow($this, $this.ej_1, total, dt);
+  var tmp_1 = $this;
+  var tmp_2;
+  if (total < floors.vh_1) {
+    tmp_2 = 0.0;
+  } else {
+    var tmp_3 = total;
+    // Inline function 'kotlin.math.max' call
+    var a_0 = $this.ej_1;
+    var tmp$ret$6 = Math.max(a_0, 0.001);
+    tmp_2 = coerceIn(tmp_3 / tmp$ret$6, 0.0, 1.0);
+  }
+  tmp_1.fj_1 = tmp_2;
+  var main = $this.ni_1[0];
+  var bass = 0.0;
+  var bassPoints = 0;
+  var inductionVariable_1 = 0;
+  var last_1 = $this.ei_1;
+  if (inductionVariable_1 <= last_1)
+    do {
+      var j_0 = inductionVariable_1;
+      inductionVariable_1 = inductionVariable_1 + 1 | 0;
+      var r_0 = $this.hi_1[j_0];
+      var peak_0 = $this.aj_1[r_0];
+      var tmp_4;
+      if (peak_0 > 0.0) {
+        // Inline function 'kotlin.math.pow' call
+        var this_0 = $this.mi_1[j_0] / peak_0;
+        var tmp_5 = Math.pow(this_0, 1.6);
+        // Inline function 'kotlin.math.pow' call
+        var this_1 = coerceIn(peak_0 / $this.yi_1[r_0], 0.0, 1.0);
+        tmp_4 = tmp_5 * Math.pow(this_1, 0.5);
+      } else {
+        tmp_4 = 0.0;
+      }
+      var v = tmp_4;
+      if (r_0 === 0) {
+        bass = bass + v;
+        bassPoints = bassPoints + 1 | 0;
+      }
+      main[j_0] = coerceIn(v, 0.0, 1.0) * $this.ji_1[j_0];
+    }
+     while (!(j_0 === last_1));
+  $this.dj_1 = bassPoints > 0 ? coerceIn(bass / bassPoints, 0.0, 1.0) : 0.0;
+  // Inline function 'kotlin.repeat' call
+  var inductionVariable_2 = 0;
+  if (inductionVariable_2 < 2)
+    do {
+      var index_0 = inductionVariable_2;
+      inductionVariable_2 = inductionVariable_2 + 1 | 0;
+      blur($this, main);
+    }
+     while (inductionVariable_2 < 2);
+  var inductionVariable_3 = 1;
+  var last_2 = $this.yh_1;
+  if (inductionVariable_3 < last_2)
+    do {
+      var l = inductionVariable_3;
+      inductionVariable_3 = inductionVariable_3 + 1 | 0;
+      // Inline function 'kotlin.collections.copyInto' call
+      var destination = $this.ni_1[l];
+      var endIndex = main.length;
+      // Inline function 'kotlin.js.unsafeCast' call
+      // Inline function 'kotlin.js.asDynamic' call
+      var tmp_6 = main;
+      // Inline function 'kotlin.js.unsafeCast' call
+      // Inline function 'kotlin.js.asDynamic' call
+      arrayCopy(tmp_6, destination, 0, 0, endIndex);
+      // Inline function 'kotlin.repeat' call
+      var times = $this.wh_1.m(l).oh_1;
+      var inductionVariable_4 = 0;
+      if (inductionVariable_4 < times)
+        do {
+          var index_1 = inductionVariable_4;
+          inductionVariable_4 = inductionVariable_4 + 1 | 0;
+          blur($this, $this.ni_1[l]);
+        }
+         while (inductionVariable_4 < times);
+    }
+     while (inductionVariable_3 < last_2);
+}
+function follow($this, reference, value, dt) {
+  var tmp;
+  if (value > reference) {
+    var tmp_0 = value - reference;
+    // Inline function 'kotlin.math.exp' call
+    var x = -dt / 2.0;
+    tmp = reference + tmp_0 * (1.0 - Math.exp(x));
+  } else {
+    // Inline function 'kotlin.math.exp' call
+    var x_0 = -dt / 25.0;
+    tmp = reference * Math.exp(x_0);
+  }
+  return tmp;
+}
+function blur($this, values) {
+  var previous = values[1];
+  var inductionVariable = 0;
+  var last = $this.ei_1;
+  if (inductionVariable <= last)
+    do {
+      var j = inductionVariable;
+      inductionVariable = inductionVariable + 1 | 0;
+      var current = values[j];
+      var next = j < $this.ei_1 ? values[j + 1 | 0] : previous;
+      values[j] = 0.25 * previous + 0.5 * current + 0.25 * next;
+      previous = current;
+    }
+     while (!(j === last));
+}
+function smoothLevels($this, steps, h) {
+  var inductionVariable = 0;
+  var last = $this.yh_1;
+  if (inductionVariable < last)
+    do {
+      var l = inductionVariable;
+      inductionVariable = inductionVariable + 1 | 0;
+      var slow = $this.wh_1.m(l).nh_1;
+      var goal = $this.ni_1[l];
+      var first = $this.oi_1[l];
+      var second = $this.pi_1[l];
+      var sum = 0.0;
+      var inductionVariable_0 = 0;
+      var last_0 = $this.ei_1;
+      if (inductionVariable_0 <= last_0)
+        do {
+          var j = inductionVariable_0;
+          inductionVariable_0 = inductionVariable_0 + 1 | 0;
+          var up = rate($this, h, $this.ki_1[j] * slow * 0.5);
+          var down = rate($this, h, $this.li_1[j] * slow * 0.5);
+          var t = goal[j];
+          var a = first[j];
+          var b = second[j];
+          // Inline function 'kotlin.repeat' call
+          var inductionVariable_1 = 0;
+          if (inductionVariable_1 < steps)
+            do {
+              var index = inductionVariable_1;
+              inductionVariable_1 = inductionVariable_1 + 1 | 0;
+              a = a + (t - a) * (t > a ? up : down);
+              b = b + (a - b) * (a > b ? up : down);
+            }
+             while (inductionVariable_1 < steps);
+          if (t === 0.0 && a < 1.0E-4) {
+            a = 0.0;
+            if (b < 1.0E-4)
+              b = 0.0;
+          }
+          first[j] = a;
+          second[j] = b;
+          sum = sum + (j === 0 || j === $this.ei_1 ? b * 0.5 : b);
+        }
+         while (!(j === last_0));
+      $this.cj_1[l] = coerceIn(sum / $this.ei_1, 0.0, 1.0);
+    }
+     while (inductionVariable < last);
+}
+function knee($this, value, cap) {
+  if (cap <= 0.0)
+    return 0.0;
+  var from = cap * 0.75;
+  var tmp;
+  if (value <= from) {
+    tmp = value;
+  } else {
+    var tmp_0 = cap - from;
+    // Inline function 'kotlin.math.tanh' call
+    var x = (value - from) / (cap - from);
+    tmp = from + tmp_0 * tanh(x);
+  }
+  return tmp;
+}
+function outline($this, halfSide, radius) {
+  var tmp;
+  if (radius > 0.0) {
+    // Inline function 'kotlin.math.min' call
+    tmp = Math.min(radius, halfSide);
+  } else {
+    tmp = 0.0;
+  }
+  var r = tmp;
+  var flat = halfSide - r;
+  var arc = 3.141592653589793 / 2 * r;
+  var length = 4.0 * flat + 2.0 * arc;
+  var inductionVariable = 0;
+  var last = $this.ei_1;
+  if (inductionVariable <= last)
+    $l$loop_2: do {
+      var j = inductionVariable;
+      inductionVariable = inductionVariable + 1 | 0;
+      var s = length * j / $this.ei_1;
+      if (j === 0 || s < flat) {
+        $this.ui_1[j] = j === 0 ? 0.0 : s;
+        $this.vi_1[j] = -halfSide;
+        $this.wi_1[j] = 0.0;
+        $this.xi_1[j] = -1.0;
+        continue $l$loop_2;
+      }
+      s = s - flat;
+      if (s < arc && r > 0.0) {
+        var a = s / r;
+        // Inline function 'kotlin.math.sin' call
+        var tmp$ret$1 = Math.sin(a);
+        $this.wi_1[j] = tmp$ret$1;
+        // Inline function 'kotlin.math.cos' call
+        var tmp$ret$2 = Math.cos(a);
+        $this.xi_1[j] = -tmp$ret$2;
+        $this.ui_1[j] = flat + r * $this.wi_1[j];
+        $this.vi_1[j] = -flat + r * $this.xi_1[j];
+        continue $l$loop_2;
+      }
+      s = s - arc;
+      if (s < 2.0 * flat) {
+        $this.ui_1[j] = halfSide;
+        $this.vi_1[j] = -flat + s;
+        $this.wi_1[j] = 1.0;
+        $this.xi_1[j] = 0.0;
+        continue $l$loop_2;
+      }
+      s = s - 2.0 * flat;
+      if (s < arc && r > 0.0 && j < $this.ei_1) {
+        var a_0 = s / r;
+        // Inline function 'kotlin.math.cos' call
+        var tmp$ret$3 = Math.cos(a_0);
+        $this.wi_1[j] = tmp$ret$3;
+        // Inline function 'kotlin.math.sin' call
+        var tmp$ret$4 = Math.sin(a_0);
+        $this.xi_1[j] = tmp$ret$4;
+        $this.ui_1[j] = flat + r * $this.wi_1[j];
+        $this.vi_1[j] = flat + r * $this.xi_1[j];
+        continue $l$loop_2;
+      }
+      s = s - arc;
+      $this.ui_1[j] = j === $this.ei_1 ? 0.0 : coerceIn(flat - s, 0.0, flat);
+      $this.vi_1[j] = halfSide;
+      $this.wi_1[j] = 0.0;
+      $this.xi_1[j] = 1.0;
+    }
+     while (!(j === last));
+}
+function shape_0($this, coverSide, cornerRadius, coverScale, spike, volume, heavy, step) {
+  var side = coverSide > 0.0 && isFinite(coverSide) ? coverSide : 0.0;
+  var scale = isFinite(coverScale) ? coerceIn(coverScale, 0.1, 10.0) : 1.0;
+  outline($this, side * 0.5 * scale, cornerRadius * scale);
+  var openAmp = 0.06 + (1.0 - 0.06) * $this.ai_1;
+  var drive = coerceIn(spike, 0.0, 2.0) * volumeGain(volume);
+  var full = side * 0.23 * maxVolumeBoost(volume) * openAmp;
+  var gap = side * 0.02;
+  var pumpPx = side * 0.01 * $this.ij_1 * $this.ai_1 * (0.4 + (1.0 - 0.4) * heavy);
+  // Inline function 'kotlin.math.max' call
+  var a = side * 0.21 - gap;
+  var ceiling = Math.max(a, 0.0);
+  $this.ci_1 = gap + ceiling;
+  var resized = !(side === $this.kj_1);
+  $this.kj_1 = side;
+  var furthest = side * 0.7 * step;
+  var inductionVariable = 0;
+  if (inductionVariable < 128)
+    do {
+      var i = inductionVariable;
+      inductionVariable = inductionVariable + 1 | 0;
+      var j = i <= $this.ei_1 ? i : 128 - i | 0;
+      $this.ti_1[imul_0(i, 2)] = i <= $this.ei_1 ? $this.ui_1[j] : -$this.ui_1[j];
+      $this.ti_1[imul_0(i, 2) + 1 | 0] = $this.vi_1[j];
+    }
+     while (inductionVariable < 128);
+  var inductionVariable_0 = 0;
+  var last = $this.yh_1;
+  if (inductionVariable_0 < last)
+    do {
+      var l = inductionVariable_0;
+      inductionVariable_0 = inductionVariable_0 + 1 | 0;
+      var size = $this.wh_1.m(l).ph_1;
+      var off = $this.qi_1[l];
+      var level = $this.pi_1[l];
+      var p = $this.ri_1[l];
+      var inductionVariable_1 = 0;
+      var last_0 = $this.ei_1;
+      if (inductionVariable_1 <= last_0)
+        do {
+          var j_0 = inductionVariable_1;
+          inductionVariable_1 = inductionVariable_1 + 1 | 0;
+          var v = level[j_0];
+          var wanted = gap + knee($this, (v * (1.0 + 0.2 * heavy * v) * drive * full + pumpPx) * size, ceiling);
+          var o = resized ? wanted : coerceIn(off[j_0] + coerceIn(wanted - off[j_0], -furthest, furthest), gap, gap + ceiling);
+          off[j_0] = o;
+          var x = $this.ui_1[j_0] + $this.wi_1[j_0] * o;
+          var y = $this.vi_1[j_0] + $this.xi_1[j_0] * o;
+          p[imul_0(j_0, 2)] = x;
+          p[imul_0(j_0, 2) + 1 | 0] = y;
+          if (1 <= j_0 ? j_0 < $this.ei_1 : false) {
+            var m = 128 - j_0 | 0;
+            p[imul_0(m, 2)] = -x;
+            p[imul_0(m, 2) + 1 | 0] = y;
+          }
+        }
+         while (!(j_0 === last_0));
+      var c = $this.si_1[l];
+      var inductionVariable_2 = 0;
+      if (inductionVariable_2 < 128)
+        do {
+          var i_0 = inductionVariable_2;
+          inductionVariable_2 = inductionVariable_2 + 1 | 0;
+          var i0 = imul_0(((i_0 + 128 | 0) - 1 | 0) % 128 | 0, 2);
+          var i1 = imul_0(i_0, 2);
+          var i2 = imul_0((i_0 + 1 | 0) % 128 | 0, 2);
+          var i3 = imul_0((i_0 + 2 | 0) % 128 | 0, 2);
+          var o_0 = imul_0(i_0, 6);
+          c[o_0] = p[i1] + (p[i2] - p[i0]) * 0.16;
+          c[o_0 + 1 | 0] = p[i1 + 1 | 0] + (p[i2 + 1 | 0] - p[i0 + 1 | 0]) * 0.16;
+          c[o_0 + 2 | 0] = p[i2] - (p[i3] - p[i1]) * 0.16;
+          c[o_0 + 3 | 0] = p[i2 + 1 | 0] - (p[i3 + 1 | 0] - p[i1 + 1 | 0]) * 0.16;
+          c[o_0 + 4 | 0] = p[i2];
+          c[o_0 + 5 | 0] = p[i2 + 1 | 0];
+        }
+         while (inductionVariable_2 < 128);
+    }
+     while (inductionVariable_0 < last);
+}
+function OrbGeometry(layers, ranges) {
+  layers = layers === VOID ? get_ORB_LAYERS() : layers;
+  ranges = ranges === VOID ? get_ORB_BANDS() : ranges;
+  this.wh_1 = layers;
+  this.xh_1 = ranges;
+  this.yh_1 = this.wh_1.q();
+  this.zh_1 = OrbSource_PCM_getInstance();
+  this.ai_1 = 0.0;
+  this.bi_1 = 0.25;
+  this.ci_1 = 0.0;
+  this.di_1 = 0.0;
+  this.ei_1 = 64;
+  this.fi_1 = this.ei_1 + 1 | 0;
+  this.gi_1 = this.xh_1.q();
+  this.hi_1 = new Int32Array(this.fi_1);
+  this.ii_1 = new Float32Array(this.fi_1);
+  this.ji_1 = new Float32Array(this.fi_1);
+  this.ki_1 = new Float32Array(this.fi_1);
+  this.li_1 = new Float32Array(this.fi_1);
+  this.mi_1 = new Float32Array(this.fi_1);
+  var tmp = this;
+  var tmp_0 = 0;
+  var tmp_1 = this.yh_1;
+  // Inline function 'kotlin.arrayOfNulls' call
+  var tmp_2 = Array(tmp_1);
+  while (tmp_0 < tmp_1) {
+    tmp_2[tmp_0] = new Float32Array(this.fi_1);
+    tmp_0 = tmp_0 + 1 | 0;
+  }
+  tmp.ni_1 = tmp_2;
+  var tmp_3 = this;
+  var tmp_4 = 0;
+  var tmp_5 = this.yh_1;
+  // Inline function 'kotlin.arrayOfNulls' call
+  var tmp_6 = Array(tmp_5);
+  while (tmp_4 < tmp_5) {
+    tmp_6[tmp_4] = new Float32Array(this.fi_1);
+    tmp_4 = tmp_4 + 1 | 0;
+  }
+  tmp_3.oi_1 = tmp_6;
+  var tmp_7 = this;
+  var tmp_8 = 0;
+  var tmp_9 = this.yh_1;
+  // Inline function 'kotlin.arrayOfNulls' call
+  var tmp_10 = Array(tmp_9);
+  while (tmp_8 < tmp_9) {
+    tmp_10[tmp_8] = new Float32Array(this.fi_1);
+    tmp_8 = tmp_8 + 1 | 0;
+  }
+  tmp_7.pi_1 = tmp_10;
+  var tmp_11 = this;
+  var tmp_12 = 0;
+  var tmp_13 = this.yh_1;
+  // Inline function 'kotlin.arrayOfNulls' call
+  var tmp_14 = Array(tmp_13);
+  while (tmp_12 < tmp_13) {
+    tmp_14[tmp_12] = new Float32Array(this.fi_1);
+    tmp_12 = tmp_12 + 1 | 0;
+  }
+  tmp_11.qi_1 = tmp_14;
+  var tmp_15 = this;
+  var tmp_16 = 0;
+  var tmp_17 = this.yh_1;
+  // Inline function 'kotlin.arrayOfNulls' call
+  var tmp_18 = Array(tmp_17);
+  while (tmp_16 < tmp_17) {
+    tmp_18[tmp_16] = new Float32Array(256);
+    tmp_16 = tmp_16 + 1 | 0;
+  }
+  tmp_15.ri_1 = tmp_18;
+  var tmp_19 = this;
+  var tmp_20 = 0;
+  var tmp_21 = this.yh_1;
+  // Inline function 'kotlin.arrayOfNulls' call
+  var tmp_22 = Array(tmp_21);
+  while (tmp_20 < tmp_21) {
+    tmp_22[tmp_20] = new Float32Array(768);
+    tmp_20 = tmp_20 + 1 | 0;
+  }
+  tmp_19.si_1 = tmp_22;
+  this.ti_1 = new Float32Array(256);
+  this.ui_1 = new Float32Array(this.fi_1);
+  this.vi_1 = new Float32Array(this.fi_1);
+  this.wi_1 = new Float32Array(this.fi_1);
+  this.xi_1 = new Float32Array(this.fi_1);
+  var tmp_23 = this;
+  var tmp_24 = 0;
+  var tmp_25 = this.gi_1;
+  var tmp_26 = new Float32Array(tmp_25);
+  while (tmp_24 < tmp_25) {
+    tmp_26[tmp_24] = 5.0;
+    tmp_24 = tmp_24 + 1 | 0;
+  }
+  tmp_23.yi_1 = tmp_26;
+  this.zi_1 = new Float32Array(this.gi_1);
+  this.aj_1 = new Float32Array(this.gi_1);
+  var tmp_27 = this;
+  var tmp_28 = 0;
+  var tmp_29 = this.yh_1;
+  var tmp_30 = new Float32Array(tmp_29);
+  while (tmp_28 < tmp_29) {
+    var tmp_31 = tmp_28;
+    tmp_30[tmp_31] = this.wh_1.m(tmp_31).qh_1;
+    tmp_28 = tmp_28 + 1 | 0;
+  }
+  tmp_27.bj_1 = tmp_30;
+  this.cj_1 = new Float32Array(this.yh_1);
+  this.dj_1 = 0.0;
+  this.ej_1 = 0.0;
+  this.fj_1 = 0.0;
+  this.gj_1 = -2147483648;
+  this.hj_1 = 1.0;
+  this.ij_1 = 0.0;
+  this.jj_1 = 0.0;
+  this.kj_1 = 0.0;
+  // Inline function 'kotlin.collections.sumOf' call
+  var sum = 0;
+  var _iterator__ex2g4s = this.xh_1.j();
+  while (_iterator__ex2g4s.k()) {
+    var element = _iterator__ex2g4s.l();
+    var tmp_32 = sum;
+    sum = tmp_32 + element.jh_1;
+  }
+  var total = sum;
+  var r = 0;
+  var start = 0.0;
+  var inductionVariable = 0;
+  var last = this.ei_1;
+  if (inductionVariable <= last)
+    do {
+      var j = inductionVariable;
+      inductionVariable = inductionVariable + 1 | 0;
+      var t = j / this.ei_1 * total;
+      while (r < (this.gi_1 - 1 | 0) && t >= start + this.xh_1.m(r).jh_1) {
+        start = start + this.xh_1.m(r).jh_1;
+        r = r + 1 | 0;
+      }
+      var within = coerceIn((t - start) / this.xh_1.m(r).jh_1, 0.0, 1.0);
+      var from = displayBandAt(this.xh_1.m(r).hh_1);
+      var to = displayBandAt(this.xh_1.m(r).ih_1);
+      this.hi_1[j] = r;
+      this.ii_1[j] = from + (to - from) * within;
+      var rise = r === 0 ? coerceIn(within / 0.35, 0.0, 1.0) : 1.0;
+      this.ji_1[j] = this.xh_1.m(r).mh_1 * (0.55 + (1.0 - 0.55) * rise * rise * (3.0 - 2.0 * rise));
+      this.ki_1[j] = this.xh_1.m(r).kh_1;
+      this.li_1[j] = this.xh_1.m(r).lh_1;
+    }
+     while (!(j === last));
+}
+protoOf(OrbGeometry).n7 = function () {
+  var inductionVariable = 0;
+  var last = this.yh_1;
+  if (inductionVariable < last)
+    do {
+      var l = inductionVariable;
+      inductionVariable = inductionVariable + 1 | 0;
+      fill_0(this.ni_1[l], 0.0);
+      fill_0(this.oi_1[l], 0.0);
+      fill_0(this.pi_1[l], 0.0);
+      this.bj_1[l] = this.wh_1.m(l).qh_1;
+      this.cj_1[l] = 0.0;
+    }
+     while (inductionVariable < last);
+  var inductionVariable_0 = 0;
+  var last_0 = this.gi_1;
+  if (inductionVariable_0 < last_0)
+    do {
+      var r = inductionVariable_0;
+      inductionVariable_0 = inductionVariable_0 + 1 | 0;
+      this.yi_1[r] = this.zh_1.uh_1;
+      this.zi_1[r] = 0.0;
+    }
+     while (inductionVariable_0 < last_0);
+  this.dj_1 = 0.0;
+  this.ej_1 = 0.0;
+  this.fj_1 = 0.0;
+  this.hj_1 = 1.0;
+  this.ij_1 = 0.0;
+  this.jj_1 = 0.0;
+  this.ai_1 = 0.0;
+  this.bi_1 = 0.25;
+};
+protoOf(OrbGeometry).lj = function (dt, playing, bands, bandsVersion, side, cornerRadius, coverScale, phaseLevel, spike, volume, heavy, kick, pulse) {
+  var tmp;
+  if (dt > 0.0) {
+    // Inline function 'kotlin.math.min' call
+    tmp = Math.min(dt, 5.0);
+  } else {
+    tmp = 0.0;
+  }
+  var elapsed = tmp;
+  var tmp_0 = this;
+  // Inline function 'kotlin.math.min' call
+  var a = this.hj_1 + elapsed;
+  tmp_0.hj_1 = Math.min(a, 10.0);
+  if (!(bandsVersion === this.gj_1)) {
+    this.gj_1 = bandsVersion;
+    if (playing) {
+      listen(this, bands, coerceIn(this.hj_1, 0.001, 0.2));
+    }
+    this.hj_1 = 0.0;
+  }
+  var live = playing && this.hj_1 < 1.0;
+  if (!live) {
+    var inductionVariable = 0;
+    var last = this.yh_1;
+    if (inductionVariable < last)
+      do {
+        var l = inductionVariable;
+        inductionVariable = inductionVariable + 1 | 0;
+        fill_0(this.ni_1[l], 0.0);
+      }
+       while (inductionVariable < last);
+    this.fj_1 = 0.0;
+    this.dj_1 = 0.0;
+  }
+  // Inline function 'kotlin.math.min' call
+  var step = Math.min(elapsed, 0.05);
+  var tmp_1;
+  if (step > 0.0) {
+    // Inline function 'kotlin.math.ceil' call
+    var x = step / 0.008333334 - 0.01;
+    var tmp$ret$3 = Math.ceil(x);
+    // Inline function 'kotlin.math.max' call
+    var b = numberToInt(tmp$ret$3);
+    tmp_1 = Math.max(1, b);
+  } else {
+    tmp_1 = 0;
+  }
+  var steps = tmp_1;
+  var h = steps > 0 ? step / steps : 0.0;
+  smoothLevels(this, steps, h);
+  var tmp_2;
+  if (live) {
+    tmp_2 = coerceIn(sane(this, pulse == null ? kick : pulse), 0.0, 1.0);
+  } else {
+    tmp_2 = 0.0;
+  }
+  var pumpGoal = tmp_2;
+  var pumpUp = rate(this, h, 0.05);
+  var pumpDown = rate(this, h, 0.18);
+  // Inline function 'kotlin.repeat' call
+  var inductionVariable_0 = 0;
+  if (inductionVariable_0 < steps)
+    do {
+      var index = inductionVariable_0;
+      inductionVariable_0 = inductionVariable_0 + 1 | 0;
+      this.ij_1 = this.ij_1 + (pumpGoal - this.ij_1) * (pumpGoal > this.ij_1 ? pumpUp : pumpDown);
+    }
+     while (inductionVariable_0 < steps);
+  if (pumpGoal === 0.0 && this.ij_1 < 5.0E-4)
+    this.ij_1 = 0.0;
+  var phaseOpen = 0.35 + (1.0 - 0.35) * coerceIn((sane(this, phaseLevel) - 0.4) / 0.5, 0.0, 1.0);
+  var loudOpen = coerceIn((this.fj_1 - 0.12) / 0.45, 0.0, 1.0);
+  var openGoal = playing ? phaseOpen * loudOpen : 0.0;
+  this.ai_1 = this.ai_1 + (openGoal - this.ai_1) * rate(this, step, openGoal > this.ai_1 ? 1.5 : 3.0);
+  if (openGoal === 0.0 && this.ai_1 < 5.0E-4)
+    this.ai_1 = 0.0;
+  var bassGoal = coerceAtMost_0(this.dj_1 * 1.5, 1.0);
+  this.jj_1 = this.jj_1 + (bassGoal - this.jj_1) * rate(this, step, bassGoal > this.jj_1 ? 0.08 : 0.35);
+  this.bi_1 = coerceIn(0.25 + (1.0 - 0.25) * this.jj_1 * (0.3 + 0.7 * this.ai_1), 0.0, 1.0);
+  var inductionVariable_1 = 0;
+  var last_0 = this.yh_1;
+  if (inductionVariable_1 < last_0)
+    do {
+      var l_0 = inductionVariable_1;
+      inductionVariable_1 = inductionVariable_1 + 1 | 0;
+      this.bj_1[l_0] = this.wh_1.m(l_0).qh_1 + (1.0 - this.wh_1.m(l_0).qh_1) * this.ai_1;
+    }
+     while (inductionVariable_1 < last_0);
+  this.di_1 = (this.di_1 + elapsed / 50.0) % 1.0;
+  shape_0(this, side, cornerRadius, coverScale, sane(this, spike), sane(this, volume), coerceIn(sane(this, heavy), 0.0, 1.0), step);
+};
+protoOf(OrbGeometry).mj = function (layer) {
+  return this.ri_1[layer];
+};
+protoOf(OrbGeometry).nj = function (layer) {
+  return this.si_1[layer];
+};
+protoOf(OrbGeometry).oj = function (layer) {
+  return this.bj_1[layer];
+};
+function OrbSource_PCM_getInstance() {
+  static_init_3();
+  return OrbSource_PCM_instance;
+}
+var properties_initialized_OrbGeometry_kt_y663nl;
+function _init_properties_OrbGeometry_kt__mo1801() {
+  if (!properties_initialized_OrbGeometry_kt_y663nl) {
+    properties_initialized_OrbGeometry_kt_y663nl = true;
+    ORB_BANDS = listOf_0([new OrbBandSpec(45.0, 120.0, 0.24, 0.065, 0.25, 1.0), new OrbBandSpec(120.0, 500.0, 0.28, 0.055, 0.22, 0.8), new OrbBandSpec(500.0, 2500.0, 0.27, 0.045, 0.19, 0.6), new OrbBandSpec(2500.0, 10000.0, 0.21, 0.04, 0.16, 0.45)]);
+    ORB_LAYERS = listOf_0([new OrbLayerSpec(1.0, 0, 1.0, 0.55), new OrbLayerSpec(1.7, 3, 1.22, 0.3), new OrbLayerSpec(2.8, 7, 1.42, 0.15)]);
   }
 }
 function fft($this, re, im) {
@@ -7206,35 +8126,35 @@ function push$b(scale, v) {
   // Inline function 'kotlin.math.roundToInt' call
   var this_0 = v * scale;
   var tmp$ret$0 = roundToInt(this_0);
-  return toByte(coerceIn(tmp$ret$0, -128, 127));
+  return toByte(coerceIn_0(tmp$ret$0, -128, 127));
 }
 function PcmFft(size) {
-  this.wg_1 = size;
-  this.xg_1 = this.wg_1 / 2 | 0;
+  this.pj_1 = size;
+  this.qj_1 = this.pj_1 / 2 | 0;
   var tmp = this;
   var tmp_0 = 0;
-  var tmp_1 = this.wg_1;
+  var tmp_1 = this.pj_1;
   var tmp_2 = new Float32Array(tmp_1);
   while (tmp_0 < tmp_1) {
     var tmp_3 = tmp_0;
     // Inline function 'kotlin.math.cos' call
-    var x = 2.0 * 3.141592653589793 * tmp_3 / (this.wg_1 - 1 | 0);
+    var x = 2.0 * 3.141592653589793 * tmp_3 / (this.pj_1 - 1 | 0);
     tmp_2[tmp_3] = 0.5 - 0.5 * Math.cos(x);
     tmp_0 = tmp_0 + 1 | 0;
   }
-  tmp.yg_1 = tmp_2;
-  this.zg_1 = new Float32Array(this.wg_1);
-  this.ah_1 = new Float32Array(this.wg_1);
-  this.bh_1 = new Float32Array(this.wg_1);
-  this.ch_1 = new Int8Array(this.wg_1);
-  this.dh_1 = 1.0;
+  tmp.rj_1 = tmp_2;
+  this.sj_1 = new Float32Array(this.pj_1);
+  this.tj_1 = new Float32Array(this.pj_1);
+  this.uj_1 = new Float32Array(this.pj_1);
+  this.vj_1 = new Int8Array(this.pj_1);
+  this.wj_1 = 1.0;
 }
-protoOf(PcmFft).eh = function (samples, rateHz) {
-  var tmp0 = this.zg_1;
-  var tmp2 = this.zg_1;
-  var tmp6 = this.xg_1;
+protoOf(PcmFft).xj = function (samples, rateHz) {
+  var tmp0 = this.sj_1;
+  var tmp2 = this.sj_1;
+  var tmp6 = this.qj_1;
   // Inline function 'kotlin.collections.copyInto' call
-  var endIndex = this.wg_1;
+  var endIndex = this.pj_1;
   // Inline function 'kotlin.js.unsafeCast' call
   // Inline function 'kotlin.js.asDynamic' call
   var tmp = tmp0;
@@ -7242,36 +8162,36 @@ protoOf(PcmFft).eh = function (samples, rateHz) {
   // Inline function 'kotlin.js.asDynamic' call
   arrayCopy(tmp, tmp2, 0, tmp6, endIndex);
   var inductionVariable = 0;
-  var last = this.xg_1;
+  var last = this.qj_1;
   if (inductionVariable < last)
     do {
       var i = inductionVariable;
       inductionVariable = inductionVariable + 1 | 0;
-      this.zg_1[(this.wg_1 - this.xg_1 | 0) + i | 0] = samples[i];
+      this.sj_1[(this.pj_1 - this.qj_1 | 0) + i | 0] = samples[i];
     }
      while (inductionVariable < last);
   var inductionVariable_0 = 0;
-  var last_0 = this.wg_1;
+  var last_0 = this.pj_1;
   if (inductionVariable_0 < last_0)
     do {
       var i_0 = inductionVariable_0;
       inductionVariable_0 = inductionVariable_0 + 1 | 0;
-      this.ah_1[i_0] = this.zg_1[i_0] * this.yg_1[i_0];
-      this.bh_1[i_0] = 0.0;
+      this.tj_1[i_0] = this.sj_1[i_0] * this.rj_1[i_0];
+      this.uj_1[i_0] = 0.0;
     }
      while (inductionVariable_0 < last_0);
-  fft(this, this.ah_1, this.bh_1);
+  fft(this, this.tj_1, this.uj_1);
   var frameMax = 0.0;
   var inductionVariable_1 = 1;
-  var last_1 = this.wg_1 / 2 | 0;
+  var last_1 = this.pj_1 / 2 | 0;
   if (inductionVariable_1 < last_1)
     do {
       var k = inductionVariable_1;
       inductionVariable_1 = inductionVariable_1 + 1 | 0;
       var tmp0_0 = frameMax;
-      var tmp0_1 = this.ah_1[k];
+      var tmp0_1 = this.tj_1[k];
       // Inline function 'kotlin.math.hypot' call
-      var y = this.bh_1[k];
+      var y = this.uj_1[k];
       // Inline function 'kotlin.math.max' call
       var b = hypot(tmp0_1, y);
       frameMax = Math.max(tmp0_0, b);
@@ -7279,30 +8199,30 @@ protoOf(PcmFft).eh = function (samples, rateHz) {
      while (inductionVariable_1 < last_1);
   var tmp_0 = this;
   var tmp0_2 = frameMax;
-  var tmp_1 = this.dh_1;
+  var tmp_1 = this.wj_1;
   // Inline function 'kotlin.math.exp' call
-  var x = -(this.xg_1 / rateHz) / 30.0;
+  var x = -(this.qj_1 / rateHz) / 30.0;
   // Inline function 'kotlin.math.max' call
   var b_0 = tmp_1 * Math.exp(x);
   // Inline function 'kotlin.math.max' call
   var b_1 = Math.max(0.001, b_0);
-  tmp_0.dh_1 = Math.max(tmp0_2, b_1);
-  var scale = 100.0 / this.dh_1;
-  this.ch_1[0] = push$b(scale, this.ah_1[0]);
-  this.ch_1[1] = push$b(scale, this.ah_1[this.wg_1 / 2 | 0]);
+  tmp_0.wj_1 = Math.max(tmp0_2, b_1);
+  var scale = 100.0 / this.wj_1;
+  this.vj_1[0] = push$b(scale, this.tj_1[0]);
+  this.vj_1[1] = push$b(scale, this.tj_1[this.pj_1 / 2 | 0]);
   var inductionVariable_2 = 1;
-  var last_2 = this.wg_1 / 2 | 0;
+  var last_2 = this.pj_1 / 2 | 0;
   if (inductionVariable_2 < last_2)
     do {
       var k_0 = inductionVariable_2;
       inductionVariable_2 = inductionVariable_2 + 1 | 0;
-      this.ch_1[imul_0(2, k_0)] = push$b(scale, this.ah_1[k_0]);
-      this.ch_1[imul_0(2, k_0) + 1 | 0] = push$b(scale, this.bh_1[k_0]);
+      this.vj_1[imul_0(2, k_0)] = push$b(scale, this.tj_1[k_0]);
+      this.vj_1[imul_0(2, k_0) + 1 | 0] = push$b(scale, this.uj_1[k_0]);
     }
      while (inductionVariable_2 < last_2);
   // Inline function 'kotlin.collections.copyOf' call
   // Inline function 'kotlin.js.asDynamic' call
-  return this.ch_1.slice();
+  return this.vj_1.slice();
 };
 function RaveLog$sink$lambda(_unused_var__etf5q3, _unused_var__etf5q3_0) {
   return Unit_instance;
@@ -7310,10 +8230,10 @@ function RaveLog$sink$lambda(_unused_var__etf5q3, _unused_var__etf5q3_0) {
 function RaveLog() {
   RaveLog_instance = this;
   var tmp = this;
-  tmp.ha_1 = RaveLog$sink$lambda;
+  tmp.qa_1 = RaveLog$sink$lambda;
 }
-protoOf(RaveLog).ia = function (tag, message) {
-  return this.ha_1(tag, message);
+protoOf(RaveLog).ra = function (tag, message) {
+  return this.qa_1(tag, message);
 };
 var RaveLog_instance;
 function RaveLog_getInstance() {
@@ -7323,14 +8243,17 @@ function RaveLog_getInstance() {
 }
 function volumeGain(volume) {
   // Inline function 'kotlin.math.pow' call
-  var this_0 = coerceIn_0(volume, 0.0, 1.0);
+  var this_0 = coerceIn(volume, 0.0, 1.0);
   return 0.35 + 0.65 * Math.pow(this_0, 1.5);
 }
+function maxVolumeBoost(volume) {
+  return 1.0 + (1.0 / 0.7 - 1.0) * coerceIn((volume - 0.9) / 0.1, 0.0, 1.0);
+}
 function loudRamp(volume) {
-  return coerceIn_0((volume - 0.7) / 0.3, 0.0, 1.0);
+  return coerceIn((volume - 0.7) / 0.3, 0.0, 1.0);
 }
 function loudness(volume) {
-  return coerceIn_0((volume - 0.75) / 0.25, 0.0, 1.0);
+  return coerceIn((volume - 0.75) / 0.25, 0.0, 1.0);
 }
 function GenreLook(kick, spike, particles, shake, strobe, swayX, swayRot, bounceY, warmth) {
   kick = kick === VOID ? null : kick;
@@ -7342,29 +8265,29 @@ function GenreLook(kick, spike, particles, shake, strobe, swayX, swayRot, bounce
   swayRot = swayRot === VOID ? 0.0 : swayRot;
   bounceY = bounceY === VOID ? 0.0 : bounceY;
   warmth = warmth === VOID ? 0.0 : warmth;
-  this.fh_1 = kick;
-  this.gh_1 = spike;
-  this.hh_1 = particles;
-  this.ih_1 = shake;
-  this.jh_1 = strobe;
-  this.kh_1 = swayX;
-  this.lh_1 = swayRot;
-  this.mh_1 = bounceY;
-  this.nh_1 = warmth;
+  this.yj_1 = kick;
+  this.zj_1 = spike;
+  this.ak_1 = particles;
+  this.bk_1 = shake;
+  this.ck_1 = strobe;
+  this.dk_1 = swayX;
+  this.ek_1 = swayRot;
+  this.fk_1 = bounceY;
+  this.gk_1 = warmth;
 }
 protoOf(GenreLook).toString = function () {
-  return 'GenreLook(kick=' + this.fh_1 + ', spike=' + this.gh_1 + ', particles=' + this.hh_1 + ', shake=' + this.ih_1 + ', strobe=' + this.jh_1 + ', swayX=' + this.kh_1 + ', swayRot=' + this.lh_1 + ', bounceY=' + this.mh_1 + ', warmth=' + this.nh_1 + ')';
+  return 'GenreLook(kick=' + this.yj_1 + ', spike=' + this.zj_1 + ', particles=' + this.ak_1 + ', shake=' + this.bk_1 + ', strobe=' + this.ck_1 + ', swayX=' + this.dk_1 + ', swayRot=' + this.ek_1 + ', bounceY=' + this.fk_1 + ', warmth=' + this.gk_1 + ')';
 };
 protoOf(GenreLook).hashCode = function () {
-  var result = this.fh_1 == null ? 0 : getNumberHashCode(this.fh_1);
-  result = imul_0(result, 31) + getNumberHashCode(this.gh_1) | 0;
-  result = imul_0(result, 31) + getNumberHashCode(this.hh_1) | 0;
-  result = imul_0(result, 31) + getNumberHashCode(this.ih_1) | 0;
-  result = imul_0(result, 31) + getNumberHashCode(this.jh_1) | 0;
-  result = imul_0(result, 31) + getNumberHashCode(this.kh_1) | 0;
-  result = imul_0(result, 31) + getNumberHashCode(this.lh_1) | 0;
-  result = imul_0(result, 31) + getNumberHashCode(this.mh_1) | 0;
-  result = imul_0(result, 31) + getNumberHashCode(this.nh_1) | 0;
+  var result = this.yj_1 == null ? 0 : getNumberHashCode(this.yj_1);
+  result = imul_0(result, 31) + getNumberHashCode(this.zj_1) | 0;
+  result = imul_0(result, 31) + getNumberHashCode(this.ak_1) | 0;
+  result = imul_0(result, 31) + getNumberHashCode(this.bk_1) | 0;
+  result = imul_0(result, 31) + getNumberHashCode(this.ck_1) | 0;
+  result = imul_0(result, 31) + getNumberHashCode(this.dk_1) | 0;
+  result = imul_0(result, 31) + getNumberHashCode(this.ek_1) | 0;
+  result = imul_0(result, 31) + getNumberHashCode(this.fk_1) | 0;
+  result = imul_0(result, 31) + getNumberHashCode(this.gk_1) | 0;
   return result;
 };
 protoOf(GenreLook).equals = function (other) {
@@ -7372,64 +8295,64 @@ protoOf(GenreLook).equals = function (other) {
     return true;
   if (!(other instanceof GenreLook))
     return false;
-  if (!equals(this.fh_1, other.fh_1))
+  if (!equals(this.yj_1, other.yj_1))
     return false;
-  if (!equals(this.gh_1, other.gh_1))
+  if (!equals(this.zj_1, other.zj_1))
     return false;
-  if (!equals(this.hh_1, other.hh_1))
+  if (!equals(this.ak_1, other.ak_1))
     return false;
-  if (!equals(this.ih_1, other.ih_1))
+  if (!equals(this.bk_1, other.bk_1))
     return false;
-  if (!equals(this.jh_1, other.jh_1))
+  if (!equals(this.ck_1, other.ck_1))
     return false;
-  if (!equals(this.kh_1, other.kh_1))
+  if (!equals(this.dk_1, other.dk_1))
     return false;
-  if (!equals(this.lh_1, other.lh_1))
+  if (!equals(this.ek_1, other.ek_1))
     return false;
-  if (!equals(this.mh_1, other.mh_1))
+  if (!equals(this.fk_1, other.fk_1))
     return false;
-  if (!equals(this.nh_1, other.nh_1))
+  if (!equals(this.gk_1, other.gk_1))
     return false;
   return true;
 };
 function GenreRules() {
-  this.oh_1 = 0.25;
+  this.hk_1 = 0.25;
 }
-protoOf(GenreRules).ph = function (f, now) {
-  var p = f.g8_1;
-  if (p <= 0.0 || compare(f.f8_1, new Long(0, 0)) <= 0 || toNumber(subtract(now, f.f8_1)) > p * 2.0)
+protoOf(GenreRules).ik = function (f, now) {
+  var p = f.p8_1;
+  if (p <= 0.0 || compare(f.o8_1, new Long(0, 0)) <= 0 || toNumber(subtract(now, f.o8_1)) > p * 2.0)
     return null;
   // Inline function 'kotlin.Long.div' call
-  var this_0 = subtract(now, f.f8_1);
+  var this_0 = subtract(now, f.o8_1);
   return (toNumber(this_0) / p % 1.0 + 1.0) % 1.0;
 };
-protoOf(GenreRules).qh = function (f, now) {
-  var tmp0_safe_receiver = this.ph(f, now);
+protoOf(GenreRules).jk = function (f, now) {
+  var tmp0_safe_receiver = this.ik(f, now);
   var tmp;
   if (tmp0_safe_receiver == null) {
     tmp = null;
   } else {
     // Inline function 'kotlin.let' call
-    tmp = ((f.e8_1 % 2 | 0) + tmp0_safe_receiver) / 2.0;
+    tmp = ((f.n8_1 % 2 | 0) + tmp0_safe_receiver) / 2.0;
   }
   return tmp;
 };
-protoOf(GenreRules).rh = function (genre, edm, f, halfPulse, fullPulse, now) {
+protoOf(GenreRules).kk = function (genre, edm, f, halfPulse, fullPulse, now) {
   var tmp;
   switch (genre.y_1) {
     case 1:
-      var strong = coerceIn_0((f.k7_1 - 0.55) / 0.3, 0.0, 1.0) * coerceAtMost_0(0.5 + f.x7_1, 1.0);
-      tmp = new GenreLook((halfPulse == null ? f.l7_1 : halfPulse) * strong, VOID, 1.0 + 0.6 * f.r7_1, VOID, 0.0);
+      var strong = coerceIn((f.t7_1 - 0.55) / 0.3, 0.0, 1.0) * coerceAtMost_0(0.5 + f.g8_1, 1.0);
+      tmp = new GenreLook((halfPulse == null ? f.u7_1 : halfPulse) * strong, VOID, 1.0 + 0.6 * f.a8_1, VOID, 0.0);
       break;
     case 6:
-      var ph = this.qh(f, now);
+      var ph = this.jk(f, now);
       var tmp_0;
       if (ph == null) {
         tmp_0 = 0.0;
       } else {
         // Inline function 'kotlin.math.sin' call
         var x = 2.0 * 3.141592653589793 * ph;
-        tmp_0 = Math.sin(x) * (0.6 + 0.4 * coerceIn_0(f.k8_1, 0.0, 1.0));
+        tmp_0 = Math.sin(x) * (0.6 + 0.4 * coerceIn(f.t8_1, 0.0, 1.0));
       }
 
       var s = tmp_0;
@@ -7437,8 +8360,8 @@ protoOf(GenreRules).rh = function (genre, edm, f, halfPulse, fullPulse, now) {
       tmp = new GenreLook(VOID, VOID, VOID, 0.0, 0.0, s, tmp2_swayRot, VOID, 1.0);
       break;
     case 7:
-      var ph_0 = this.qh(f, now);
-      var tmp4_bounceY = fullPulse == null ? f.l7_1 : fullPulse;
+      var ph_0 = this.jk(f, now);
+      var tmp4_bounceY = fullPulse == null ? f.u7_1 : fullPulse;
       var tmp_1;
       if (ph_0 == null) {
         tmp_1 = 0.0;
@@ -7455,7 +8378,7 @@ protoOf(GenreRules).rh = function (genre, edm, f, halfPulse, fullPulse, now) {
       tmp = new GenreLook(VOID, VOID, VOID, 0.0, 0.0);
       break;
     case 3:
-      tmp = edm == null ? new GenreLook() : new GenreLook(edm.vh_1 ? halfPulse : null, edm.yh_1, edm.wh_1, edm.xh_1, edm.zh_1);
+      tmp = edm == null ? new GenreLook() : new GenreLook(edm.ok_1 ? halfPulse : null, edm.rk_1, edm.pk_1, edm.qk_1, edm.sk_1);
       break;
     default:
       tmp = new GenreLook();
@@ -7463,8 +8386,8 @@ protoOf(GenreRules).rh = function (genre, edm, f, halfPulse, fullPulse, now) {
   }
   return tmp;
 };
-protoOf(GenreRules).ai = function (strength) {
-  return 0.4 + 1.2 * coerceIn_0(strength, 0.0, 1.0);
+protoOf(GenreRules).tk = function (strength) {
+  return 0.4 + 1.2 * coerceIn(strength, 0.0, 1.0);
 };
 var GenreRules_instance;
 function GenreRules_getInstance() {
@@ -7541,7 +8464,7 @@ function raveCoreVersion() {
   return 1;
 }
 function _get_strength__jhduay($this) {
-  var tmp0_elvis_lhs = $this.qi_1;
+  var tmp0_elvis_lhs = $this.ol_1;
   return tmp0_elvis_lhs == null ? 0.5 : tmp0_elvis_lhs;
 }
 function tick$blend(mix, a, b) {
@@ -7550,35 +8473,46 @@ function tick$blend(mix, a, b) {
 function tick$subMul(hsW, x) {
   return 1.0 + (x - 1.0) * hsW;
 }
+function tick$eased(dt, from, goal, attackS, releaseS) {
+  var tmp = goal - from;
+  // Inline function 'kotlin.math.exp' call
+  var x = -dt / (goal > from ? attackS : releaseS);
+  return from + tmp * (1.0 - Math.exp(x));
+}
 function WebPartyEngine(fftSize) {
   fftSize = fftSize === VOID ? 2048 : fftSize;
-  this.bi_1 = new PcmFft(fftSize);
-  this.ci_1 = new HardstyleAudio();
-  this.di_1 = new GenreDetector();
-  this.ei_1 = new HardstyleStructure();
-  this.fi_1 = new HardSubDetector();
-  this.gi_1 = new BeatClock();
-  this.hi_1 = new BeatClock();
-  this.ii_1 = new FlashBudget();
-  this.ji_1 = Random_0(7);
-  this.ki_1 = new HardstyleFrame();
-  this.li_1 = new Long(0, 0);
-  this.mi_1 = new HardstyleFrame();
-  this.ni_1 = new Float32Array(48);
-  this.oi_1 = 0.0;
-  this.pi_1 = 1.0;
-  this.qi_1 = null;
-  this.ri_1 = null;
-  this.si_1 = HardSub_RAW_getInstance();
-  this.ti_1 = 0.0;
-  this.ui_1 = SongPart_INTRO_getInstance();
-  this.vi_1 = new Long(0, 0);
-  this.wi_1 = false;
-  this.xi_1 = new Long(-10000, -1);
-  this.yi_1 = new Long(-10000, -1);
-  this.zi_1 = 0;
+  this.uk_1 = new PcmFft(fftSize);
+  this.vk_1 = new HardstyleAudio();
+  this.wk_1 = new GenreDetector();
+  this.xk_1 = new HardstyleStructure();
+  this.yk_1 = new HardSubDetector();
+  this.zk_1 = new BeatClock();
+  this.al_1 = new BeatClock();
+  this.bl_1 = new FlashBudget();
+  this.cl_1 = Random_0(7);
+  this.dl_1 = new HardstyleFrame();
+  this.el_1 = new Long(0, 0);
+  this.fl_1 = new HardstyleFrame();
+  this.gl_1 = new Float32Array(48);
+  this.hl_1 = 0.0;
+  this.il_1 = new OrbGeometry();
+  this.jl_1 = new Float32Array(96);
+  this.kl_1 = 0.0;
+  this.ll_1 = 0.0;
+  this.ml_1 = 0.0;
+  this.nl_1 = 1.0;
+  this.ol_1 = null;
+  this.pl_1 = null;
+  this.ql_1 = HardSub_RAW_getInstance();
+  this.rl_1 = 0.0;
+  this.sl_1 = SongPart_INTRO_getInstance();
+  this.tl_1 = new Long(0, 0);
+  this.ul_1 = false;
+  this.vl_1 = new Long(-10000, -1);
+  this.wl_1 = new Long(-10000, -1);
+  this.xl_1 = 0;
   this.genre = 'HARDSTYLE';
-  this.genreLabel = Genre_HARDSTYLE_getInstance().t8_1;
+  this.genreLabel = Genre_HARDSTYLE_getInstance().c9_1;
   this.genreAnnouncedAt = 0.0;
   this.partName = 'INTRO';
   this.partLabel = '';
@@ -7614,233 +8548,514 @@ function WebPartyEngine(fftSize) {
   this.strobeAmount = 0.0;
   this.density = 1.0;
   this.softness = 1.0;
+  this.dropOn = false;
+  this.particleDrift = 1.0;
+  this.edgeGlow = 0.0;
+  this.yl_1 = 0.0;
   this.hearing = false;
+  this.coverScale = 1.0;
 }
-protoOf(WebPartyEngine).aj = function () {
-  return this.bi_1.xg_1;
+protoOf(WebPartyEngine).zl = function () {
+  return this.uk_1.qj_1;
 };
-protoOf(WebPartyEngine).bj = function () {
+protoOf(WebPartyEngine).am = function () {
   return this.genre;
 };
-protoOf(WebPartyEngine).cj = function () {
+protoOf(WebPartyEngine).bm = function () {
   return this.genreLabel;
 };
-protoOf(WebPartyEngine).dj = function () {
+protoOf(WebPartyEngine).cm = function () {
   return this.genreAnnouncedAt;
 };
-protoOf(WebPartyEngine).ej = function () {
+protoOf(WebPartyEngine).dm = function () {
   return this.partName;
 };
-protoOf(WebPartyEngine).fj = function () {
+protoOf(WebPartyEngine).em = function () {
   return this.partLabel;
 };
-protoOf(WebPartyEngine).gj = function () {
+protoOf(WebPartyEngine).fm = function () {
   return this.partLabelAt;
 };
-protoOf(WebPartyEngine).hj = function () {
+protoOf(WebPartyEngine).gm = function () {
   return this.vibe;
 };
-protoOf(WebPartyEngine).ij = function () {
+protoOf(WebPartyEngine).hm = function () {
   return this.vibeLive;
 };
-protoOf(WebPartyEngine).jj = function () {
+protoOf(WebPartyEngine).im = function () {
   return this.vibeAuto;
 };
-protoOf(WebPartyEngine).kj = function () {
+protoOf(WebPartyEngine).jm = function () {
   return this.rockness;
 };
-protoOf(WebPartyEngine).lj = function () {
+protoOf(WebPartyEngine).km = function () {
   return this.phaseLevel;
 };
-protoOf(WebPartyEngine).mj = function () {
+protoOf(WebPartyEngine).lm = function () {
   return this.visualTime;
 };
-protoOf(WebPartyEngine).nj = function () {
+protoOf(WebPartyEngine).mm = function () {
   return this.audioIntensity;
 };
-protoOf(WebPartyEngine).oj = function () {
+protoOf(WebPartyEngine).nm = function () {
   return this.dropLook;
 };
-protoOf(WebPartyEngine).pj = function () {
+protoOf(WebPartyEngine).om = function () {
   return this.warmth;
 };
-protoOf(WebPartyEngine).qj = function () {
+protoOf(WebPartyEngine).pm = function () {
   return this.dip;
 };
-protoOf(WebPartyEngine).rj = function () {
+protoOf(WebPartyEngine).qm = function () {
   return this.dropHit;
 };
-protoOf(WebPartyEngine).sj = function () {
+protoOf(WebPartyEngine).rm = function () {
   return this.breath;
 };
-protoOf(WebPartyEngine).tj = function () {
+protoOf(WebPartyEngine).sm = function () {
   return this.grade;
 };
-protoOf(WebPartyEngine).uj = function () {
+protoOf(WebPartyEngine).tm = function () {
   return this.shakeX;
 };
-protoOf(WebPartyEngine).vj = function () {
+protoOf(WebPartyEngine).um = function () {
   return this.shakeY;
 };
-protoOf(WebPartyEngine).wj = function () {
+protoOf(WebPartyEngine).vm = function () {
   return this.shakeRotation;
 };
-protoOf(WebPartyEngine).xj = function () {
+protoOf(WebPartyEngine).wm = function () {
   return this.bounceY;
 };
-protoOf(WebPartyEngine).yj = function () {
+protoOf(WebPartyEngine).xm = function () {
   return this.aberration;
 };
-protoOf(WebPartyEngine).zj = function () {
+protoOf(WebPartyEngine).ym = function () {
   return this.strobe;
 };
-protoOf(WebPartyEngine).ak = function () {
+protoOf(WebPartyEngine).zm = function () {
   return this.strobeColor;
 };
-protoOf(WebPartyEngine).bk = function () {
+protoOf(WebPartyEngine).an = function () {
   return this.heavyFlash;
 };
-protoOf(WebPartyEngine).ck = function () {
+protoOf(WebPartyEngine).bn = function () {
   return this.partyHit;
 };
-protoOf(WebPartyEngine).dk = function () {
+protoOf(WebPartyEngine).cn = function () {
   return this.subGlow;
 };
-protoOf(WebPartyEngine).ek = function () {
+protoOf(WebPartyEngine).dn = function () {
   return this.screechTint;
 };
-protoOf(WebPartyEngine).fk = function () {
+protoOf(WebPartyEngine).en = function () {
   return this.flashesPerSecond;
 };
-protoOf(WebPartyEngine).gk = function () {
+protoOf(WebPartyEngine).fn = function () {
   return this.spike;
 };
-protoOf(WebPartyEngine).hk = function () {
+protoOf(WebPartyEngine).gn = function () {
   return this.particles;
 };
-protoOf(WebPartyEngine).ik = function () {
+protoOf(WebPartyEngine).hn = function () {
   return this.shakeAmount;
 };
-protoOf(WebPartyEngine).jk = function () {
+protoOf(WebPartyEngine).in = function () {
   return this.strobeAmount;
 };
-protoOf(WebPartyEngine).kk = function () {
+protoOf(WebPartyEngine).jn = function () {
   return this.density;
 };
-protoOf(WebPartyEngine).lk = function () {
+protoOf(WebPartyEngine).kn = function () {
   return this.softness;
 };
-protoOf(WebPartyEngine).mk = function () {
+protoOf(WebPartyEngine).ln = function () {
+  return this.dropOn;
+};
+protoOf(WebPartyEngine).mn = function () {
+  return this.particleDrift;
+};
+protoOf(WebPartyEngine).nn = function () {
+  return 60;
+};
+protoOf(WebPartyEngine).on = function () {
+  return 120;
+};
+protoOf(WebPartyEngine).pn = function () {
+  return 400;
+};
+protoOf(WebPartyEngine).qn = function () {
+  return this.edgeGlow;
+};
+protoOf(WebPartyEngine).rn = function () {
+  return 0.03;
+};
+protoOf(WebPartyEngine).sn = function () {
+  return 32.0;
+};
+protoOf(WebPartyEngine).tn = function () {
+  return 3.4;
+};
+protoOf(WebPartyEngine).un = function () {
+  return 2.5;
+};
+protoOf(WebPartyEngine).vn = function () {
+  return 0.12;
+};
+protoOf(WebPartyEngine).wn = function () {
+  return 0.3;
+};
+protoOf(WebPartyEngine).xn = function () {
+  return 0.1;
+};
+protoOf(WebPartyEngine).yn = function () {
+  return 0.3;
+};
+protoOf(WebPartyEngine).zn = function () {
+  return 40.0;
+};
+protoOf(WebPartyEngine).ao = function () {
+  return 24.0;
+};
+protoOf(WebPartyEngine).bo = function () {
+  return 0.42;
+};
+protoOf(WebPartyEngine).co = function () {
+  return 4.0;
+};
+protoOf(WebPartyEngine).do = function () {
+  return 16.0;
+};
+protoOf(WebPartyEngine).eo = function () {
+  return 7;
+};
+protoOf(WebPartyEngine).fo = function () {
+  return 3;
+};
+protoOf(WebPartyEngine).go = function () {
+  return 0.3;
+};
+protoOf(WebPartyEngine).ho = function () {
+  return 0.35;
+};
+protoOf(WebPartyEngine).io = function () {
+  return 0.6;
+};
+protoOf(WebPartyEngine).jo = function () {
+  return 0.09;
+};
+protoOf(WebPartyEngine).ko = function () {
+  return 0.45;
+};
+protoOf(WebPartyEngine).lo = function () {
+  return 0.3;
+};
+protoOf(WebPartyEngine).mo = function () {
+  return 1900;
+};
+protoOf(WebPartyEngine).no = function () {
+  return 0.75;
+};
+protoOf(WebPartyEngine).oo = function () {
+  return 0.1;
+};
+protoOf(WebPartyEngine).po = function () {
+  return 0.42;
+};
+protoOf(WebPartyEngine).qo = function () {
+  return 0.34;
+};
+protoOf(WebPartyEngine).ro = function () {
+  return 0.6;
+};
+protoOf(WebPartyEngine).so = function () {
+  return 0.5;
+};
+protoOf(WebPartyEngine).to = function () {
+  return 0.72;
+};
+protoOf(WebPartyEngine).uo = function () {
+  return 1.2;
+};
+protoOf(WebPartyEngine).vo = function () {
+  return 0.96;
+};
+protoOf(WebPartyEngine).wo = function () {
+  return 1.25;
+};
+protoOf(WebPartyEngine).xo = function () {
+  return 12.0;
+};
+protoOf(WebPartyEngine).yo = function () {
+  return 1.2;
+};
+protoOf(WebPartyEngine).zo = function () {
+  return 0.22;
+};
+protoOf(WebPartyEngine).ap = function () {
+  return 0.85;
+};
+protoOf(WebPartyEngine).bp = function () {
+  return 0.3;
+};
+protoOf(WebPartyEngine).cp = function () {
+  return 0.17;
+};
+protoOf(WebPartyEngine).dp = function () {
+  return 0.7;
+};
+protoOf(WebPartyEngine).ep = function () {
+  return 0.35;
+};
+protoOf(WebPartyEngine).fp = function () {
+  return 0.3;
+};
+protoOf(WebPartyEngine).gp = function () {
+  return 0.45;
+};
+protoOf(WebPartyEngine).hp = function () {
+  return 8;
+};
+protoOf(WebPartyEngine).ip = function () {
+  return 0.72;
+};
+protoOf(WebPartyEngine).jp = function () {
+  return 0.35;
+};
+protoOf(WebPartyEngine).kp = function () {
+  return 0.5;
+};
+protoOf(WebPartyEngine).lp = function () {
+  return 0.04;
+};
+protoOf(WebPartyEngine).mp = function () {
+  return 2.2;
+};
+protoOf(WebPartyEngine).np = function () {
+  return 7.0;
+};
+protoOf(WebPartyEngine).op = function () {
+  return 3.0;
+};
+protoOf(WebPartyEngine).pp = function () {
+  return 9;
+};
+protoOf(WebPartyEngine).qp = function () {
+  return 0.25;
+};
+protoOf(WebPartyEngine).rp = function () {
+  return 9.0;
+};
+protoOf(WebPartyEngine).sp = function () {
+  return 1.0;
+};
+protoOf(WebPartyEngine).tp = function () {
+  return 0.9;
+};
+protoOf(WebPartyEngine).auraLayerAlpha = function (layer) {
+  return auraLayerAlpha(layer);
+};
+protoOf(WebPartyEngine).auraLayerColorShift = function (layer) {
+  return auraLayerColorShift(layer);
+};
+protoOf(WebPartyEngine).auraLayerDrift = function (layer) {
+  return auraLayerDrift(layer);
+};
+protoOf(WebPartyEngine).up = function () {
+  return 2;
+};
+protoOf(WebPartyEngine).vp = function () {
+  return 11.0;
+};
+protoOf(WebPartyEngine).wp = function () {
+  return 16775404;
+};
+protoOf(WebPartyEngine).xp = function () {
+  return 0.22;
+};
+protoOf(WebPartyEngine).yp = function () {
+  return 0.33;
+};
+protoOf(WebPartyEngine).zp = function () {
+  return 56;
+};
+protoOf(WebPartyEngine).aq = function () {
+  return 1.3;
+};
+protoOf(WebPartyEngine).bq = function () {
+  return 9.0;
+};
+protoOf(WebPartyEngine).cq = function () {
+  return 2.5;
+};
+protoOf(WebPartyEngine).dq = function () {
+  return 1;
+};
+protoOf(WebPartyEngine).eq = function () {
+  return 0.2;
+};
+protoOf(WebPartyEngine).fq = function () {
+  return 0.25;
+};
+protoOf(WebPartyEngine).gq = function () {
+  return 0;
+};
+protoOf(WebPartyEngine).hq = function () {
+  return 0.45;
+};
+protoOf(WebPartyEngine).iq = function () {
+  return 0.25;
+};
+protoOf(WebPartyEngine).jq = function () {
+  return 0.6;
+};
+protoOf(WebPartyEngine).kq = function () {
+  return 4.0;
+};
+protoOf(WebPartyEngine).lq = function () {
+  return 0.75499994;
+};
+protoOf(WebPartyEngine).mq = function () {
   return this.hearing;
 };
-protoOf(WebPartyEngine).nk = function () {
-  return this.mi_1.k7_1;
+protoOf(WebPartyEngine).nq = function () {
+  return this.fl_1.t7_1;
 };
-protoOf(WebPartyEngine).ok = function () {
-  return this.mi_1.l7_1;
+protoOf(WebPartyEngine).oq = function () {
+  return this.fl_1.u7_1;
 };
-protoOf(WebPartyEngine).pk = function () {
-  return this.mi_1.m7_1;
+protoOf(WebPartyEngine).pq = function () {
+  return this.fl_1.v7_1;
 };
-protoOf(WebPartyEngine).qk = function () {
-  return this.mi_1.n7_1;
+protoOf(WebPartyEngine).qq = function () {
+  return this.fl_1.w7_1;
 };
-protoOf(WebPartyEngine).rk = function () {
-  return this.mi_1.o7_1;
+protoOf(WebPartyEngine).rq = function () {
+  return this.fl_1.x7_1;
 };
-protoOf(WebPartyEngine).sk = function () {
-  return this.mi_1.p7_1;
+protoOf(WebPartyEngine).sq = function () {
+  return this.fl_1.y7_1;
 };
-protoOf(WebPartyEngine).tk = function () {
-  return this.mi_1.r7_1;
+protoOf(WebPartyEngine).tq = function () {
+  return this.fl_1.a8_1;
 };
-protoOf(WebPartyEngine).uk = function () {
-  return this.mi_1.s7_1;
+protoOf(WebPartyEngine).uq = function () {
+  return this.fl_1.b8_1;
 };
-protoOf(WebPartyEngine).vk = function () {
-  return this.mi_1.t7_1;
+protoOf(WebPartyEngine).vq = function () {
+  return this.fl_1.c8_1;
 };
-protoOf(WebPartyEngine).wk = function () {
-  return this.mi_1.v7_1;
+protoOf(WebPartyEngine).wq = function () {
+  return this.fl_1.e8_1;
 };
-protoOf(WebPartyEngine).xk = function () {
-  return this.mi_1.w7_1;
+protoOf(WebPartyEngine).xq = function () {
+  return this.fl_1.f8_1;
 };
-protoOf(WebPartyEngine).yk = function () {
-  return this.mi_1.x7_1;
+protoOf(WebPartyEngine).yq = function () {
+  return this.fl_1.g8_1;
 };
-protoOf(WebPartyEngine).zk = function () {
-  return this.mi_1.z7_1;
+protoOf(WebPartyEngine).zq = function () {
+  return this.fl_1.i8_1;
 };
-protoOf(WebPartyEngine).al = function () {
-  return this.mi_1.l8_1;
+protoOf(WebPartyEngine).ar = function () {
+  return this.fl_1.u8_1;
 };
-protoOf(WebPartyEngine).bl = function () {
-  return this.mi_1.m8_1;
+protoOf(WebPartyEngine).br = function () {
+  return this.fl_1.v8_1;
 };
-protoOf(WebPartyEngine).cl = function () {
-  return this.mi_1.u7_1;
+protoOf(WebPartyEngine).cr = function () {
+  return this.fl_1.d8_1;
 };
-protoOf(WebPartyEngine).dl = function () {
-  return this.ni_1;
+protoOf(WebPartyEngine).dr = function () {
+  return this.gl_1;
+};
+protoOf(WebPartyEngine).er = function () {
+  return this.coverScale;
+};
+protoOf(WebPartyEngine).fr = function () {
+  return this.il_1.yh_1;
+};
+protoOf(WebPartyEngine).gr = function () {
+  return this.il_1.ai_1;
+};
+protoOf(WebPartyEngine).hr = function () {
+  return this.il_1.bi_1;
+};
+protoOf(WebPartyEngine).setOrbSize = function (side, cornerRadius) {
+  this.kl_1 = side;
+  this.ll_1 = cornerRadius;
+};
+protoOf(WebPartyEngine).orbPoints = function (layer) {
+  return this.il_1.mj(layer);
+};
+protoOf(WebPartyEngine).orbCurves = function (layer) {
+  return this.il_1.nj(layer);
+};
+protoOf(WebPartyEngine).orbAlpha = function (layer) {
+  return this.il_1.oj(layer);
+};
+protoOf(WebPartyEngine).ir = function () {
+  return this.il_1.di_1;
 };
 protoOf(WebPartyEngine).pushPcm = function (samples, rateHz, nowMs) {
   var now = numberToLong(nowMs);
-  var fft = this.bi_1.eh(samples, rateHz);
-  this.ki_1 = this.ci_1.sg(fft, rateHz, now);
-  this.li_1 = now;
+  var fft = this.uk_1.xj(samples, rateHz);
+  this.dl_1 = this.vk_1.dh(fft, rateHz, now);
+  this.el_1 = now;
   return fft;
 };
 protoOf(WebPartyEngine).newTrack = function (nowMs) {
   var now = numberToLong(nowMs);
-  this.ci_1.i7();
-  this.ki_1 = new HardstyleFrame();
-  this.di_1.ka(now);
-  this.ei_1.ka(now);
-  this.fi_1.ye();
-  this.ti_1 = 0.0;
-  this.gi_1.i7();
-  this.hi_1.i7();
+  this.vk_1.n7();
+  this.il_1.n7();
+  this.ml_1 = 0.0;
+  this.dl_1 = new HardstyleFrame();
+  this.wk_1.ta(now);
+  this.xk_1.ta(now);
+  this.yk_1.hf();
+  this.rl_1 = 0.0;
+  this.zk_1.n7();
+  this.al_1.n7();
   this.dip = 0.0;
   this.dropHit = 0.0;
-  this.ui_1 = SongPart_INTRO_getInstance();
+  this.sl_1 = SongPart_INTRO_getInstance();
   this.dropLook = 0;
-  this.vi_1 = new Long(0, 0);
-  this.wi_1 = false;
+  this.tl_1 = new Long(0, 0);
+  this.ul_1 = false;
 };
 protoOf(WebPartyEngine).setMetadata = function (appleGenre, appleExact, deezerGenres, nowMs) {
-  this.di_1.la(appleGenre, appleExact, toList_0(deezerGenres), null, numberToLong(nowMs));
-  this.genre = this.di_1.b9_1.x_1;
+  this.wk_1.ua(appleGenre, appleExact, toList_0(deezerGenres), null, numberToLong(nowMs));
+  this.genre = this.wk_1.k9_1.x_1;
 };
 protoOf(WebPartyEngine).setStrength = function (value) {
   var tmp = this;
-  tmp.qi_1 = value == null ? null : coerceIn_0(value, 0.0, 1.0);
+  tmp.ol_1 = value == null ? null : coerceIn(value, 0.0, 1.0);
 };
 protoOf(WebPartyEngine).tick = function (nowMs, dtS, playing, positionMs, durationMs, volume) {
   var now = numberToLong(nowMs);
-  var dt = coerceIn_0(dtS, 0.0, 0.05);
-  var fresh = compare(subtract(now, this.li_1), new Long(300, 0)) < 0;
+  var dt = coerceIn(dtS, 0.0, 0.05);
+  var fresh = compare(subtract(now, this.el_1), new Long(300, 0)) < 0;
   this.hearing = fresh;
-  var rawTarget = playing && fresh ? this.ki_1 : new HardstyleFrame();
+  var rawTarget = playing && fresh ? this.dl_1 : new HardstyleFrame();
   var pos = numberToLong(positionMs);
   var dur = durationMs > 0 ? numberToLong(durationMs) : new Long(-1, -1);
-  var tmp0_elvis_lhs = maxOrNull_0(rawTarget.q7_1);
-  var activity = maxOf(rawTarget.k7_1, new Float32Array([rawTarget.l7_1, rawTarget.m7_1, rawTarget.r7_1, tmp0_elvis_lhs == null ? 0.0 : tmp0_elvis_lhs]));
+  var tmp0_elvis_lhs = maxOrNull_0(rawTarget.z7_1);
+  var activity = maxOf(rawTarget.t7_1, new Float32Array([rawTarget.u7_1, rawTarget.v7_1, rawTarget.a8_1, tmp0_elvis_lhs == null ? 0.0 : tmp0_elvis_lhs]));
   if (playing && activity > 0.025)
     this.visualTime = this.visualTime + dt * (0.35 + activity);
-  this.audioIntensity = playing && activity > 0.025 ? coerceIn_0(activity, 0.0, 1.0) : 0.0;
+  this.audioIntensity = playing && activity > 0.025 ? coerceIn(activity, 0.0, 1.0) : 0.0;
   // Inline function 'kotlin.math.exp' call
   var x = -dt / (playing ? 0.025 : 0.12);
   var mix = 1.0 - Math.exp(x);
-  var g = playing && fresh ? this.di_1.ma(rawTarget, now) : this.di_1.b9_1;
+  var g = playing && fresh ? this.wk_1.va(rawTarget, now) : this.wk_1.k9_1;
   this.genre = g.x_1;
-  this.genreAnnouncedAt = toNumber(this.di_1.e9_1);
+  this.genreAnnouncedAt = toNumber(this.wk_1.n9_1);
   var tmp = this;
   // Inline function 'kotlin.math.round' call
-  var x_0 = this.di_1.ga_1 * 100.0;
+  var x_0 = this.wk_1.pa_1 * 100.0;
   tmp.rockness = round(x_0) / 100.0;
-  this.vibeAuto = this.qi_1 == null;
-  var vibeGoal = this.di_1.ja() ? 1.0 : vibeTarget(g);
+  this.vibeAuto = this.ol_1 == null;
+  var vibeGoal = this.wk_1.sa() ? 1.0 : vibeTarget(g);
   var tmp_0 = this.vibe;
   var tmp_1 = vibeGoal - this.vibe;
   // Inline function 'kotlin.math.exp' call
@@ -7860,68 +9075,68 @@ protoOf(WebPartyEngine).tick = function (nowMs, dtS, playing, positionMs, durati
   var r = this.rockness;
   var hardW = hardWeight(v);
   if (!playing || !fresh) {
-    this.gi_1.i7();
-    this.hi_1.i7();
+    this.zk_1.n7();
+    this.al_1.n7();
   }
   var clockOn = v >= 0.4;
-  var clockPulse = playing && fresh ? this.gi_1.n8(rawTarget, now, 70.0) : null;
+  var clockPulse = playing && fresh ? this.zk_1.w8(rawTarget, now, 70.0) : null;
   var clockKick = clockOn ? clockPulse : null;
-  var halfPulse = playing && fresh ? this.hi_1.j7(rawTarget, now, 70.0, true, 350.0) : null;
-  var look = GenreRules_instance.rh(g, this.ri_1, rawTarget, halfPulse, clockPulse, now);
-  var strengthMul = GenreRules_instance.ai(_get_strength__jhduay(this));
-  var clocked = !(clockKick == null) ? rawTarget.a9(VOID, clockKick) : rawTarget;
-  var visualInput = this.ei_1.ob_1.equals(SongPart_BUILDUP_getInstance()) ? clocked.a9(VOID, VOID, VOID, VOID, VOID, VOID, VOID, VOID, VOID, VOID, VOID, clocked.v7_1 * 0.3) : clocked;
+  var halfPulse = playing && fresh ? this.al_1.s7(rawTarget, now, 70.0, true, 350.0) : null;
+  var look = GenreRules_instance.kk(g, this.pl_1, rawTarget, halfPulse, clockPulse, now);
+  var strengthMul = GenreRules_instance.tk(_get_strength__jhduay(this));
+  var clocked = !(clockKick == null) ? rawTarget.j9(VOID, clockKick) : rawTarget;
+  var visualInput = this.xk_1.xb_1.equals(SongPart_BUILDUP_getInstance()) ? clocked.j9(VOID, VOID, VOID, VOID, VOID, VOID, VOID, VOID, VOID, VOID, VOID, clocked.e8_1 * 0.3) : clocked;
   var shapedFull = vibeShape(visualInput, v, r);
-  var phaseIntensity = playing && fresh ? this.ei_1.be(rawTarget, now, pos, dur) : 1.0;
-  this.partName = this.ei_1.ob_1.x_1;
-  this.partLabel = this.ei_1.qb_1;
-  this.partLabelAt = toNumber(this.ei_1.rb_1);
+  var phaseIntensity = playing && fresh ? this.xk_1.ke(rawTarget, now, pos, dur) : 1.0;
+  this.partName = this.xk_1.xb_1.x_1;
+  this.partLabel = this.xk_1.zb_1;
+  this.partLabelAt = toNumber(this.xk_1.ac_1);
   if (playing && fresh && hardW > 0.0)
-    this.si_1 = this.fi_1.ma(rawTarget, now);
+    this.ql_1 = this.yk_1.va(rawTarget, now);
   var tmp_4 = this;
   var tmp_5;
   switch (g.y_1) {
     case 0:
-      tmp_5 = this.rockness >= 0.5 ? 'ROCK' : 'HARDSTYLE \xB7 ' + this.si_1.ee_1;
+      tmp_5 = this.rockness >= 0.5 ? 'ROCK' : 'HARDSTYLE \xB7 ' + this.ql_1.ne_1;
       break;
     case 3:
-      var tmp2_safe_receiver = this.ri_1;
+      var tmp2_safe_receiver = this.pl_1;
       var tmp_6;
       if (tmp2_safe_receiver == null) {
         tmp_6 = null;
       } else {
         // Inline function 'kotlin.let' call
-        tmp_6 = 'EDM \xB7 ' + tmp2_safe_receiver.uh_1;
+        tmp_6 = 'EDM \xB7 ' + tmp2_safe_receiver.nk_1;
       }
 
       var tmp3_elvis_lhs = tmp_6;
       tmp_5 = tmp3_elvis_lhs == null ? 'EDM' : tmp3_elvis_lhs;
       break;
     default:
-      tmp_5 = g.t8_1;
+      tmp_5 = g.c9_1;
       break;
   }
   tmp_4.genreLabel = tmp_5;
   var sw = structureWeight(v) * (1.0 - hardW * r);
-  var heldOnPurpose = this.ei_1.ob_1.equals(SongPart_DROP_getInstance()) || this.ei_1.ob_1.equals(SongPart_BUILDUP_getInstance()) || this.ei_1.ob_1.equals(SongPart_BREAKDOWN_getInstance()) || this.ei_1.ob_1.equals(SongPart_ANTI_CLIMAX_getInstance());
-  if (!playing || heldOnPurpose || rawTarget.n7_1 < 0.3)
-    this.ti_1 = 0.0;
-  else if (rawTarget.n7_1 > 0.55)
-    this.ti_1 = this.ti_1 + dt;
-  var missedDrop = coerceIn_0((this.ti_1 - 20.0) / 10.0, 0.0, 1.0);
+  var heldOnPurpose = this.xk_1.xb_1.equals(SongPart_DROP_getInstance()) || this.xk_1.xb_1.equals(SongPart_BUILDUP_getInstance()) || this.xk_1.xb_1.equals(SongPart_BREAKDOWN_getInstance()) || this.xk_1.xb_1.equals(SongPart_ANTI_CLIMAX_getInstance());
+  if (!playing || heldOnPurpose || rawTarget.w7_1 < 0.3)
+    this.rl_1 = 0.0;
+  else if (rawTarget.w7_1 > 0.55)
+    this.rl_1 = this.rl_1 + dt;
+  var missedDrop = coerceIn((this.rl_1 - 20.0) / 10.0, 0.0, 1.0);
   var remainingMs = compare(dur, new Long(0, 0)) > 0 ? subtract(dur, pos) : new Long(-1, -1);
   var outroFade = (compare(new Long(0, 0), remainingMs) <= 0 ? compare(remainingMs, new Long(20000, 0)) < 0 : false) ? 0.3 + (1.0 - 0.3) * (toNumber(remainingMs) / toNumber(new Long(20000, 0))) : 1.0;
   var tmp0 = 1.0 + (phaseIntensity - 1.0) * sw;
   // Inline function 'kotlin.math.max' call
   var b = 0.9 * missedDrop;
   var pi = Math.max(tmp0, b) * outroFade;
-  var inDrop = sw > 0.0 && this.ei_1.ob_1.equals(SongPart_DROP_getInstance());
-  var effectsOn = sw <= 0.5 || this.ei_1.zd() || missedDrop >= 1.0;
+  var inDrop = sw > 0.0 && this.xk_1.xb_1.equals(SongPart_DROP_getInstance());
+  var effectsOn = sw <= 0.5 || this.xk_1.ie() || missedDrop >= 1.0;
   var hsW = hardW * (1.0 - r);
-  var sub = this.si_1;
+  var sub = this.ql_1;
   this.phaseLevel = coerceAtMost_0(pi, 1.0);
-  var live = !playing ? 0.0 : coerceIn_0(sw * coerceAtMost_0(pi, 1.0) + (1.0 - sw) * coerceIn_0(rawTarget.n7_1, 0.0, 1.0), 0.0, 1.0);
-  var liveGoal = coerceIn_0(_get_strength__jhduay(this) * (0.35 + 0.65 * live), 0.0, 1.0);
+  var live = !playing ? 0.0 : coerceIn(sw * coerceAtMost_0(pi, 1.0) + (1.0 - sw) * coerceIn(rawTarget.w7_1, 0.0, 1.0), 0.0, 1.0);
+  var liveGoal = coerceIn(_get_strength__jhduay(this) * (0.35 + 0.65 * live), 0.0, 1.0);
   var tmp_7 = this;
   var tmp_8 = this.vibeLive;
   var tmp_9 = liveGoal - this.vibeLive;
@@ -7930,47 +9145,47 @@ protoOf(WebPartyEngine).tick = function (nowMs, dtS, playing, positionMs, durati
   // Inline function 'kotlin.math.round' call
   var x_4 = (tmp_8 + tmp_9 * (1.0 - Math.exp(x_3))) * 200.0;
   tmp_7.vibeLive = round(x_4) / 200.0;
-  var screechShake = hsW * (this.ei_1.ob_1.equals(SongPart_DROP_getInstance()) && effectsOn ? sub.je_1 * (this.ei_1.pb_1.equals(DropKind_LAST_getInstance()) ? 1.3 : 1.0) : this.ei_1.ob_1.equals(SongPart_DROP_getInstance()) ? 0.5 * sub.je_1 : 0.0);
+  var screechShake = hsW * (this.xk_1.xb_1.equals(SongPart_DROP_getInstance()) && effectsOn ? sub.se_1 * (this.xk_1.yb_1.equals(DropKind_LAST_getInstance()) ? 1.3 : 1.0) : this.xk_1.xb_1.equals(SongPart_DROP_getInstance()) ? 0.5 * sub.se_1 : 0.0);
   var tmp_10;
   if (sw <= 0.0) {
     tmp_10 = shapedFull;
   } else if (inDrop) {
-    var tmp0_0 = shapedFull.s7_1 * pi;
+    var tmp0_0 = shapedFull.b8_1 * pi;
     // Inline function 'kotlin.math.max' call
     var b_0 = effectsOn ? 0.35 * sw * coerceAtMost_0(pi, 1.0) : 0.0;
     var tmp$ret$9 = Math.max(tmp0_0, b_0);
-    tmp_10 = shapedFull.a9(VOID, VOID, VOID, VOID, VOID, VOID, VOID, VOID, coerceAtMost_0(tmp$ret$9, 1.0), effectsOn ? shapedFull.t7_1 : 0.0);
+    tmp_10 = shapedFull.j9(VOID, VOID, VOID, VOID, VOID, VOID, VOID, VOID, coerceAtMost_0(tmp$ret$9, 1.0), effectsOn ? shapedFull.c8_1 : 0.0);
   } else {
-    var tmp4_heavy = coerceAtMost_0(shapedFull.s7_1 * pi, 1.0);
-    var tmp5_kick = shapedFull.l7_1 * (0.6 + 0.4 * coerceAtMost_0(pi, 1.0));
-    var tmp6_grit = missedDrop >= 1.0 ? shapedFull.t7_1 : shapedFull.t7_1 * (1.0 - sw);
-    tmp_10 = shapedFull.a9(VOID, tmp5_kick, VOID, VOID, VOID, VOID, VOID, VOID, tmp4_heavy, tmp6_grit);
+    var tmp4_heavy = coerceAtMost_0(shapedFull.b8_1 * pi, 1.0);
+    var tmp5_kick = shapedFull.u7_1 * (0.6 + 0.4 * coerceAtMost_0(pi, 1.0));
+    var tmp6_grit = missedDrop >= 1.0 ? shapedFull.c8_1 : shapedFull.c8_1 * (1.0 - sw);
+    tmp_10 = shapedFull.j9(VOID, tmp5_kick, VOID, VOID, VOID, VOID, VOID, VOID, tmp4_heavy, tmp6_grit);
   }
   var shaped = tmp_10;
   var showW = structureWeight(v) * (1.0 - 0.7 * r * hardW);
-  var hud = this.ei_1.sb_1;
-  var part = this.ei_1.ob_1;
-  var buildRise = part.equals(SongPart_BUILDUP_getInstance()) ? coerceIn_0(hud.za_1, 0.0, 1.0) * showW : 0.0;
-  var hadDip = this.dip > 0.3 || compare(this.vi_1, new Long(0, 0)) > 0 || this.wi_1;
+  var hud = this.xk_1.bc_1;
+  var part = this.xk_1.xb_1;
+  var buildRise = part.equals(SongPart_BUILDUP_getInstance()) ? coerceIn(hud.ib_1, 0.0, 1.0) * showW : 0.0;
+  var hadDip = this.dip > 0.3 || compare(this.tl_1, new Long(0, 0)) > 0 || this.ul_1;
   if (!part.equals(SongPart_BUILDUP_getInstance())) {
-    this.vi_1 = new Long(0, 0);
-    this.wi_1 = false;
+    this.tl_1 = new Long(0, 0);
+    this.ul_1 = false;
   }
   var tmp_11;
-  if (part.equals(SongPart_BUILDUP_getInstance()) && hud.wa_1 && !this.wi_1) {
-    var tmp0_1 = this.ei_1.ae() >= 1 && hud.ua_1 === 8 ? 1.0 : 0.0;
+  if (part.equals(SongPart_BUILDUP_getInstance()) && hud.fb_1 && !this.ul_1) {
+    var tmp0_1 = this.xk_1.je() >= 1 && hud.db_1 === 8 ? 1.0 : 0.0;
     // Inline function 'kotlin.comparisons.maxOf' call
-    var b_1 = coerceIn_0((hud.za_1 - 0.75) / (1.0 - 0.75), 0.0, 1.0);
+    var b_1 = coerceIn((hud.ib_1 - 0.75) / (1.0 - 0.75), 0.0, 1.0);
     tmp_11 = showW * Math.max(tmp0_1, b_1);
   } else {
     tmp_11 = 0.0;
   }
   var dipWanted = tmp_11;
-  if (dipWanted > 0.3 && equalsLong(this.vi_1, new Long(0, 0)))
-    this.vi_1 = now;
-  if (compare(this.vi_1, new Long(0, 0)) > 0 && compare(subtract(now, this.vi_1), new Long(2500, 0)) > 0)
-    this.wi_1 = true;
-  var dipGoal = this.wi_1 ? 0.0 : dipWanted;
+  if (dipWanted > 0.3 && equalsLong(this.tl_1, new Long(0, 0)))
+    this.tl_1 = now;
+  if (compare(this.tl_1, new Long(0, 0)) > 0 && compare(subtract(now, this.tl_1), new Long(2500, 0)) > 0)
+    this.ul_1 = true;
+  var dipGoal = this.ul_1 ? 0.0 : dipWanted;
   var tmp_12;
   if (part.equals(SongPart_DROP_getInstance())) {
     tmp_12 = 0.0;
@@ -7986,7 +9201,7 @@ protoOf(WebPartyEngine).tick = function (nowMs, dtS, playing, positionMs, durati
   // Inline function 'kotlin.math.round' call
   var x_6 = dipNext * 100.0;
   tmp_15.dip = round(x_6) / 100.0;
-  if (part.equals(SongPart_DROP_getInstance()) && !this.ui_1.equals(SongPart_DROP_getInstance()) && showW > 0.3 && this.ii_1.p8(now))
+  if (part.equals(SongPart_DROP_getInstance()) && !this.sl_1.equals(SongPart_DROP_getInstance()) && showW > 0.3 && this.bl_1.y8(now))
     this.dropHit = hadDip ? 1.0 : 0.5;
   else if (this.dropHit > 0.0) {
     var tmp_16 = this;
@@ -7997,9 +9212,9 @@ protoOf(WebPartyEngine).tick = function (nowMs, dtS, playing, positionMs, durati
     var it = tmp_17 * Math.exp(x_7);
     tmp_16.dropHit = it < 0.01 ? 0.0 : it;
   }
-  this.ui_1 = part;
+  this.sl_1 = part;
   var inShowDrop = part.equals(SongPart_DROP_getInstance()) && showW > 0.0;
-  this.dropLook = inShowDrop ? (hud.va_1 + this.ei_1.ae() | 0) % 3 | 0 : 0;
+  this.dropLook = inShowDrop ? (hud.eb_1 + this.xk_1.je() | 0) % 3 | 0 : 0;
   var tmp_18;
   if (!inShowDrop) {
     tmp_18 = 1.0;
@@ -8025,50 +9240,52 @@ protoOf(WebPartyEngine).tick = function (nowMs, dtS, playing, positionMs, durati
   }
   var lookShake = tmp_19;
   var lookParticles = inShowDrop && this.dropLook === 1 ? 1.1 : 1.0;
-  this.flashesPerSecond = this.ii_1.q8(now);
+  this.flashesPerSecond = this.bl_1.z8(now);
   var tune = 1.0;
   var p = vibeProfile(v, r);
-  this.spike = p.u8_1 * (0.75 + 0.25 * pi) * tick$subMul(hsW, sub.he_1) * lookSpike * tune * look.gh_1 * strengthMul;
-  this.particles = p.v8_1 * (0.6 + 0.4 * pi) * tick$subMul(hsW, sub.ie_1) * (1.0 + 0.25 * buildRise) * lookParticles * tune * look.hh_1 * strengthMul;
-  this.shakeAmount = p.w8_1 * pi * tick$subMul(hsW, sub.fe_1) * lookShake * tune * look.ih_1 * strengthMul;
-  this.strobeAmount = p.x8_1 * (effectsOn && pi >= 0.9 ? 1.0 : 0.0) * tick$subMul(hsW, sub.ge_1) * look.jh_1 * (_get_strength__jhduay(this) < 0.25 ? 0.0 : 1.0);
-  this.density = p.y8_1 * (1.0 + 0.2 * buildRise);
+  this.spike = p.d9_1 * (0.75 + 0.25 * pi) * tick$subMul(hsW, sub.qe_1) * lookSpike * tune * look.zj_1 * strengthMul;
+  this.particles = p.e9_1 * (0.6 + 0.4 * pi) * tick$subMul(hsW, sub.re_1) * (1.0 + 0.25 * buildRise) * lookParticles * tune * look.ak_1 * strengthMul;
+  this.shakeAmount = p.f9_1 * pi * tick$subMul(hsW, sub.oe_1) * lookShake * tune * look.bk_1 * strengthMul;
+  this.strobeAmount = p.g9_1 * (effectsOn && pi >= 0.9 ? 1.0 : 0.0) * tick$subMul(hsW, sub.pe_1) * look.ck_1 * (_get_strength__jhduay(this) < 0.25 ? 0.0 : 1.0);
+  this.density = p.h9_1 * (1.0 + 0.2 * buildRise);
+  this.dropOn = (playing && effectsOn && pi >= 0.9);
+  this.particleDrift = this.dropOn ? 1.0 : 0.7;
   var tmp_20 = this;
   // Inline function 'kotlin.let' call
-  var it_0 = p.z8_1;
+  var it_0 = p.i9_1;
   tmp_20.softness = it_0 <= 1.2 ? coerceAtMost_0(it_0, 1.15) : it_0;
-  var popLift = g.equals(Genre_POP_getInstance()) || g.equals(Genre_REGGAE_getInstance()) || g.equals(Genre_REGGAETON_getInstance()) ? this.di_1.k9_1 : 0.0;
+  var popLift = g.equals(Genre_POP_getInstance()) || g.equals(Genre_REGGAE_getInstance()) || g.equals(Genre_REGGAETON_getInstance()) ? this.wk_1.t9_1 : 0.0;
   if (popLift > 0.0) {
     this.spike = this.spike * (1.0 + 0.35 * popLift);
     this.particles = this.particles * (1.0 + 0.4 * popLift);
   }
   var tmp_21;
   if (popLift > 0.0) {
-    var tmp9_kick = coerceAtMost_0(shaped.l7_1 * (1.0 + 0.6 * popLift), 1.0);
-    var tmp10_bass = coerceAtMost_0(shaped.k7_1 * (1.0 + 0.15 * popLift), 1.0);
-    tmp_21 = shaped.a9(tmp10_bass, tmp9_kick);
+    var tmp9_kick = coerceAtMost_0(shaped.u7_1 * (1.0 + 0.6 * popLift), 1.0);
+    var tmp10_bass = coerceAtMost_0(shaped.t7_1 * (1.0 + 0.15 * popLift), 1.0);
+    tmp_21 = shaped.j9(tmp10_bass, tmp9_kick);
   } else {
     tmp_21 = shaped;
   }
   var shapedPop = tmp_21;
   var tmp_22;
   if (buildRise > 0.0) {
-    var tmp0_2 = shapedPop.l7_1;
+    var tmp0_2 = shapedPop.u7_1;
     // Inline function 'kotlin.math.max' call
-    var b_2 = rawTarget.v7_1 * 0.45 * buildRise;
+    var b_2 = rawTarget.e8_1 * 0.45 * buildRise;
     var tmp$ret$18 = Math.max(tmp0_2, b_2);
-    tmp_22 = shapedPop.a9(VOID, tmp$ret$18);
+    tmp_22 = shapedPop.j9(VOID, tmp$ret$18);
   } else {
     tmp_22 = shapedPop;
   }
   var untuned = tmp_22;
-  var tmp11_safe_receiver = look.fh_1;
+  var tmp11_safe_receiver = look.yj_1;
   var tmp_23;
   if (tmp11_safe_receiver == null) {
     tmp_23 = null;
   } else {
     // Inline function 'kotlin.let' call
-    tmp_23 = untuned.a9(VOID, coerceIn_0(tmp11_safe_receiver, 0.0, 1.0));
+    tmp_23 = untuned.j9(VOID, coerceIn(tmp11_safe_receiver, 0.0, 1.0));
   }
   var tmp12_elvis_lhs = tmp_23;
   var target = tmp12_elvis_lhs == null ? untuned : tmp12_elvis_lhs;
@@ -8078,8 +9295,8 @@ protoOf(WebPartyEngine).tick = function (nowMs, dtS, playing, positionMs, durati
     do {
       var i = inductionVariable;
       inductionVariable = inductionVariable + 1 | 0;
-      var goal = liveSpectrum ? target.q7_1.m(i) : 0.0;
-      var current = this.ni_1[i];
+      var goal = liveSpectrum ? target.z7_1.m(i) : 0.0;
+      var current = this.gl_1[i];
       var tau = goal > current ? 0.022 : 0.13;
       var tmp_24 = goal - current;
       // Inline function 'kotlin.math.exp' call
@@ -8087,151 +9304,245 @@ protoOf(WebPartyEngine).tick = function (nowMs, dtS, playing, positionMs, durati
       var value = current + tmp_24 * (1.0 - Math.exp(x_8));
       if (value < 1.0E-4)
         value = 0.0;
-      this.ni_1[i] = value;
+      this.gl_1[i] = value;
     }
      while (inductionVariable < 48);
-  this.mi_1 = new HardstyleFrame(tick$blend(mix, this.mi_1.k7_1, target.k7_1), clockOn ? target.l7_1 : tick$blend(mix, this.mi_1.l7_1, target.l7_1), tick$blend(mix, this.mi_1.m7_1, target.m7_1), tick$blend(mix, this.mi_1.n7_1, target.n7_1), clockOn ? target.o7_1 : tick$blend(mix, this.mi_1.o7_1, target.o7_1), tick$blend(mix, this.mi_1.p7_1, target.p7_1), toList(this.ni_1), tick$blend(mix, this.mi_1.r7_1, playing && fresh ? target.r7_1 : 0.0), tick$blend(mix, this.mi_1.s7_1, target.s7_1), tick$blend(mix, this.mi_1.t7_1, target.t7_1), target.u7_1, target.v7_1, target.w7_1, target.x7_1, target.y7_1, tick$blend(mix, this.mi_1.z7_1, target.z7_1), target.a8_1, target.b8_1, target.c8_1, target.d8_1, target.e8_1, VOID, VOID, VOID, VOID, VOID, VOID, tick$blend(mix, this.mi_1.l8_1, target.l8_1), target.m8_1);
-  var f = this.mi_1;
+  this.fl_1 = new HardstyleFrame(tick$blend(mix, this.fl_1.t7_1, target.t7_1), clockOn ? target.u7_1 : tick$blend(mix, this.fl_1.u7_1, target.u7_1), tick$blend(mix, this.fl_1.v7_1, target.v7_1), tick$blend(mix, this.fl_1.w7_1, target.w7_1), clockOn ? target.x7_1 : tick$blend(mix, this.fl_1.x7_1, target.x7_1), tick$blend(mix, this.fl_1.y7_1, target.y7_1), toList(this.gl_1), tick$blend(mix, this.fl_1.a8_1, playing && fresh ? target.a8_1 : 0.0), tick$blend(mix, this.fl_1.b8_1, target.b8_1), tick$blend(mix, this.fl_1.c8_1, target.c8_1), target.d8_1, target.e8_1, target.f8_1, target.g8_1, target.h8_1, tick$blend(mix, this.fl_1.i8_1, target.i8_1), target.j8_1, target.k8_1, target.l8_1, target.m8_1, target.n8_1, VOID, VOID, VOID, VOID, VOID, VOID, tick$blend(mix, this.fl_1.u8_1, target.u8_1), target.v8_1);
+  var f = this.fl_1;
   var ramp = loudRamp(volume);
-  var punch = this.shakeAmount * f.l7_1 * volumeGain(volume) * (f.s7_1 * (10.0 + loudness(volume) * 4.0) * (1.0 + ramp * 0.8) + ramp * 5.0);
-  var tremble = screechShake * f.z7_1 * 7.0 * volumeGain(volume);
-  if (f.l7_1 < 0.3)
-    this.pi_1 = 1.0;
-  if (f.l7_1 > 0.55 && this.pi_1 === 1.0) {
-    this.pi_1 = 0.0;
-    this.oi_1 = this.ji_1.e6() * 2 * 3.141592653589793;
+  var punch = this.dropOn ? this.shakeAmount * f.u7_1 * volumeGain(volume) * f.b8_1 * (5.0 + loudness(volume) * 2.0) * (1.0 + ramp * 0.8) : 0.0;
+  var tremble = this.dropOn ? screechShake * f.i8_1 * 3.5 * volumeGain(volume) * f.u7_1 : 0.0;
+  if (f.u7_1 < 0.3)
+    this.nl_1 = 1.0;
+  if (f.u7_1 > 0.55 && this.nl_1 === 1.0) {
+    this.nl_1 = 0.0;
+    this.hl_1 = this.cl_1.e6() * 2 * 3.141592653589793;
   }
-  // Inline function 'kotlin.Long.div' call
-  var this_0 = modulo(now, new Long(1000000, 0));
-  var s = toNumber(this_0) / 1000.0;
-  var wobble = punch * 0.35 + tremble;
-  // Inline function 'kotlin.math.cos' call
-  var x_9 = this.oi_1;
-  var tmp_25 = Math.cos(x_9) * punch;
-  // Inline function 'kotlin.math.sin' call
-  var x_10 = s * 61.0;
-  var x_11 = tmp_25 + Math.sin(x_10) * wobble;
-  // Inline function 'kotlin.math.sin' call
-  var x_12 = this.oi_1;
-  var tmp_26 = Math.sin(x_12) * punch;
-  // Inline function 'kotlin.math.cos' call
-  var x_13 = s * 47.0;
-  var y = tmp_26 + Math.cos(x_13) * wobble;
-  var big = punch + tremble > 0.2;
-  this.shakeX = big ? x_11 : 0.0;
-  this.shakeY = big ? y : 0.0;
-  this.shakeRotation = big ? f.s7_1 * f.l7_1 * 0.8 * (this.oi_1 > 3.141592653589793 ? -1.0 : 1.0) : 0.0;
-  var split = f.s7_1 * f.l7_1 * this.shakeAmount;
+  var push = punch + tremble;
+  var big = push > 0.2;
+  var tmp_25 = this;
+  var tmp_26;
+  if (big) {
+    // Inline function 'kotlin.math.cos' call
+    var x_9 = this.hl_1;
+    tmp_26 = Math.cos(x_9) * push;
+  } else {
+    tmp_26 = 0.0;
+  }
+  tmp_25.shakeX = tmp_26;
+  var tmp_27 = this;
+  var tmp_28;
+  if (big) {
+    // Inline function 'kotlin.math.sin' call
+    var x_10 = this.hl_1;
+    tmp_28 = Math.sin(x_10) * push;
+  } else {
+    tmp_28 = 0.0;
+  }
+  tmp_27.shakeY = tmp_28;
+  this.shakeRotation = big ? f.b8_1 * f.u7_1 * 0.4 * (this.hl_1 > 3.141592653589793 ? -1.0 : 1.0) : 0.0;
+  var split = f.b8_1 * f.u7_1 * this.shakeAmount;
   this.aberration = effectsOn && split > 0.25 ? coerceAtMost_0((split - 0.25) / 0.75, 1.0) * 5.0 : 0.0;
-  this.bounceY = -look.mh_1 * 10.0 * strengthMul;
-  this.warmth = look.nh_1;
+  this.bounceY = -look.fk_1 * 10.0 * strengthMul;
+  this.warmth = look.gk_1;
   var lowBands = 0.0;
   var inductionVariable_0 = 0;
   if (inductionVariable_0 < 24)
     do {
       var i_0 = inductionVariable_0;
       inductionVariable_0 = inductionVariable_0 + 1 | 0;
-      lowBands = lowBands + this.ni_1[i_0];
+      lowBands = lowBands + this.gl_1[i_0];
     }
      while (inductionVariable_0 < 24);
   lowBands = lowBands / 24;
-  var tmp_27 = 1.2 * lowBands;
+  var tmp_29 = 1.2 * lowBands;
   // Inline function 'kotlin.math.pow' call
-  var this_1 = lowBands;
-  var tmp$ret$27 = Math.pow(this_1, 1.2);
+  var this_0 = lowBands;
+  var tmp$ret$24 = Math.pow(this_0, 1.2);
   // Inline function 'kotlin.math.pow' call
-  var this_2 = coerceIn_0(5.0 * (tmp_27 - tmp$ret$27), 0.0, 1.0);
-  var knee = Math.pow(this_2, 0.8);
-  var tmp_28 = this;
-  var tmp_29 = this.breath;
-  var tmp_30 = knee - this.breath;
+  var this_1 = coerceIn(5.0 * (tmp_29 - tmp$ret$24), 0.0, 1.0);
+  var knee = Math.pow(this_1, 0.8);
+  var tmp_30 = this;
+  var tmp_31 = this.breath;
+  var tmp_32 = knee - this.breath;
   // Inline function 'kotlin.math.exp' call
-  var x_14 = -dt / (knee > this.breath ? 0.08 : 0.35);
-  tmp_28.breath = tmp_29 + tmp_30 * (1.0 - Math.exp(x_14));
-  var tmp_31;
+  var x_11 = -dt / (knee > this.breath ? 0.08 : 0.35);
+  tmp_30.breath = tmp_31 + tmp_32 * (1.0 - Math.exp(x_11));
+  var tmp_33;
   if (sw > 0.5) {
-    var tmp_32;
-    switch (this.ei_1.ob_1.y_1) {
+    var tmp_34;
+    switch (this.xk_1.xb_1.y_1) {
       case 0:
       case 2:
       case 6:
       case 7:
-        tmp_32 = -0.6;
+        tmp_34 = -0.6;
         break;
       case 1:
       case 5:
-        tmp_32 = 0.0;
+        tmp_34 = 0.0;
         break;
       case 3:
-        tmp_32 = 0.35;
+        tmp_34 = 0.35;
         break;
       case 4:
-        tmp_32 = 1.0;
+        tmp_34 = 1.0;
         break;
       default:
         noWhenBranchMatchedException();
         break;
     }
-    tmp_31 = tmp_32;
+    tmp_33 = tmp_34;
   } else {
-    tmp_31 = coerceIn_0(-0.4 + this.mi_1.n7_1 * 1.2, -0.6, 0.8);
+    tmp_33 = coerceIn(-0.4 + this.fl_1.w7_1 * 1.2, -0.6, 0.8);
   }
-  var gradeTarget = tmp_31;
-  var tmp_33 = this;
-  var tmp_34 = this.grade;
-  var tmp_35 = (playing ? gradeTarget : 0.0) - this.grade;
+  var gradeTarget = tmp_33;
+  var tmp_35 = this;
+  var tmp_36 = this.grade;
+  var tmp_37 = (playing ? gradeTarget : 0.0) - this.grade;
   // Inline function 'kotlin.math.exp' call
-  var x_15 = -dt / 1.5;
-  tmp_33.grade = tmp_34 + tmp_35 * (1.0 - Math.exp(x_15));
-  var tmp_36 = this;
-  var tmp_37 = 0.3 + 0.7 * this.phaseLevel;
-  var tmp0_3 = f.l7_1;
-  var tmp2 = f.k7_1 * 0.55;
+  var x_12 = -dt / 1.5;
+  tmp_35.grade = tmp_36 + tmp_37 * (1.0 - Math.exp(x_12));
+  var tmp_38 = 0.3 + 0.7 * this.phaseLevel;
+  var tmp0_3 = f.u7_1;
+  var tmp2 = f.t7_1 * 0.55;
   // Inline function 'kotlin.comparisons.maxOf' call
-  var c = f.r7_1 * 0.2;
-  var tmp_38 = Math.max(tmp0_3, tmp2, c) + f.s7_1 * f.l7_1 * 0.4;
-  var tmp14_elvis_lhs = maxOrNull(this.ni_1);
-  tmp_36.partyHit = coerceAtMost_0(tmp_37 * (tmp_38 + (tmp14_elvis_lhs == null ? 0.0 : tmp14_elvis_lhs) * 0.25 * volumeGain(volume)), 1.6);
-  var heavyRaw = f.s7_1 * f.l7_1 * (0.6 + 0.4 * loudness(volume));
+  var c = f.a8_1 * 0.2;
+  var tmp_39 = Math.max(tmp0_3, tmp2, c) + f.b8_1 * f.u7_1 * 0.4;
+  var tmp14_elvis_lhs = maxOrNull(this.gl_1);
+  var hitGoal = coerceAtMost_0(tmp_38 * (tmp_39 + (tmp14_elvis_lhs == null ? 0.0 : tmp14_elvis_lhs) * 0.25 * volumeGain(volume)), 1.6);
+  var tmp_40 = this;
+  // Inline function 'kotlin.let' call
+  var it_1 = tick$eased(dt, this.partyHit, hitGoal, 0.07, 0.3);
+  tmp_40.partyHit = it_1 < 0.001 ? 0.0 : it_1;
+  var heavyRaw = f.b8_1 * f.u7_1 * (0.6 + 0.4 * loudness(volume));
   var showOn = structureWeight(v);
-  this.subGlow = 0.12 * f.x7_1 * f.k7_1 * showOn;
-  this.screechTint = coerceAtMost_0(f.z7_1 * 0.7 * showOn, 0.7);
-  var tmp0_4 = f.l7_1 * f.s7_1;
+  this.subGlow = tick$eased(dt, this.subGlow, 0.12 * f.g8_1 * f.t7_1 * showOn, 0.07, 0.3);
+  this.yl_1 = tick$eased(dt, this.yl_1, coerceIn(f.e8_1, 0.0, 1.0) * showOn, 0.04, 0.25);
+  var tmp_41 = this;
+  // Inline function 'kotlin.let' call
+  var it_2 = 0.3 * this.yl_1;
+  tmp_41.edgeGlow = it_2 < 0.004 ? 0.0 : it_2;
+  this.screechTint = coerceAtMost_0(f.i8_1 * 0.7 * showOn, 0.7);
+  var tmp0_4 = f.u7_1 * f.b8_1;
   // Inline function 'kotlin.math.max' call
-  var b_3 = f.w7_1 * hardWeight(v);
+  var b_3 = f.f8_1 * hardWeight(v);
   var strobeSource = Math.max(tmp0_4, b_3);
   var strobeFrom = 0.85 - 0.15 * hardWeight(v);
-  var strobeRaw = this.strobeAmount * strobeSource * coerceIn_0((volume - strobeFrom) / 0.15, 0.0, 1.0);
-  if (strobeRaw > 0.3 && compare(subtract(now, this.xi_1), new Long(400, 0)) >= 0 && this.ii_1.p8(now)) {
-    this.xi_1 = now;
-    this.zi_1 = this.zi_1 + 1 | 0;
+  var strobeRaw = this.strobeAmount * strobeSource * coerceIn((volume - strobeFrom) / 0.15, 0.0, 1.0);
+  if (strobeRaw > 0.3 && compare(subtract(now, this.vl_1), new Long(400, 0)) >= 0 && this.bl_1.y8(now)) {
+    this.vl_1 = now;
+    this.xl_1 = this.xl_1 + 1 | 0;
   }
-  this.strobe = compare(subtract(now, this.xi_1), new Long(120, 0)) < 0 ? strobeRaw : 0.0;
-  this.strobeColor = this.zi_1;
-  if (heavyRaw > 0.3 && compare(subtract(now, this.yi_1), new Long(400, 0)) >= 0 && compare(subtract(now, this.xi_1), new Long(120, 0)) >= 0 && this.ii_1.p8(now))
-    this.yi_1 = now;
-  this.heavyFlash = heavyRaw > 0.02 && compare(subtract(now, this.yi_1), new Long(120, 0)) < 0 ? heavyRaw : 0.0;
+  this.strobe = compare(subtract(now, this.vl_1), new Long(120, 0)) < 0 ? strobeRaw : 0.0;
+  this.strobeColor = this.xl_1;
+  if (heavyRaw > 0.3 && compare(subtract(now, this.wl_1), new Long(400, 0)) >= 0 && compare(subtract(now, this.vl_1), new Long(120, 0)) >= 0 && this.bl_1.y8(now))
+    this.wl_1 = now;
+  this.heavyFlash = heavyRaw > 0.02 && compare(subtract(now, this.wl_1), new Long(120, 0)) < 0 ? heavyRaw : 0.0;
+  this.ml_1 = easeCoverKick(this.ml_1, f.u7_1, dtS);
+  this.coverScale = coverPulseScale(this.breath, this.ml_1, f.b8_1, volume, this.phaseLevel);
+  this.il_1.lj(dtS, playing, this.jl_1, this.vk_1.lg(this.jl_1), this.kl_1, this.ll_1, this.coverScale, this.phaseLevel, this.spike, volume, f.b8_1, f.u7_1, clockKick);
 };
 //region block: post-declaration
 protoOf(InternalHashMap).s2 = containsAllEntries;
-defineProp(protoOf(WebPartyEngine), 'hop', protoOf(WebPartyEngine).aj);
-defineProp(protoOf(WebPartyEngine), 'bass', protoOf(WebPartyEngine).nk);
-defineProp(protoOf(WebPartyEngine), 'kick', protoOf(WebPartyEngine).ok);
-defineProp(protoOf(WebPartyEngine), 'highs', protoOf(WebPartyEngine).pk);
-defineProp(protoOf(WebPartyEngine), 'energy', protoOf(WebPartyEngine).qk);
-defineProp(protoOf(WebPartyEngine), 'burst', protoOf(WebPartyEngine).rk);
-defineProp(protoOf(WebPartyEngine), 'build', protoOf(WebPartyEngine).sk);
-defineProp(protoOf(WebPartyEngine), 'highMotion', protoOf(WebPartyEngine).tk);
-defineProp(protoOf(WebPartyEngine), 'heavy', protoOf(WebPartyEngine).uk);
-defineProp(protoOf(WebPartyEngine), 'grit', protoOf(WebPartyEngine).vk);
-defineProp(protoOf(WebPartyEngine), 'snare', protoOf(WebPartyEngine).wk);
-defineProp(protoOf(WebPartyEngine), 'crash', protoOf(WebPartyEngine).xk);
-defineProp(protoOf(WebPartyEngine), 'sub', protoOf(WebPartyEngine).yk);
-defineProp(protoOf(WebPartyEngine), 'screech', protoOf(WebPartyEngine).zk);
-defineProp(protoOf(WebPartyEngine), 'vocal', protoOf(WebPartyEngine).al);
-defineProp(protoOf(WebPartyEngine), 'vocalHit', protoOf(WebPartyEngine).bl);
-defineProp(protoOf(WebPartyEngine), 'bpm', protoOf(WebPartyEngine).cl);
-defineProp(protoOf(WebPartyEngine), 'spectrum', protoOf(WebPartyEngine).dl);
+defineProp(protoOf(WebPartyEngine), 'hop', protoOf(WebPartyEngine).zl);
+defineProp(protoOf(WebPartyEngine), 'particleBase', protoOf(WebPartyEngine).nn);
+defineProp(protoOf(WebPartyEngine), 'particleMax', protoOf(WebPartyEngine).on);
+defineProp(protoOf(WebPartyEngine), 'rippleGapMs', protoOf(WebPartyEngine).pn);
+defineProp(protoOf(WebPartyEngine), 'backlightHitTravel', protoOf(WebPartyEngine).rn);
+defineProp(protoOf(WebPartyEngine), 'backlightCycleS', protoOf(WebPartyEngine).sn);
+defineProp(protoOf(WebPartyEngine), 'haloWidth', protoOf(WebPartyEngine).tn);
+defineProp(protoOf(WebPartyEngine), 'haloHeight', protoOf(WebPartyEngine).un);
+defineProp(protoOf(WebPartyEngine), 'haloRest', protoOf(WebPartyEngine).vn);
+defineProp(protoOf(WebPartyEngine), 'haloGain', protoOf(WebPartyEngine).wn);
+defineProp(protoOf(WebPartyEngine), 'haloSwell', protoOf(WebPartyEngine).xn);
+defineProp(protoOf(WebPartyEngine), 'haloOffset', protoOf(WebPartyEngine).yn);
+defineProp(protoOf(WebPartyEngine), 'haloRoundS', protoOf(WebPartyEngine).zn);
+defineProp(protoOf(WebPartyEngine), 'dustDriftS', protoOf(WebPartyEngine).ao);
+defineProp(protoOf(WebPartyEngine), 'dustReach', protoOf(WebPartyEngine).bo);
+defineProp(protoOf(WebPartyEngine), 'dustSmallDp', protoOf(WebPartyEngine).co);
+defineProp(protoOf(WebPartyEngine), 'dustBigDp', protoOf(WebPartyEngine).do);
+defineProp(protoOf(WebPartyEngine), 'dustBigEvery', protoOf(WebPartyEngine).eo);
+defineProp(protoOf(WebPartyEngine), 'dustWhiteEvery', protoOf(WebPartyEngine).fo);
+defineProp(protoOf(WebPartyEngine), 'dustBigAlpha', protoOf(WebPartyEngine).go);
+defineProp(protoOf(WebPartyEngine), 'dustRest', protoOf(WebPartyEngine).ho);
+defineProp(protoOf(WebPartyEngine), 'dustCalmShare', protoOf(WebPartyEngine).io);
+defineProp(protoOf(WebPartyEngine), 'dustAttackS', protoOf(WebPartyEngine).jo);
+defineProp(protoOf(WebPartyEngine), 'dustReleaseS', protoOf(WebPartyEngine).ko);
+defineProp(protoOf(WebPartyEngine), 'dustSway', protoOf(WebPartyEngine).lo);
+defineProp(protoOf(WebPartyEngine), 'waveLifeMs', protoOf(WebPartyEngine).mo);
+defineProp(protoOf(WebPartyEngine), 'waveReach', protoOf(WebPartyEngine).no);
+defineProp(protoOf(WebPartyEngine), 'waveWidthFrom', protoOf(WebPartyEngine).oo);
+defineProp(protoOf(WebPartyEngine), 'waveWidthTo', protoOf(WebPartyEngine).po);
+defineProp(protoOf(WebPartyEngine), 'waveAlpha', protoOf(WebPartyEngine).qo);
+defineProp(protoOf(WebPartyEngine), 'haloSquash', protoOf(WebPartyEngine).ro);
+defineProp(protoOf(WebPartyEngine), 'haloGainCalm', protoOf(WebPartyEngine).so);
+defineProp(protoOf(WebPartyEngine), 'videoLightDim', protoOf(WebPartyEngine).to);
+defineProp(protoOf(WebPartyEngine), 'dustPaceEaseS', protoOf(WebPartyEngine).uo);
+defineProp(protoOf(WebPartyEngine), 'dustStart', protoOf(WebPartyEngine).vo);
+defineProp(protoOf(WebPartyEngine), 'dustPathCurve', protoOf(WebPartyEngine).wo);
+defineProp(protoOf(WebPartyEngine), 'dustFadeIn', protoOf(WebPartyEngine).xo);
+defineProp(protoOf(WebPartyEngine), 'dustFadeOutCurve', protoOf(WebPartyEngine).yo);
+defineProp(protoOf(WebPartyEngine), 'dustShimmer', protoOf(WebPartyEngine).zo);
+defineProp(protoOf(WebPartyEngine), 'dustWhiteMix', protoOf(WebPartyEngine).ap);
+defineProp(protoOf(WebPartyEngine), 'dustTintMix', protoOf(WebPartyEngine).bp);
+defineProp(protoOf(WebPartyEngine), 'dustTwinkleShare', protoOf(WebPartyEngine).cp);
+defineProp(protoOf(WebPartyEngine), 'dustTwinkleMin', protoOf(WebPartyEngine).dp);
+defineProp(protoOf(WebPartyEngine), 'dustTwinkleDecayS', protoOf(WebPartyEngine).ep);
+defineProp(protoOf(WebPartyEngine), 'dustBandGain', protoOf(WebPartyEngine).fp);
+defineProp(protoOf(WebPartyEngine), 'dustTwinkleGain', protoOf(WebPartyEngine).gp);
+defineProp(protoOf(WebPartyEngine), 'waveCount', protoOf(WebPartyEngine).hp);
+defineProp(protoOf(WebPartyEngine), 'waveBassFrom', protoOf(WebPartyEngine).ip);
+defineProp(protoOf(WebPartyEngine), 'waveGritFrom', protoOf(WebPartyEngine).jp);
+defineProp(protoOf(WebPartyEngine), 'waveRearmBass', protoOf(WebPartyEngine).kp);
+defineProp(protoOf(WebPartyEngine), 'waveStart', protoOf(WebPartyEngine).lp);
+defineProp(protoOf(WebPartyEngine), 'waveSlowdown', protoOf(WebPartyEngine).mp);
+defineProp(protoOf(WebPartyEngine), 'waveFadeIn', protoOf(WebPartyEngine).np);
+defineProp(protoOf(WebPartyEngine), 'waveFadeOutCurve', protoOf(WebPartyEngine).op);
+defineProp(protoOf(WebPartyEngine), 'waveStrokes', protoOf(WebPartyEngine).pp);
+defineProp(protoOf(WebPartyEngine), 'waveWhiteMix', protoOf(WebPartyEngine).qp);
+defineProp(protoOf(WebPartyEngine), 'edgeGlowBlurDp', protoOf(WebPartyEngine).rp);
+defineProp(protoOf(WebPartyEngine), 'edgeGlowSpreadDp', protoOf(WebPartyEngine).sp);
+defineProp(protoOf(WebPartyEngine), 'edgeGlowAlpha', protoOf(WebPartyEngine).tp);
+defineProp(protoOf(WebPartyEngine), 'auraColorRounds', protoOf(WebPartyEngine).up);
+defineProp(protoOf(WebPartyEngine), 'coreReachDp', protoOf(WebPartyEngine).vp);
+defineProp(protoOf(WebPartyEngine), 'coreColor', protoOf(WebPartyEngine).wp);
+defineProp(protoOf(WebPartyEngine), 'coreRest', protoOf(WebPartyEngine).xp);
+defineProp(protoOf(WebPartyEngine), 'coreGain', protoOf(WebPartyEngine).yp);
+defineProp(protoOf(WebPartyEngine), 'coreStrokes', protoOf(WebPartyEngine).zp);
+defineProp(protoOf(WebPartyEngine), 'coreDensity', protoOf(WebPartyEngine).aq);
+defineProp(protoOf(WebPartyEngine), 'bloomBlurDp', protoOf(WebPartyEngine).bq);
+defineProp(protoOf(WebPartyEngine), 'bloomRoomBlurs', protoOf(WebPartyEngine).cq);
+defineProp(protoOf(WebPartyEngine), 'bloomBackColor', protoOf(WebPartyEngine).dq);
+defineProp(protoOf(WebPartyEngine), 'bloomBackAlpha', protoOf(WebPartyEngine).eq);
+defineProp(protoOf(WebPartyEngine), 'bloomBackOpen', protoOf(WebPartyEngine).fq);
+defineProp(protoOf(WebPartyEngine), 'bloomMainColor', protoOf(WebPartyEngine).gq);
+defineProp(protoOf(WebPartyEngine), 'bloomMainAlpha', protoOf(WebPartyEngine).hq);
+defineProp(protoOf(WebPartyEngine), 'bloomMainOpen', protoOf(WebPartyEngine).iq);
+defineProp(protoOf(WebPartyEngine), 'bloomRimAlpha', protoOf(WebPartyEngine).jq);
+defineProp(protoOf(WebPartyEngine), 'bloomRimDp', protoOf(WebPartyEngine).kq);
+defineProp(protoOf(WebPartyEngine), 'orbExtent', protoOf(WebPartyEngine).lq);
+defineProp(protoOf(WebPartyEngine), 'bass', protoOf(WebPartyEngine).nq);
+defineProp(protoOf(WebPartyEngine), 'kick', protoOf(WebPartyEngine).oq);
+defineProp(protoOf(WebPartyEngine), 'highs', protoOf(WebPartyEngine).pq);
+defineProp(protoOf(WebPartyEngine), 'energy', protoOf(WebPartyEngine).qq);
+defineProp(protoOf(WebPartyEngine), 'burst', protoOf(WebPartyEngine).rq);
+defineProp(protoOf(WebPartyEngine), 'build', protoOf(WebPartyEngine).sq);
+defineProp(protoOf(WebPartyEngine), 'highMotion', protoOf(WebPartyEngine).tq);
+defineProp(protoOf(WebPartyEngine), 'heavy', protoOf(WebPartyEngine).uq);
+defineProp(protoOf(WebPartyEngine), 'grit', protoOf(WebPartyEngine).vq);
+defineProp(protoOf(WebPartyEngine), 'snare', protoOf(WebPartyEngine).wq);
+defineProp(protoOf(WebPartyEngine), 'crash', protoOf(WebPartyEngine).xq);
+defineProp(protoOf(WebPartyEngine), 'sub', protoOf(WebPartyEngine).yq);
+defineProp(protoOf(WebPartyEngine), 'screech', protoOf(WebPartyEngine).zq);
+defineProp(protoOf(WebPartyEngine), 'vocal', protoOf(WebPartyEngine).ar);
+defineProp(protoOf(WebPartyEngine), 'vocalHit', protoOf(WebPartyEngine).br);
+defineProp(protoOf(WebPartyEngine), 'bpm', protoOf(WebPartyEngine).cr);
+defineProp(protoOf(WebPartyEngine), 'spectrum', protoOf(WebPartyEngine).dr);
+defineProp(protoOf(WebPartyEngine), 'orbLayers', protoOf(WebPartyEngine).fr);
+defineProp(protoOf(WebPartyEngine), 'orbOpen', protoOf(WebPartyEngine).gr);
+defineProp(protoOf(WebPartyEngine), 'orbGlow', protoOf(WebPartyEngine).hr);
+defineProp(protoOf(WebPartyEngine), 'orbDrift', protoOf(WebPartyEngine).ir);
 //endregion
 //region block: init
 Companion_instance = new Companion();

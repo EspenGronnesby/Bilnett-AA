@@ -139,3 +139,9 @@ Gammel plan for trening:
 4. Installer, Espen tester i bil, ny rapport. Gjenta i små steg ([[party-intensitet-hardstyle]]: heller for lite enn for mye).
 
 Plan: `~/.claude/plans/jeg-har-lagt-mere-happy-sunset.md` (steg 0–6).
+
+## Merk: loggtall etter aura-ombyggingen (2026-11-20)
+
+Fra `feat/party-ring-frekvenslag` er `shakePx` i loggene bare over 0 i drop (og ca. halvert), og
+partikkelantallet er maks 120 (før 224). Snitt av risting/partikler fra eldre logger er derfor ikke
+sammenlignbare med nye. Analysen selv (sjanger, sangdeler, `PartyReplayTest`) er uendret.
