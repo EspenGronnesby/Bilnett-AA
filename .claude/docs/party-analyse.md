@@ -152,6 +152,11 @@ Mappe-valg og eksport ligger kun under «Flere valg → data» og vises ikke len
 **AI-trener, musikk-uttrykk, senere dempet etter designprofilen (2026-11-20: ingen emoji/konfetti, nøytrale knapper, valgt = kremhvit, delene som lysstyrke-skala på tidslinjen, rolig prikk).** Første versjon: Coveret blurret som bakgrunn, farger som følger delen AI-en tror på (`--tr-accent`), lite cover som pulserer på kicken, equalizer (48 bånd) som danser,
 fylt «bølge» under bassen på tidslinjen, emoji på delknappene (🌅 🚀 💥 🌊 🌙), glass-kort og konfetti ved svar. Av ved «Ingen blinking» og reduser-bevegelse. Ren utseende-endring (ingen endring i data).
 
+**AI-trener, designprofil-gjennomgang (2026-11-20, mål: maksimalt clean).** Sentrert spalte med luft; ett kort per del med tynne skillelinjer (ikke kort i kort); tonale kontroller uten kant;
+valgt = fylt aksent (kremhvit) med hake, ellers grå flate; reserveveier («Hjernen ›», «Flere valg ›», Angre, Lukk) som dempede tekstlenker; bryterne «Finn start selv» og «Pause og spør» som `.switch`-lignende;
+delene som lysstyrke-skala via CSS-tokens (`--p-intro … --p-drop`), ingen hex i komponenten; forklaringene i vanlige ord uten tall; ingen fast forklaringstekst om lagring; coveret pulserer ikke (regel: ingen uønsket
+bevegelse); ingen `will-change`/blur på kort; bevegelse via tokens (120/180/250 ms), hover bare med `@media (hover: hover)`, reduser bevegelse gir kortere overganger.
+
 Gammel plan for trening:
 
 1. Hent loggene og lydopptakene (sync).
