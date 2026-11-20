@@ -157,6 +157,9 @@ valgt = fylt aksent (kremhvit) med hake, ellers grå flate; reserveveier («Hjer
 delene som lysstyrke-skala via CSS-tokens (`--p-intro … --p-drop`), ingen hex i komponenten; forklaringene i vanlige ord uten tall; ingen fast forklaringstekst om lagring; coveret pulserer ikke (regel: ingen uønsket
 bevegelse); ingen `will-change`/blur på kort; bevegelse via tokens (120/180/250 ms), hover bare med `@media (hover: hover)`, reduser bevegelse gir kortere overganger.
 
+Profil-revisjon (automatisk, i nettleseren, 67 stilregler for AI-treneren): 0× `transition: all`, 0× `will-change`, 0× `scale(0)`, 0× `backdrop-filter`, alle `:hover` i `@media (hover: hover)`,
+0 bokstavelige farger i regler (alt via tokens), 0 transisjoner på width/height/margin/top/left, 0 bokstavelig easing, 0 emoji, ingen animasjon på coveret, redusert bevegelse = bare opacity-fade, knapper ≥ 28 px.
+
 Gammel plan for trening:
 
 1. Hent loggene og lydopptakene (sync).

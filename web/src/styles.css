@@ -675,8 +675,9 @@ select option { background: #211827; color: white; }
   /* Delene som en lysstyrke-skala (Drop = lysest = sterkest); lesbare på mørk bakgrunn, ellers nøytrale. */
   --p-intro: hsl(222 16% 46%); --p-buildup: hsl(38 25% 56%); --p-drop: var(--fg); --p-breakdown: hsl(246 14% 38%); --p-outro: hsl(250 10% 28%);
   --line-2: hsl(222 18% 64%); --line-3: hsl(38 25% 56%);
+  --tr-divider: hsl(0 0% 100% / 0.06); --tr-hover: hsl(0 0% 100% / 0.12); --tr-shadow: hsl(0 0% 0% / 0.45); --tr-ink-tint: color-mix(in srgb, var(--on-pill) 7%, transparent);
   position: fixed; inset: 0; z-index: 12; overflow-y: auto; outline: none; isolation: isolate;
-  background: hsl(0 0% 3%); color: var(--fg);
+  background: var(--bg); color: var(--fg);
 }
 .tr-bg { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
 .tr-bg::before { content: ''; position: absolute; inset: -12%; background: var(--tr-cover) center / cover; filter: blur(80px) saturate(1.1); opacity: 0.22; }
@@ -709,7 +710,7 @@ select option { background: #211827; color: white; }
 .tr-btn:active { transform: scale(0.97); }
 .tr-btn.sm { height: calc(32 * var(--tu)); padding: 0 calc(12 * var(--tu)); font-size: calc(13 * var(--tu)); border-radius: calc(10 * var(--tu)); }
 .tr-btn.on { background: var(--accent-fill); color: var(--on-pill); }
-@media (hover: hover) and (pointer: fine) { .tr-btn:not(.on):hover { background: hsl(0 0% 100% / 0.12); } }
+@media (hover: hover) and (pointer: fine) { .tr-btn:not(.on):hover { background: var(--tr-hover); } }
 
 .tr-parts { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: calc(10 * var(--tu)); }
 .tr-part { height: calc(64 * var(--tu)); font-size: calc(18 * var(--tu)); position: relative; }
@@ -726,7 +727,7 @@ select option { background: #211827; color: white; }
 
 /* Ett kort per del, innholdet skilles med tynne linjer (ikke nye kort) */
 .tr-panel { background: var(--card); border-radius: calc(16 * var(--tu)); padding: calc(20 * var(--tu)) calc(24 * var(--tu)); display: grid; gap: calc(18 * var(--tu)); }
-.tr-divider { height: 1px; background: hsl(0 0% 100% / 0.06); }
+.tr-divider { height: 1px; background: var(--tr-divider); }
 .tr-brains { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: calc(20 * var(--tu)); }
 .tr-brain { display: grid; gap: calc(4 * var(--tu)); align-content: start; }
 .tr-brain-name { color: var(--muted); font-size: calc(13 * var(--tu)); }
@@ -739,14 +740,16 @@ select option { background: #211827; color: white; }
 .tr-react input { width: calc(120 * var(--tu)); accent-color: var(--fg); }
 
 /* Ja/nei-spørsmålet */
-.tr-prompt { position: fixed; left: 50%; bottom: calc(28 * var(--tu)); translate: -50% 0; z-index: 14; background: hsl(40 27% 94%); color: var(--on-pill); border-radius: calc(20 * var(--tu)); padding: calc(22 * var(--tu)) calc(30 * var(--tu)); display: grid; gap: calc(14 * var(--tu)); justify-items: center; box-shadow: 0 calc(12 * var(--tu)) calc(44 * var(--tu)) hsl(0 0% 0% / 0.45); max-width: 94vw; animation: tr-in 250ms var(--ease-out); }
+.tr-prompt { position: fixed; left: 50%; bottom: calc(28 * var(--tu)); translate: -50% 0; z-index: 14; background: var(--fg); color: var(--on-pill); border-radius: calc(20 * var(--tu)); padding: calc(22 * var(--tu)) calc(30 * var(--tu)); display: grid; gap: calc(14 * var(--tu)); justify-items: center; box-shadow: 0 calc(12 * var(--tu)) calc(44 * var(--tu)) var(--tr-shadow); max-width: 94vw; animation: tr-in 250ms var(--ease-out); }
 .tr-prompt-q { font-size: calc(24 * var(--tu)); font-weight: 600; text-align: center; }
-.tr-prompt .tr-btn { height: calc(56 * var(--tu)); font-size: calc(20 * var(--tu)); padding: 0 calc(32 * var(--tu)); background: hsl(0 0% 0% / 0.07); color: var(--on-pill); }
+.tr-prompt .tr-btn { height: calc(56 * var(--tu)); font-size: calc(20 * var(--tu)); padding: 0 calc(32 * var(--tu)); background: var(--tr-ink-tint); color: var(--on-pill); }
 .tr-prompt .tr-yes { background: var(--on-pill); color: var(--fg); }
 .tr-prompt .tr-part { height: calc(48 * var(--tu)); font-size: calc(16 * var(--tu)); padding: 0 calc(16 * var(--tu)); }
-.tr-prompt .tr-link { color: hsl(0 0% 4% / 0.6); }
+.tr-prompt .tr-link { color: color-mix(in srgb, var(--on-pill) 60%, transparent); }
 @keyframes tr-in { from { transform: translateY(calc(12 * var(--tu))); opacity: 0; } }
+@keyframes tr-fade { from { opacity: 0; } }
 .tr-toast { position: fixed; left: 50%; bottom: calc(28 * var(--tu)); translate: -50% 0; background: var(--fg); color: var(--on-pill); padding: calc(10 * var(--tu)) calc(20 * var(--tu)); border-radius: 999px; font-weight: 500; font-size: calc(14 * var(--tu)); z-index: 13; animation: tr-in 250ms var(--ease-out); }
 .tr-toast.tr-off { bottom: calc(76 * var(--tu)); }
-@media (prefers-reduced-motion: reduce) { .tr-prompt, .tr-toast { animation: none; } .tr-link b, .tr-toggle .sw::after { transition-duration: 0ms; } }
+/* Redusert bevegelse = mildere, ikke null: bare opacity-fade, ingen flytting */
+@media (prefers-reduced-motion: reduce) { .tr-prompt, .tr-toast { animation-name: tr-fade; } .tr-link b, .tr-toggle .sw::after, .tr-btn:active, .tr-link:active { transition-property: background-color, color, opacity; transform: none; } }
 @media (max-width: 900px) { .tr-brains { grid-template-columns: repeat(2, minmax(0, 1fr)); } .tr-parts { grid-template-columns: repeat(2, minmax(0, 1fr)); } .tr-hero { flex-wrap: wrap; } .tr-wrap { padding-inline: calc(18 * var(--tu)); } }
