@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MutableRefObject } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type MutableRefObject } from 'react'
 import type { Party } from './useParty'
 import { analysis, MARK_LABEL, useAnalysis, type MarkPart } from './analysis'
 import { snapOnset, timeline } from './timeline'
@@ -17,6 +17,7 @@ const PART_NAME: Record<string, string> = {
 const PARTS = Object.keys(MARK_LABEL) as MarkPart[]
 const toMark = (p: string): MarkPart => (p === 'INTRO' || p === 'BUILDUP' || p === 'DROP' || p === 'OUTRO' ? p : 'BREAKDOWN')
 const col = (p: string) => PART_COL[toMark(p)]
+const EMOJI: Record<string, string> = { INTRO: '🌅', BUILDUP: '🚀', DROP: '💥', BREAKDOWN: '🌊', OUTRO: '🌙' }
 const GENRES = ['HARDSTYLE', 'EDM', 'RAP', 'ROCK', 'POP', 'REGGAE', 'REGGAETON', 'ROLIG']
 
 const mmss = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` }
@@ -33,6 +34,27 @@ const LAG_WORD: Record<string, string> = { d2: ' (siste halvtakt)', d4: ' (siste
 function featureWord(name: string) {
   const [base, lag] = name.split('_')
   return (WORD[base] ?? base) + (lag ? LAG_WORD[lag] ?? '' : '')
+}
+
+const reducedMotion = () => { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches } catch { return false } }
+
+/** Små «poff» av farget konfetti ut fra en knapp når du svarer (av ved «Ingen blinking» / reduser bevegelse). */
+function burst(from: Element | null, host: HTMLElement | null, color: string, emoji?: string) {
+  if (!from || !host) return
+  const r = from.getBoundingClientRect()
+  for (let i = 0; i < 16; i++) {
+    const d = document.createElement('span')
+    d.className = 'tr-conf'
+    const big = emoji && i % 4 === 0
+    if (big) d.textContent = emoji
+    else d.style.background = i % 2 ? color : '#fff'
+    d.style.left = `${r.left + r.width / 2}px`; d.style.top = `${r.top + r.height / 2}px`
+    host.appendChild(d)
+    const a = Math.random() * Math.PI * 2, dist = 60 + Math.random() * 110
+    d.animate([{ transform: 'translate(-50%,-50%) scale(1)', opacity: 1 },
+      { transform: `translate(calc(-50% + ${Math.cos(a) * dist}px), calc(-50% + ${Math.sin(a) * dist - 40}px)) scale(${big ? 1.3 : .4}) rotate(${Math.random() * 360}deg)`, opacity: 0 }],
+      { duration: 650 + Math.random() * 450, easing: 'cubic-bezier(.2,.8,.3,1)' }).onfinish = () => d.remove()
+  }
 }
 
 function useTick(ms: number) {
@@ -82,9 +104,11 @@ interface Props {
   reaction: number
   setReaction: (seconds: number) => void
   onClose: () => void
+  /** Coverbilde (URL) til bakgrunn og den pulserende lille coveret. */
+  cover: string | null
 }
 
-export function Trainer({ party, title, artist, playing, positionMs, durationMs, seek, next, togglePlay, reaction, setReaction, onClose }: Props) {
+export function Trainer({ party, title, artist, playing, positionMs, durationMs, seek, next, togglePlay, reaction, setReaction, onClose, cover }: Props) {
   useAnalysis()
   useTick(250)
   const root = useRef<HTMLDivElement>(null)
@@ -127,6 +151,12 @@ export function Trainer({ party, title, artist, playing, positionMs, durationMs,
     { label: 'Nå', ms: reaction * 1000 }, { label: '2 s', ms: 2000 }, { label: '4 s', ms: 4000 }, { label: '8 s', ms: 8000 },
     { label: '1 takt', ms: bar }, { label: '2 takter', ms: bar * 2 }, { label: '4 takter', ms: bar * 4 },
   ]
+  /** Konfetti fra knappen for [p] (eller en knapp med klassen [sel]). */
+  const celebrate = (p: MarkPart | null, sel?: string) => {
+    if (party.calm || reducedMotion()) return
+    const el = sel ? root.current?.querySelector(sel) : root.current?.querySelector(`[data-part="${p}"]`)
+    burst(el ?? null, root.current, p ? PART_COL[p] : '#5ad68a', p ? EMOJI[p] : '🎉')
+  }
   const say = (t: string) => { setToast(t); window.setTimeout(() => setToast(s => (s === t ? '' : s)), 1600) }
 
   const apply = (p: MarkPart) => {
@@ -143,6 +173,7 @@ export function Trainer({ party, title, artist, playing, positionMs, durationMs,
     }
     if (!ok) { say('Ikke lagret: posisjonen i sangen er ukjent ennå'); return }
     selRef.current = null; setChip(0); if (prompt) closePrompt()
+    celebrate(p)
     say(`Lagret: ${MARK_LABEL[p]}${note}`)
   }
   /** «Ja»: den nye lytteren hadde rett. Starten settes der lyden skiftet rundt lytterens bytte (ellers litt før). */
@@ -152,6 +183,7 @@ export function Trainer({ party, title, artist, playing, positionMs, durationMs,
     const found = snap ? snapOnset(timeline.points, prompt.pos + 1500, 6000) : { pos: -1, snapped: false }
     if (!analysis.setMark(part, found.snapped ? found.pos : prompt.pos - 1000)) { say('Ikke lagret: posisjonen i sangen er ukjent ennå'); return }
     analysis.logEvent('riktig', `ny:${prompt.part}`)
+    celebrate(null, '.tr-yes')
     closePrompt(); say(`Lagret: ${MARK_LABEL[part]} stemte`)
   }
   /** Spol litt tilbake og spill, så du kan høre øyeblikket før du svarer. */
@@ -236,7 +268,9 @@ export function Trainer({ party, title, artist, playing, positionMs, durationMs,
 
   const guess = e.listenerPart
   return (
-    <div className="trainer" role="dialog" aria-label="AI-trener" tabIndex={-1} ref={root}>
+    <div className="trainer" role="dialog" aria-label="AI-trener" tabIndex={-1} ref={root}
+      style={{ '--tr-accent': col(guess), '--tr-cover': cover ? `url("${cover}")` : 'none' } as CSSProperties}>
+      <div className="tr-bg" aria-hidden />
       <div className="tr-head">
         <div className="tr-title">
           <span className={analysis.hasRecording && playing ? 'tr-pulse on' : 'tr-pulse'} />
@@ -251,18 +285,20 @@ export function Trainer({ party, title, artist, playing, positionMs, durationMs,
       </div>
 
       <div className="tr-hero">
-        <span className="tr-hero-label">AI-en tror</span>
-        <span className="tr-hero-part" style={{ color: col(guess) }}>{PART_NAME[guess] ?? guess}</span>
-        <span className="tr-hero-label">{status !== 'Mottar lyd' ? status : ''}</span>
+        <CoverPulse party={party} cover={cover} />
+        <div className="tr-hero-text">
+          <span className="tr-hero-label">AI-en tror {status !== 'Mottar lyd' ? `· ${status}` : ''}</span>
+          <span className="tr-hero-part" style={{ color: col(guess) }}>{EMOJI[toMark(guess)]} {PART_NAME[guess] ?? guess}</span>
+        </div>
+        <Equalizer party={party} />
       </div>
 
       <LiveTimeline party={party} positionMs={positionMs} selRef={selRef} detail={brain} onPick={() => redraw(n => n + 1)} />
 
       <div className="tr-row tr-parts">
         {PARTS.map((p, i) => (
-          <button key={p} className="tr-btn tr-part" style={{ borderColor: PART_COL[p] }} onClick={() => apply(p)}>
-            <span className="tr-key" style={{ background: PART_COL[p] }}>{i + 1}</span> {MARK_LABEL[p]}
-            {analysis.mark === p && <span className="tr-now"> ✓</span>}
+          <button key={p} data-part={p} className={analysis.mark === p ? 'tr-btn tr-part on-part' : 'tr-btn tr-part'} style={{ '--pc': PART_COL[p] } as CSSProperties} onClick={() => apply(p)}>
+            <span className="tr-emoji">{EMOJI[p]}</span> {MARK_LABEL[p]}<span className="tr-keyhint">{i + 1}</span>
           </button>
         ))}
       </div>
@@ -336,8 +372,8 @@ export function Trainer({ party, title, artist, playing, positionMs, durationMs,
       )}
 
       {prompt && analysis.enabled && (
-        <div className="tr-prompt" role="group" aria-label="Stemmer det?">
-          <div className="tr-prompt-q"><b style={{ color: col(prompt.part) }}>{PART_NAME[prompt.part] ?? prompt.part}</b> nå – stemmer det?</div>
+        <div className="tr-prompt" role="group" aria-label="Stemmer det?" style={{ '--pc': col(prompt.part) } as CSSProperties}>
+          <div className="tr-prompt-q">{EMOJI[toMark(prompt.part)]} <b style={{ color: col(prompt.part) }}>{PART_NAME[prompt.part] ?? prompt.part}</b> nå – stemmer det?</div>
           {!prompt.denied ? (
             <div className="tr-row">
               <button className="tr-btn tr-yes" onClick={confirmPrompt}>✔ Ja</button>
@@ -346,7 +382,7 @@ export function Trainer({ party, title, artist, playing, positionMs, durationMs,
             </div>
           ) : (
             <>
-              <div className="tr-row">{PARTS.map((p, i) => <button key={p} className="tr-btn tr-part" style={{ borderColor: PART_COL[p] }} onClick={() => apply(p)}><span className="tr-key" style={{ background: PART_COL[p] }}>{i + 1}</span> {MARK_LABEL[p]}</button>)}</div>
+              <div className="tr-row">{PARTS.map(p => <button key={p} data-part={p} className="tr-btn tr-part" style={{ '--pc': PART_COL[p] } as CSSProperties} onClick={() => apply(p)}><span className="tr-emoji">{EMOJI[p]}</span> {MARK_LABEL[p]}</button>)}</div>
               <button className="chip small" onClick={listenAgain}>▶ Hør igjen</button>
             </>
           )}
@@ -356,6 +392,51 @@ export function Trainer({ party, title, artist, playing, positionMs, durationMs,
       {!analysis.enabled && <div className="tr-toast tr-off">Analyse er av</div>}
     </div>
   )
+}
+
+/** Lite cover som pulserer på kicken. */
+function CoverPulse({ party, cover }: { party: Party; cover: string | null }) {
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (reducedMotion()) return
+    return party.onFrame(() => {
+      const el = ref.current; if (!el) return
+      const k = party.calm ? 0 : party.engine.kick
+      el.style.transform = `scale(${1 + k * 0.07})`
+      el.style.boxShadow = `0 0 ${14 + k * 46}px color-mix(in srgb, var(--tr-accent) ${30 + k * 50}%, transparent)`
+    })
+  }, [party])
+  return <div ref={ref} className="tr-cover" style={cover ? { backgroundImage: `url("${cover}")` } : undefined} />
+}
+
+/** Equalizer som danser med musikken (48 bånd), farget etter delen AI-en tror på. */
+function Equalizer({ party }: { party: Party }) {
+  const ref = useRef<HTMLCanvasElement>(null)
+  useEffect(() => {
+    const c = ref.current, ctx = c?.getContext('2d')
+    if (!c || !ctx) return
+    let w = 1, h = 1
+    const fit = () => { const r = c.getBoundingClientRect(), ratio = Math.min(window.devicePixelRatio || 1, 2); w = Math.max(1, Math.round(r.width)); h = Math.max(1, Math.round(r.height)); c.width = w * ratio; c.height = h * ratio; ctx.setTransform(ratio, 0, 0, ratio, 0, 0) }
+    fit(); const ro = new ResizeObserver(fit); ro.observe(c)
+    const still = reducedMotion()
+    const off = party.onFrame(() => {
+      ctx.clearRect(0, 0, w, h)
+      const accent = getComputedStyle(c).getPropertyValue('--tr-accent').trim() || '#6aa5ff'
+      const sp = party.engine.spectrum, n = sp.length || 48, bw = w / n
+      const kick = party.calm ? 0 : party.engine.kick
+      const g = ctx.createLinearGradient(0, h, 0, 0); g.addColorStop(0, accent); g.addColorStop(1, '#ffffff')
+      ctx.fillStyle = g
+      for (let i = 0; i < n; i++) {
+        const v = still ? 0.15 : Math.pow(Math.min(1, sp[i] ?? 0), 0.85)
+        const bh = Math.max(3, v * h * (0.82 + kick * 0.18))
+        ctx.globalAlpha = 0.55 + 0.45 * v
+        ctx.beginPath(); ctx.roundRect(i * bw + bw * 0.14, h - bh, bw * 0.72, bh, Math.min(bw * 0.36, 6)); ctx.fill()
+      }
+      ctx.globalAlpha = 1
+    })
+    return () => { off(); ro.disconnect() }
+  }, [party])
+  return <canvas ref={ref} className="tr-eq" aria-hidden />
 }
 
 function Brain({ name, part, lines, onRate, big, sure }: { name: string; part: string; lines: string[]; onRate: (ok: boolean) => void; big?: string; sure?: boolean }) {
@@ -422,11 +503,22 @@ function LiveTimeline({ party, positionMs: positionProp, selRef, detail, onPick:
         for (const p of pts) { const x = xOf(p.pos), y = yOf(get(p)); if (p.seg !== seg) { ctx.moveTo(x, y); seg = p.seg } else ctx.lineTo(x, y) }
         ctx.stroke()
       }
+      // fylt «bølge» under bassen
+      if (pts.length > 1) {
+        const grad = ctx.createLinearGradient(0, curvesTop, 0, curvesBottom); grad.addColorStop(0, 'rgba(74,163,255,.38)'); grad.addColorStop(1, 'rgba(74,163,255,0)')
+        ctx.fillStyle = grad; ctx.beginPath(); let started = false, lastX = 0, segId = -1
+        for (const p of pts) {
+          const x = xOf(p.pos), y = yOf(p.sub)
+          if (p.seg !== segId) { if (started) { ctx.lineTo(lastX, curvesBottom); ctx.closePath(); ctx.fill(); ctx.beginPath() } ctx.moveTo(x, curvesBottom); ctx.lineTo(x, y); segId = p.seg; started = true } else ctx.lineTo(x, y)
+          lastX = x
+        }
+        if (started) { ctx.lineTo(lastX, curvesBottom); ctx.closePath(); ctx.fill() }
+      }
       line(p => p.sub, '#4aa3ff'); line(p => p.bright, '#ffb347')
       if (full) { line(p => Math.min(p.kick / 3, 1.1), 'rgba(170,170,170,.7)', 1.5); line(p => p.pModel, '#ffffff', 2); line(p => p.pApp, '#5ad68a', 2); line(p => p.pDrop, '#ff4d6d', 1.5) }
       ctx.font = '12px system-ui'
       const legend = full ? [['bass', '#4aa3ff'], ['lys klang', '#ffb347'], ['kick', '#aaa'], ['build-up (modell)', '#fff'], ['min lærling', '#5ad68a'], ['drop (lytter)', '#ff4d6d']] : [['bass', '#4aa3ff'], ['lys klang', '#ffb347']]
-      legend.forEach(([n, cc], i) => { ctx.fillStyle = cc; ctx.fillText(n, 8 + i * 100, 12) })
+      legend.forEach(([n, cc], i) => { ctx.fillStyle = cc; ctx.fillText(n, 8 + i * 128, 12) })
       // felt: gammel, ny lytter, modell (≥ 80 %), Din
       const lanes: [string, (p: (typeof pts)[number]) => string | null][] = full
         ? [['Gammel', p => p.old], ['Ny', p => p.listener], ['Modell', p => (p.pModel >= 0.8 ? 'BUILDUP' : null)]]
@@ -460,7 +552,7 @@ function LiveTimeline({ party, positionMs: positionProp, selRef, detail, onPick:
         else { ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(xa, curvesTop); ctx.lineTo(xa, h - 14); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle = '#fff'; ctx.font = '12px system-ui'; ctx.fillText('fra her', xa + 4, curvesTop + 12) }
       }
       // spillehode
-      ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(w - 1, curvesTop); ctx.lineTo(w - 1, h - 14); ctx.stroke()
+      ctx.save(); ctx.shadowColor = '#fff'; ctx.shadowBlur = 12; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(w - 1, curvesTop); ctx.lineTo(w - 1, h - 14); ctx.stroke(); ctx.restore()
     }
     const off = party.onFrame(draw)
 

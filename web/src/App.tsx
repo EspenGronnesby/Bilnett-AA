@@ -241,7 +241,7 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
         <Trainer party={party} title={track?.title ?? ''} artist={track?.artist ?? ''} playing={status === 'playing'} positionMs={now.positionMs}
           durationMs={track?.durationMs ?? -1} seek={now.controls.seek} next={now.controls.next} togglePlay={now.controls.toggle}
           reaction={settings.trainerReaction} setReaction={trainerReaction => updateSettings({ trainerReaction })}
-          onClose={() => trainer.closeTrainer()} />
+          onClose={() => trainer.closeTrainer()} cover={track?.coverUrl ?? null} />
       )}
       {settingsOpen && (
         <SettingsSheet now={now} settings={settings} update={updateSettings} wide={wide}

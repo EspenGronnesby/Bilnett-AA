@@ -149,6 +149,9 @@ trener først på slag eldre enn 6 s og lagrer en modell-signatur. Ikke testet: 
 og tre små brytere (Angre, Finn start selv, Pause og spør). «Hjernen» åpner hjernekort og forklaring, «Flere valg» åpner resten (tidspunkt, stemmer ikke, fake drop, følelse, sjanger, spol, reaksjonstid, data).
 Mappe-valg og eksport ligger kun under «Flere valg → data» og vises ikke lenger i Party-panelet: sangene lagres i nettleseren av seg selv, og eksport/mappe er noe Espen gjør senere.
 
+**AI-trener, musikk-uttrykk (2026-11-20).** Coveret blurret som bakgrunn, farger som følger delen AI-en tror på (`--tr-accent`), lite cover som pulserer på kicken, equalizer (48 bånd) som danser,
+fylt «bølge» under bassen på tidslinjen, emoji på delknappene (🌅 🚀 💥 🌊 🌙), glass-kort og konfetti ved svar. Av ved «Ingen blinking» og reduser-bevegelse. Ren utseende-endring (ingen endring i data).
+
 Gammel plan for trening:
 
 1. Hent loggene og lydopptakene (sync).
