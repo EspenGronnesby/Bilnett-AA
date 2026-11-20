@@ -724,3 +724,15 @@ select option { background: #211827; color: white; }
 .tr-prompt .tr-yes { background: #1f9d55; }
 .tr-prompt .tr-no { background: #c43c3c; }
 .tr-prompt .tr-part { height: calc(52 * var(--tu)); font-size: calc(18 * var(--tu)); padding: 0 calc(16 * var(--tu)); min-width: 0; }
+
+/* Rent oppsett: stor «AI-en tror», tidslinje, fem store knapper. Resten er lukket (Hjernen / Flere valg). */
+.tr-title .tr-sub { color: var(--muted); font-size: calc(14 * var(--tu)); font-weight: 500; margin: 0 0 0 calc(8 * var(--tu)); }
+.tr-hero { display: flex; align-items: baseline; gap: calc(14 * var(--tu)); }
+.tr-hero-label { color: var(--muted); font-size: calc(14 * var(--tu)); }
+.tr-hero-part { font-size: calc(46 * var(--tu)); font-weight: 800; line-height: 1; }
+.tr-parts .tr-part { height: calc(64 * var(--tu)); font-size: calc(20 * var(--tu)); flex: 1 1 0; min-width: 0; }
+.tr-mini { align-items: center; }
+.tr-hint { color: var(--muted); font-size: calc(13 * var(--tu)); }
+.tr-more { display: grid; gap: calc(8 * var(--tu)); background: var(--card); border-radius: calc(16 * var(--tu)); padding: calc(12 * var(--tu)) calc(14 * var(--tu)); }
+.tr-data { color: var(--muted); font-size: calc(12 * var(--tu)); display: flex; align-items: center; gap: calc(8 * var(--tu)); flex-wrap: wrap; }
+.trainer .tr-timeline { height: clamp(200px, 44vh, 480px); }

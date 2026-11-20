@@ -93,9 +93,11 @@ export function Trainer({ party, title, artist, playing, positionMs, durationMs,
   const [chip, setChip] = useState(0)
   const [genreOpen, setGenreOpen] = useState(false)
   const [toast, setToast] = useState('')
-  // Enkel modus (standard): bare det viktigste. «Flere valg» viser resten. Husker valget.
-  const [simple, setSimple] = useState(() => { try { return localStorage.getItem('rave.trainer.simple') !== '0' } catch { return true } })
-  const toggleSimple = () => { const v = !simple; setSimple(v); try { localStorage.setItem('rave.trainer.simple', v ? '1' : '0') } catch { /* ok */ } }
+  // Rent som standard: «Hjernen» (hva den tenker) og «Flere valg» er lukket. Valget huskes.
+  const flag = (key: string) => { try { return localStorage.getItem(key) === '1' } catch { return false } }
+  const [brain, setBrain] = useState(() => flag('rave.trainer.brain'))
+  const [more, setMore] = useState(() => flag('rave.trainer.more'))
+  const flip = (key: string, v: boolean, set: (v: boolean) => void) => { set(!v); try { localStorage.setItem(key, v ? '0' : '1') } catch { /* ok */ } }
   // Finn starten automatisk (standard på): trykket justeres til der lyden faktisk skifter.
   const [snap, setSnap] = useState(() => { try { return localStorage.getItem('rave.trainer.snap') !== '0' } catch { return true } })
   const toggleSnap = () => { const v = !snap; setSnap(v); try { localStorage.setItem('rave.trainer.snap', v ? '1' : '0') } catch { /* ok */ } }
@@ -232,128 +234,126 @@ export function Trainer({ party, title, artist, playing, positionMs, durationMs,
   const status = party.listening ? (party.paused ? 'Pause' : party.listening.status()) : 'Ikke tilkoblet'
   const modelP = e.pBuildModel
 
+  const guess = e.listenerPart
   return (
     <div className="trainer" role="dialog" aria-label="AI-trener" tabIndex={-1} ref={root}>
       <div className="tr-head">
-        <div>
-          <div className="tr-title"><span className={analysis.hasRecording && playing ? 'tr-pulse on' : 'tr-pulse'} /> Trener AI-en</div>
-          <div className="tr-sub">{title ? `${artist} – ${title}` : 'Ingen sang spilles'} · {mmss(nowPos)}{durationMs > 0 ? ` / ${mmss(durationMs)}` : ''} · {status}</div>
+        <div className="tr-title">
+          <span className={analysis.hasRecording && playing ? 'tr-pulse on' : 'tr-pulse'} />
+          Trener AI-en
+          <span className="tr-sub">{title ? `${artist} – ${title}` : 'Ingen sang spilles'} · {mmss(nowPos)}{durationMs > 0 ? ` / ${mmss(durationMs)}` : ''}</span>
         </div>
         <div className="tr-head-btns">
-          <label className="tr-react" title="Hvor mange sekunder før knappetrykket en del regnes å ha startet (din reaksjonstid)">
-            Reaksjonstid {reaction.toFixed(1).replace('.', ',')} s
-            <input type="range" min={0} max={3} step={0.1} value={reaction} onChange={ev => setReaction(Number(ev.currentTarget.value))} />
-          </label>
-          <button className={analysis.dirName ? 'chip small on' : 'chip small'} onClick={() => void analysis.pickDir()}
-            title="Velg en mappe (Nedlastinger/rave-analyse): hver sang lagres dit av seg selv">{analysis.dirName ? `Mappe: ${analysis.dirName}` : 'Velg mappe'}</button>
-          {analysis.savedCount > 0 && <button className="chip small" onClick={() => void analysis.exportAll()}>Eksporter ({analysis.savedCount})</button>}
-          <button className="chip small" onClick={() => analysis.setEnabled(false)} title="Slå av analyse og lagre sangen">Stopp analyse</button>
-          <button className="chip small on" onClick={onClose}>Lukk (Esc)</button>
+          <button className={brain ? 'chip small on' : 'chip small'} onClick={() => flip('rave.trainer.brain', brain, setBrain)}>Hjernen</button>
+          <button className={more ? 'chip small on' : 'chip small'} onClick={() => flip('rave.trainer.more', more, setMore)}>Flere valg</button>
+          <button className="chip small on" onClick={onClose}>Lukk</button>
         </div>
       </div>
 
-      <div className="tr-cards">
-        <Brain name="Gammel hjerne" part={brainParts.old} onRate={ok => rate('gammel', brainParts.old, ok)}
-          lines={[`bygger opp: ${pct(e.hudBuild)}`, `takt ${e.hudBar} i frasen${e.hudReady ? ' · klar for drop' : ''}`]} />
-        <Brain name="Ny lytter" part={brainParts.nu} onRate={ok => rate('ny', brainParts.nu, ok)}
-          lines={[`fylde ${pct(e.listenerLevel)} · drop ${pct(e.pDrop)}`, `build (regel) ${pct(e.pBuild)} · drops ${e.listenerDrops}`]} />
-        <Brain name="Build-up-modell" part={modelP >= 0.8 ? 'BUILDUP' : ''} big={pct(modelP)} sure={modelP >= 0.8} onRate={ok => rate('modell', modelP >= 0.8 ? 'BUILDUP' : 'IKKE', ok)}
-          lines={[modelP >= 0.8 ? 'sier: build-up' : modelP >= 0.5 ? 'usikker' : 'sier: ikke build-up']} />
-        <div className="tr-card" style={{ borderColor: '#5ad68a' }}>
-          <div className="tr-card-name">Min lærling</div>
-          <div className="tr-card-part" style={{ color: '#5ad68a' }}>{pct(apprentice.p)}</div>
-          <div className="tr-card-sub">Grunnmodellen (uten læring): {pct(e.pBuildModelRaw)}</div>
-          <div className="tr-card-sub">Har trent på {apprentice.updates} slag · viser at den lærer av deg, ikke at den er bedre</div>
-          <div className="tr-card-btns">
-            <button className="chip small" onClick={() => { apprentice.reset(); say('Lærlingen er nullstilt') }}>Nullstill</button>
-          </div>
-        </div>
-        <div className="tr-card tr-score">
-          <div className="tr-card-name">Treffer det du merket (siste minutt)</div>
-          <div className="tr-scoreline"><span>Ny lytter</span><b>{agree(p => p.listener)}</b></div>
-          <div className="tr-scoreline"><span>Gammel hjerne</span><b>{agree(p => p.old)}</b></div>
-          <div className="tr-card-sub">Merker i dag: {analysis.marksToday} · hendelser denne sangen: {analysis.events.length}</div>
-        </div>
+      <div className="tr-hero">
+        <span className="tr-hero-label">AI-en tror</span>
+        <span className="tr-hero-part" style={{ color: col(guess) }}>{PART_NAME[guess] ?? guess}</span>
+        <span className="tr-hero-label">{status !== 'Mottar lyd' ? status : ''}</span>
       </div>
 
-      <LiveTimeline party={party} positionMs={positionMs} selRef={selRef} onPick={() => redraw(n => n + 1)} />
+      <LiveTimeline party={party} positionMs={positionMs} selRef={selRef} detail={brain} onPick={() => redraw(n => n + 1)} />
 
-      <div className="tr-cols">
-        <div className="tr-think">
-          <div className="tr-h">Slik tenker den nå</div>
-          <div className="tr-thought"><b style={{ color: col(e.listenerPart) }}>{PART_NAME[e.listenerPart] ?? e.listenerPart}</b> (ny lytter) · <b style={{ color: col(e.partName) }}>{PART_NAME[e.partName] ?? e.partName}</b> (gammel)</div>
-          <ul>{explain(party).map((l, i) => <li key={i}>{l}</li>)}</ul>
-          <div className="tr-h tr-h2">Modellen sier {pct(modelP)} build-up, fordi:</div>
-          <ul>{modelWhy(party).map((l, i) => <li key={i}>{l}</li>)}</ul>
-        </div>
+      <div className="tr-row tr-parts">
+        {PARTS.map((p, i) => (
+          <button key={p} className="tr-btn tr-part" style={{ borderColor: PART_COL[p] }} onClick={() => apply(p)}>
+            <span className="tr-key" style={{ background: PART_COL[p] }}>{i + 1}</span> {MARK_LABEL[p]}
+            {analysis.mark === p && <span className="tr-now"> ✓</span>}
+          </button>
+        ))}
+      </div>
+      <div className="tr-row tr-mini">
+        <button className="chip small" onClick={() => say(analysis.undo() ? 'Angret' : 'Ingenting å angre')}>Angre</button>
+        <button className={snap ? 'chip small on' : 'chip small'} onClick={toggleSnap} title="Starten settes der lyden faktisk skifter">Finn start selv</button>
+        <button className={pauseAsk ? 'chip small on' : 'chip small'} onClick={togglePause} title="Sangen stopper ved et bytte og spør. Den fortsetter når du har svart.">Pause og spør</button>
+        {(sel || chip > 0) && <span className="tr-hint">Neste trykk gjelder {target}</span>}
+      </div>
 
-        <div className="tr-actions">
-          <div className="tr-h">Si hva som er riktig <span className="tr-target">· gjelder {target}</span></div>
+      {brain && (
+        <>
+          <div className="tr-cards">
+            <Brain name="Gammel hjerne" part={brainParts.old} onRate={ok => rate('gammel', brainParts.old, ok)}
+              lines={[`bygger opp: ${pct(e.hudBuild)}`, `takt ${e.hudBar} i frasen${e.hudReady ? ' · klar for drop' : ''}`]} />
+            <Brain name="Ny lytter" part={brainParts.nu} onRate={ok => rate('ny', brainParts.nu, ok)}
+              lines={[`fylde ${pct(e.listenerLevel)} · drop ${pct(e.pDrop)}`, `build (regel) ${pct(e.pBuild)}`]} />
+            <Brain name="Build-up-modell" part={modelP >= 0.8 ? 'BUILDUP' : ''} big={pct(modelP)} sure={modelP >= 0.8} onRate={ok => rate('modell', modelP >= 0.8 ? 'BUILDUP' : 'IKKE', ok)}
+              lines={[modelP >= 0.8 ? 'sier build-up' : modelP >= 0.5 ? 'usikker' : 'sier ikke build-up']} />
+            <div className="tr-card" style={{ borderColor: '#5ad68a' }}>
+              <div className="tr-card-name">Min lærling</div>
+              <div className="tr-card-part" style={{ color: '#5ad68a' }}>{pct(apprentice.p)}</div>
+              <div className="tr-card-sub">Trent på {apprentice.updates} slag · lærer av deg</div>
+              <div className="tr-card-btns"><button className="chip small" onClick={() => { apprentice.reset(); say('Nullstilt') }}>Nullstill</button></div>
+            </div>
+            <div className="tr-card tr-score">
+              <div className="tr-card-name">Treffer det du merket</div>
+              <div className="tr-scoreline"><span>Ny lytter</span><b>{agree(p => p.listener)}</b></div>
+              <div className="tr-scoreline"><span>Gammel</span><b>{agree(p => p.old)}</b></div>
+            </div>
+          </div>
+          <div className="tr-think">
+            <div className="tr-thought"><b style={{ color: col(e.listenerPart) }}>{PART_NAME[e.listenerPart] ?? e.listenerPart}</b> (ny) · <b style={{ color: col(e.partName) }}>{PART_NAME[e.partName] ?? e.partName}</b> (gammel)</div>
+            <ul>{[...explain(party), ...modelWhy(party)].map((l, i) => <li key={i}>{l}</li>)}</ul>
+          </div>
+        </>
+      )}
+
+      {more && (
+        <div className="tr-more">
           <div className="tr-row">
-            {PARTS.map((p, i) => (
-              <button key={p} className="tr-btn tr-part" style={{ borderColor: PART_COL[p] }} onClick={() => apply(p)}>
-                <span className="tr-key" style={{ background: PART_COL[p] }}>{i + 1}</span> {MARK_LABEL[p]}
-                {analysis.mark === p && <span className="tr-now"> ✓</span>}
-              </button>
-            ))}
+            {offsets.map((o, i) => <button key={o.label} className={chip === i ? 'chip small on' : 'chip small'} onClick={() => { selRef.current = null; setChip(i) }}>{i === 0 ? 'Nå' : `for ${o.label} siden`}</button>)}
+            <button className="chip small" onClick={() => say(analysis.moveLastMark(-bar) ? 'Flyttet' : 'Ingen merke å flytte')}>‹ 1 takt</button>
+            <button className="chip small" onClick={() => say(analysis.moveLastMark(bar) ? 'Flyttet' : 'Ingen merke å flytte')}>1 takt ›</button>
           </div>
           <div className="tr-row">
-            <button className={snap ? 'chip small on' : 'chip small'} onClick={toggleSnap} title="Når du trykker en del, justeres starten til der lyden faktisk skifter (ellers regnes reaksjonstiden din)">Finn starten automatisk: {snap ? 'på' : 'av'}</button>
-            <button className={pauseAsk ? 'chip small on' : 'chip small'} onClick={togglePause} title="Når den nye lytteren bytter del, stopper sangen og spør om det stemmer. Den fortsetter når du har svart.">Stopp sangen og spør: {pauseAsk ? 'på' : 'av'}</button>
-            <button className="chip small" onClick={() => say(analysis.undo() ? 'Angret' : 'Ingenting å angre')}>Angre (Z)</button>
-            <button className="chip small" onClick={toggleSimple}>{simple ? 'Flere valg ▾' : 'Færre valg ▴'}</button>
+            <button className="tr-btn" onClick={() => log('feil_na', `gammel=${e.partName};ny=${e.listenerPart}`, 'Lagret')}>Stemmer ikke nå</button>
+            <button className="tr-btn" onClick={() => { log('fake_drop', '', 'Lagret'); apply('BUILDUP') }}>Fake drop</button>
+            <button className="tr-btn" onClick={() => log('ingen_drop', '', 'Lagret')}>Ingen drop i sangen</button>
+            <button className="tr-btn" onClick={() => log('ikke_drop_sang', '', 'Lagret')}>Ikke drop-musikk</button>
+            <button className="tr-btn" onClick={() => log('bra', '', 'Bra!')}>Bra!</button>
+            <button className="tr-btn" onClick={() => log('for_mye', e.partName, 'Lagret')}>For mye</button>
+            <button className="tr-btn" onClick={() => log('for_lite', e.partName, 'Lagret')}>For lite</button>
+            <button className={genreOpen ? 'tr-btn on' : 'tr-btn'} onClick={() => setGenreOpen(o => !o)}>Feil sjanger</button>
           </div>
-          {!simple && (
-            <>
-          <div className="tr-sublabel">Når startet det? (gjelder neste trykk)</div>
+          {genreOpen && <div className="tr-row">{GENRES.map(g => <button key={g} className="chip small" onClick={() => { log('feil_sjanger', g, 'Lagret'); setGenreOpen(false) }}>{g}</button>)}</div>}
           <div className="tr-row">
-            {offsets.map((o, i) => <button key={o.label} className={chip === i ? 'chip small on' : 'chip small'} onClick={() => { selRef.current = null; setChip(i) }}>{i === 0 ? `Nå (−${(o.ms / 1000).toFixed(1).replace('.', ',')} s)` : `for ${o.label} siden`}</button>)}
-            <button className="chip small" onClick={() => say(analysis.moveLastMark(-bar) ? 'Flyttet siste merke 1 takt tidligere' : 'Ingen merke å flytte')}>‹ siste merke 1 takt tidligere</button>
-            <button className="chip small" onClick={() => say(analysis.moveLastMark(bar) ? 'Flyttet siste merke 1 takt senere' : 'Ingen merke å flytte')}>1 takt senere ›</button>
-          </div>
-          <div className="tr-sublabel">Dette stemmer ikke / dette er sangen</div>
-          <div className="tr-row">
-            <button className="tr-btn" onClick={() => log('feil_na', `gammel=${e.partName};ny=${e.listenerPart}`, 'Lagret: det stemmer ikke nå')}>Det stemmer ikke nå</button>
-            <button className="tr-btn" onClick={() => { log('fake_drop', '', 'Lagret: fake drop'); apply('BUILDUP') }}>Fake drop</button>
-            <button className="tr-btn" onClick={() => log('ingen_drop', '', 'Lagret: ingen drop i denne sangen')}>Ingen drop i sangen</button>
-            <button className="tr-btn" onClick={() => log('ikke_drop_sang', '', 'Lagret: ikke drop-musikk')}>Ikke drop-musikk</button>
-          </div>
-          <div className="tr-sublabel">Følelse</div>
-          <div className="tr-row">
-            <button className="tr-btn" onClick={() => log('bra', '', 'Bra! (B)')}>Bra! (B)</button>
-            <button className="tr-btn" onClick={() => log('for_mye', e.partName, 'Lagret: for mye')}>For mye</button>
-            <button className="tr-btn" onClick={() => log('for_lite', e.partName, 'Lagret: for lite')}>For lite</button>
-            <button className={genreOpen ? 'tr-btn on' : 'tr-btn'} onClick={() => setGenreOpen(o => !o)}>Feil sjanger ({e.genreLabel})</button>
-          </div>
-          {genreOpen && <div className="tr-row">{GENRES.map(g => <button key={g} className="chip small" onClick={() => { log('feil_sjanger', g, `Lagret: sjangeren er ${g}`); setGenreOpen(false) }}>{g}</button>)}</div>}
-          <div className="tr-row tr-tools">
-            <button className="tr-btn" onClick={seekBack}>Spol tilbake 10 s (←)</button>
+            <button className="tr-btn" onClick={seekBack}>Spol 10 s tilbake</button>
             <button className="tr-btn" onClick={next}>Neste sang</button>
+            <label className="tr-react">Reaksjonstid {reaction.toFixed(1).replace('.', ',')} s
+              <input type="range" min={0} max={3} step={0.1} value={reaction} onChange={ev => setReaction(Number(ev.currentTarget.value))} />
+            </label>
+            <button className="chip small" onClick={() => analysis.setEnabled(false)}>Stopp analyse</button>
           </div>
-            </>
-          )}
+          <div className="tr-data">
+            Sangene lagres i nettleseren av seg selv. {analysis.savedCount > 0 ? `${analysis.savedCount} venter på eksport (senere).` : ''}
+            {analysis.savedCount > 0 && <button className="chip small" onClick={() => void analysis.exportAll()}>Eksporter</button>}
+            <button className="chip small" onClick={() => void analysis.pickDir()}>{analysis.dirName ? `Mappe: ${analysis.dirName}` : 'Velg mappe'}</button>
+          </div>
         </div>
-      </div>
+      )}
+
       {prompt && analysis.enabled && (
         <div className="tr-prompt" role="group" aria-label="Stemmer det?">
-          {held.current && <div className="tr-prompt-sub">Sangen står på pause – den fortsetter når du har svart</div>}
-          <div className="tr-prompt-q">Ny lytter sier <b style={{ color: col(prompt.part) }}>{PART_NAME[prompt.part] ?? prompt.part}</b> nå. Stemmer det?</div>
+          <div className="tr-prompt-q"><b style={{ color: col(prompt.part) }}>{PART_NAME[prompt.part] ?? prompt.part}</b> nå – stemmer det?</div>
           {!prompt.denied ? (
             <div className="tr-row">
-              <button className="tr-btn tr-yes" onClick={confirmPrompt}>✔ Ja (mellomrom)</button>
-              <button className="tr-btn tr-no" onClick={denyPrompt}>✖ Nei (N)</button>
+              <button className="tr-btn tr-yes" onClick={confirmPrompt}>✔ Ja</button>
+              <button className="tr-btn tr-no" onClick={denyPrompt}>✖ Nei</button>
               <button className="tr-btn" onClick={listenAgain}>▶ Hør igjen</button>
             </div>
           ) : (
             <>
-              <div className="tr-prompt-sub">Hva er det egentlig? <button className="chip small" onClick={listenAgain}>▶ Hør igjen</button></div>
               <div className="tr-row">{PARTS.map((p, i) => <button key={p} className="tr-btn tr-part" style={{ borderColor: PART_COL[p] }} onClick={() => apply(p)}><span className="tr-key" style={{ background: PART_COL[p] }}>{i + 1}</span> {MARK_LABEL[p]}</button>)}</div>
+              <button className="chip small" onClick={listenAgain}>▶ Hør igjen</button>
             </>
           )}
         </div>
       )}
       {toast && <div className="tr-toast">{toast}</div>}
-      {!analysis.enabled && <div className="tr-toast tr-off">Analyse er av – slå den på for å lagre</div>}
+      {!analysis.enabled && <div className="tr-toast tr-off">Analyse er av</div>}
     </div>
   )
 }
@@ -376,11 +376,12 @@ function Brain({ name, part, lines, onRate, big, sure }: { name: string; part: s
 const WIN_MS = 120_000
 
 /** Tidslinjen: siste to minutter, spillehodet til høyre. Dra for å velge et tidsrom, klikk for «fra her og utover». */
-function LiveTimeline({ party, positionMs: positionProp, selRef, onPick: onPickProp }: { party: Party; positionMs: () => number; selRef: MutableRefObject<Sel>; onPick: () => void }) {
+function LiveTimeline({ party, positionMs: positionProp, selRef, detail, onPick: onPickProp }: { party: Party; positionMs: () => number; selRef: MutableRefObject<Sel>; detail: boolean; onPick: () => void }) {
   const ref = useRef<HTMLCanvasElement>(null)
   // Funksjonene får ny identitet ved hver render; effekten (og pekerhåndtererne) skal ikke startes på nytt midt i en drag.
   const posRef = useRef(positionProp); posRef.current = positionProp
   const pickRef = useRef(onPickProp); pickRef.current = onPickProp
+  const detailRef = useRef(detail); detailRef.current = detail
   useEffect(() => {
     const positionMs = () => posRef.current()
     const onPick = () => pickRef.current()
@@ -397,12 +398,14 @@ function LiveTimeline({ party, positionMs: positionProp, selRef, onPick: onPickP
     const ro = new ResizeObserver(fit); ro.observe(c)
     const style = getComputedStyle(c)
     const faint = style.getPropertyValue('--faint').trim() || 'rgba(255,255,255,.45)'
-    const LANE = 15, GAP = 3, LANES = 4
+    const LANE = 15, GAP = 3
 
     const draw = () => {
       const nowPos = positionMs()
       const xOf = (pos: number) => w * (1 - (nowPos - pos) / WIN_MS)
       ctx.clearRect(0, 0, w, h)
+      const full = detailRef.current
+      const LANES = full ? 4 : 2 // rent: bare «Ny» og «Din»; med Hjernen: alle
       const curvesBottom = h - LANES * (LANE + GAP) - 16
       const curvesTop = 18
       const yOf = (v: number) => curvesBottom - (Math.max(-0.2, Math.min(1.2, v)) + 0.2) / 1.4 * (curvesBottom - curvesTop)
@@ -419,14 +422,15 @@ function LiveTimeline({ party, positionMs: positionProp, selRef, onPick: onPickP
         for (const p of pts) { const x = xOf(p.pos), y = yOf(get(p)); if (p.seg !== seg) { ctx.moveTo(x, y); seg = p.seg } else ctx.lineTo(x, y) }
         ctx.stroke()
       }
-      line(p => p.sub, '#4aa3ff'); line(p => p.bright, '#ffb347'); line(p => Math.min(p.kick / 3, 1.1), 'rgba(170,170,170,.7)', 1.5)
-      line(p => p.pModel, '#ffffff', 2); line(p => p.pApp, '#5ad68a', 2); line(p => p.pDrop, '#ff4d6d', 1.5)
+      line(p => p.sub, '#4aa3ff'); line(p => p.bright, '#ffb347')
+      if (full) { line(p => Math.min(p.kick / 3, 1.1), 'rgba(170,170,170,.7)', 1.5); line(p => p.pModel, '#ffffff', 2); line(p => p.pApp, '#5ad68a', 2); line(p => p.pDrop, '#ff4d6d', 1.5) }
       ctx.font = '12px system-ui'
-      ;[['sub', '#4aa3ff'], ['lys klang', '#ffb347'], ['kick', '#aaa'], ['build-up (modell)', '#fff'], ['min lærling', '#5ad68a'], ['drop (lytter)', '#ff4d6d']].forEach(([n, cc], i) => { ctx.fillStyle = cc; ctx.fillText(n, 8 + i * 110, 12) })
+      const legend = full ? [['bass', '#4aa3ff'], ['lys klang', '#ffb347'], ['kick', '#aaa'], ['build-up (modell)', '#fff'], ['min lærling', '#5ad68a'], ['drop (lytter)', '#ff4d6d']] : [['bass', '#4aa3ff'], ['lys klang', '#ffb347']]
+      legend.forEach(([n, cc], i) => { ctx.fillStyle = cc; ctx.fillText(n, 8 + i * 100, 12) })
       // felt: gammel, ny lytter, modell (≥ 80 %), Din
-      const lanes: [string, (p: (typeof pts)[number]) => string | null][] = [
-        ['Gammel', p => p.old], ['Ny', p => p.listener], ['Modell', p => (p.pModel >= 0.8 ? 'BUILDUP' : null)],
-      ]
+      const lanes: [string, (p: (typeof pts)[number]) => string | null][] = full
+        ? [['Gammel', p => p.old], ['Ny', p => p.listener], ['Modell', p => (p.pModel >= 0.8 ? 'BUILDUP' : null)]]
+        : [['AI', p => p.listener]]
       lanes.forEach(([name, get], li) => {
         const y = curvesBottom + 6 + li * (LANE + GAP)
         ctx.fillStyle = faint; ctx.font = '11px system-ui'; ctx.fillText(name, 4, y + 11)
@@ -437,7 +441,7 @@ function LiveTimeline({ party, positionMs: positionProp, selRef, onPick: onPickP
           ctx.globalAlpha = .8; ctx.fillStyle = col(v); ctx.fillRect(Math.max(x0, 0), y, Math.max(x1 - x0, 1) + 1, LANE); ctx.globalAlpha = 1
         })
       })
-      const yMine = curvesBottom + 6 + 3 * (LANE + GAP)
+      const yMine = curvesBottom + 6 + lanes.length * (LANE + GAP)
       ctx.fillStyle = faint; ctx.font = '11px system-ui'; ctx.fillText('Din', 4, yMine + 11)
       const marks = analysis.marks
       marks.forEach((m, i) => {

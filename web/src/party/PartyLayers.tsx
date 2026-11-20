@@ -266,7 +266,6 @@ export function PartyControls({ party, strength, setStrength, koko, setKoko }: {
 /** Analyse (steg 5): ta opp og merk hvor i sangen vi er; merkene brukes til å trene lytteren (eksporteres til Mac-en). */
 function AnalysisPanel() {
   const [, redraw] = useState(0)
-  const [busy, setBusy] = useState(false)
   useEffect(() => {
     void analysis.refreshCount()
     return analysis.subscribe(() => redraw(n => n + 1))
@@ -279,12 +278,6 @@ function AnalysisPanel() {
       {on && <button className={analysis.trainerOpen ? 'chip small on' : 'chip small'} onClick={() => analysis.trainerOpen ? analysis.closeTrainer() : analysis.openTrainer()}>AI-trener</button>}
       {on && (Object.keys(MARK_LABEL) as MarkPart[]).map(p =>
         <button key={p} className={analysis.mark === p ? 'chip small on' : 'chip small'} onClick={() => analysis.setMark(p)}>{MARK_LABEL[p]}</button>)}
-      {on && <button className={analysis.dirName ? 'chip small on' : 'chip small'} onClick={() => void analysis.pickDir()}
-        title="Velg en mappe (for eksempel Nedlastinger/rave-analyse): hver sang lagres dit av seg selv, så du kan la en spilleliste gå uten å trykke noe.">
-        {analysis.dirName ? `Mappe: ${analysis.dirName}` : 'Velg mappe'}</button>}
-      {analysis.savedCount > 0 && (
-        <button className="chip small" disabled={busy} onClick={async () => { setBusy(true); try { await analysis.exportAll() } finally { setBusy(false) } }}>
-          Eksporter ({analysis.savedCount})</button>)}
       {on && analysis.note && <span className="chip info">{analysis.note}</span>}
     </div>
   )

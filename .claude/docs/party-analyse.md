@@ -145,6 +145,10 @@ bakover-merker skrives som `# RELABEL <fra_s> <til_s> <DEL>` i sang-CSV (`Analys
 `sync.py` kaster aldri opptak med `espen`/`review`, `.events.csv` kopieres til `raw/events/` og forveksles ikke med sang-CSV, ærlige «Lagret»/«Angret»-meldinger, «flytt siste merke» flytter riktig merke, lærlingen
 trener først på slag eldre enn 6 s og lagrer en modell-signatur. Ikke testet: ekte Spotify (pause/spol/fortsett), ekte PC-lyd, hvordan det oppleves å bruke mens du hører på, appen på telefon.
 
+**AI-trener, renere (2026-11-20).** Standardvisningen er bare: tittel, «AI-en tror: <del>», live tidslinje (bass og lys klang + felt for AI og Din), fem store knapper (Intro, Build-up, Drop, Breakdown, Outro),
+og tre små brytere (Angre, Finn start selv, Pause og spør). «Hjernen» åpner hjernekort og forklaring, «Flere valg» åpner resten (tidspunkt, stemmer ikke, fake drop, følelse, sjanger, spol, reaksjonstid, data).
+Mappe-valg og eksport ligger kun under «Flere valg → data» og vises ikke lenger i Party-panelet: sangene lagres i nettleseren av seg selv, og eksport/mappe er noe Espen gjør senere.
+
 Gammel plan for trening:
 
 1. Hent loggene og lydopptakene (sync).
