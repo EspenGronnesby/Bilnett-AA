@@ -111,6 +111,11 @@ Breakdown / Outro, og lyden tas opp (`web/src/party/analysis.ts`, samme BNFFT1-f
 dem som appens. Testet i Chrome med demo-lyden (format og rader stemmer); ikke testet med ekte PC-lyd ennå, og `sync.py` henter
 ikke fra Nedlastinger ennå. Nettsiden har ikke `feedback.csv`, så «midt i sang»-rensen (første trykk) bruker bare første merke.
 
+**Hands-free opptak (2026-11-20):** i Party → Analyse på → **Velg mappe** (Chrome; anbefalt `Nedlastinger/rave-analyse`) skrives hver
+sang dit av seg selv, uten å trykke noe, så en spilleliste kan gå alene. `sync.py` henter fra `~/Downloads/rave-analyse` og `~/Downloads`
+(også uten telefon: `python3 tools/party-analyse/sync.py --web`), hopper over sanger vi allerede har (samme tittel og lengde).
+Mappevalget er ikke testet i en ekte nettleser (kan ikke automatiseres); hentingen i `sync.py` er testet med falske filer.
+
 Gammel plan for trening:
 
 1. Hent loggene og lydopptakene (sync).

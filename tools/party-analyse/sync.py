@@ -11,8 +11,11 @@ det er offentlig og loggene inneholder sangtitler).
 Kjør for hånd:  python3 tools/party-analyse/sync.py [--open]
 """
 import fcntl
+import glob
 import json
 import os
+import re
+import shutil
 import subprocess
 import sys
 import time
@@ -76,6 +79,61 @@ def pull(remote, local):
     return True
 
 
+WEB_DIRS = [os.path.expanduser("~/Downloads/rave-analyse"), os.path.expanduser("~/Downloads")]
+WEB_NAME = re.compile(r"^\d{8}-\d{6}-.+\.(fft\.gz|csv)$")
+
+
+def song_signature(csv_path):
+    """(tittel-linje, siste posisjon i hele sekunder) – samme sang spilt til samme sted regnes som duplikat."""
+    try:
+        with open(csv_path, encoding="utf-8", errors="replace") as f:
+            lines = [line for line in f.read().splitlines() if line.strip()]
+    except OSError:
+        return None
+    head = lines[0] if lines and lines[0].startswith("#") else ""
+    body = [line for line in lines if not line.startswith("#")][1:]
+    try:
+        last = int(float(body[-1].split(",")[0])) if body else -1
+    except ValueError:
+        last = -1
+    return head, last
+
+
+def ingest_web():
+    """Henter opptak fra nettsiden (Analyse → «Velg mappe» eller «Eksporter») fra ~/Downloads/rave-analyse og ~/Downloads
+    til raw/ (csv) og raw/fft/ (fft.gz). Hopper over filer som finnes og sanger vi allerede har (samme tittel og lengde)."""
+    known = set()
+    for f in glob.glob(os.path.join(RAW, "*.csv")):
+        sig = song_signature(f)
+        if sig and sig[0]:
+            known.add(sig)
+    copied = 0
+    for d in WEB_DIRS:
+        if not os.path.isdir(d):
+            continue
+        for name in sorted(os.listdir(d)):
+            if not WEB_NAME.match(name) or not name.endswith(".csv"):
+                continue
+            stem = name[:-4]
+            csv_src = os.path.join(d, name); fft_src = os.path.join(d, stem + ".fft.gz")
+            if not os.path.exists(fft_src):
+                continue  # den ene filen mangler (eller skrives fortsatt)
+            if os.path.exists(os.path.join(RAW, name)):
+                continue
+            sig = song_signature(csv_src)
+            if sig and sig[0] and sig in known:
+                continue
+            os.makedirs(os.path.join(RAW, "fft"), exist_ok=True)
+            shutil.copy2(fft_src, os.path.join(RAW, "fft", stem + ".fft.gz"))
+            shutil.copy2(csv_src, os.path.join(RAW, name))
+            if sig and sig[0]:
+                known.add(sig)
+            copied += 1
+    if copied:
+        log(f"hentet {copied} sanger fra nettsiden")
+    return copied
+
+
 def line_count(path):
     try:
         with open(path, encoding="utf-8", errors="replace") as f:
@@ -126,7 +184,12 @@ def main():
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:
         return  # a previous run is still busy
+    web_pulled = ingest_web()
     if not device_ok():
+        if web_pulled or "--web" in sys.argv:
+            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+            import report  # noqa: E402
+            report.build(RAW, os.path.join(DATA, "rapport.html"))
         return
 
     try:
@@ -150,6 +213,7 @@ def main():
                 continue
             if pull(remote, local):
                 pulled += 1
+    pulled += web_pulled
     state["sizes"] = sizes
     gb_path = os.path.join(RAW, "genre-book.json")
     gb_before = open(gb_path, "rb").read() if os.path.exists(gb_path) else b""

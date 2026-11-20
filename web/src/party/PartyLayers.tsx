@@ -279,6 +279,9 @@ function AnalysisPanel() {
         title="Tar opp lyden og lar deg merke sangdelene. Lagres i nettleseren til du eksporterer.">Analyse {on ? 'på' : 'av'}</button>
       {on && (Object.keys(MARK_LABEL) as MarkPart[]).map(p =>
         <button key={p} className={analysis.mark === p ? 'chip small on' : 'chip small'} onClick={() => analysis.setMark(p)}>{MARK_LABEL[p]}</button>)}
+      {on && <button className={analysis.dirName ? 'chip small on' : 'chip small'} onClick={() => void analysis.pickDir()}
+        title="Velg en mappe (for eksempel Nedlastinger/rave-analyse): hver sang lagres dit av seg selv, så du kan la en spilleliste gå uten å trykke noe.">
+        {analysis.dirName ? `Mappe: ${analysis.dirName}` : 'Velg mappe'}</button>}
       {analysis.savedCount > 0 && (
         <button className="chip small" disabled={busy} onClick={async () => { setBusy(true); try { await analysis.exportAll() } finally { setBusy(false) } }}>
           Eksporter ({analysis.savedCount})</button>)}

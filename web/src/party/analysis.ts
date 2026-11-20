@@ -65,6 +65,42 @@ export class AnalysisRecorder {
   /** Kalles ved lagring/feil, så knappene kan vise hva som skjedde. */
   onChange: () => void = () => {}
   note = ''
+  /** Valgt mappe (Chrome): hver sang skrives dit med en gang, uten nedlasting og uten «Eksporter». */
+  private dir: FileSystemDirectoryHandle | null = null
+  dirName = ''
+
+  /** Velg mappe for automatisk lagring (må kalles fra et klikk). Anbefalt: Nedlastinger/rave-analyse. */
+  async pickDir(): Promise<boolean> {
+    const pick = (window as unknown as { showDirectoryPicker?: (o?: object) => Promise<FileSystemDirectoryHandle> }).showDirectoryPicker
+    if (!pick) { this.note = 'Nettleseren kan ikke velge mappe (bruk Chrome)'; this.onChange(); return false }
+    try {
+      this.dir = await pick({ mode: 'readwrite', id: 'rave-analyse' })
+      this.dirName = this.dir.name; this.note = ''
+      await this.writeUnexported()
+    } catch { return false } finally { this.onChange() }
+    return true
+  }
+
+  private async writeFile(name: string, blob: Blob) {
+    const fh = await this.dir!.getFileHandle(name, { create: true })
+    const w = await fh.createWritable()
+    await w.write(blob); await w.close()
+  }
+
+  /** Skriver sanger som ikke er eksportert til den valgte mappen og merker dem eksportert. */
+  private async writeUnexported() {
+    if (!this.dir) return
+    const db = await openDb()
+    try {
+      const all = (await tx(db, 'readonly', s => s.getAll()) as SavedSong[]).filter(s => !s.exported)
+      for (const s of all) {
+        await this.writeFile(`${s.name}.fft.gz`, s.fft)
+        await this.writeFile(`${s.name}.csv`, new Blob([s.csv], { type: 'text/csv' }))
+        await tx(db, 'readwrite', st => st.put({ ...s, exported: true }))
+      }
+    } catch { this.note = 'Fikk ikke skrevet til mappen – velg den på nytt'; this.dir = null; this.dirName = '' } finally { db.close() }
+    await this.refreshCount()
+  }
 
   get savedCount() { return this.count }
   private count = 0
@@ -140,7 +176,7 @@ export class AnalysisRecorder {
       db.close()
       this.note = ''
     } catch { this.note = 'Fikk ikke lagret opptaket i nettleseren' }
-    await this.refreshCount()
+    await this.writeUnexported()
   }
 
   /** Laster ned lagrede sanger som ikke er eksportert (.fft.gz + .csv, to filer per sang). De slettes ikke: eldste fjernes når det blir fullt. */
