@@ -1006,31 +1006,7 @@ class RaveActivity : ComponentActivity() {
         }
         LaunchedEffect(Unit) { controls = controls.touch(SystemClock.elapsedRealtime()) }
         var announcement by remember { mutableStateOf<String?>(null) }
-        // Short label when the Party profile changes, e.g. "ROCK", "RAP", "HARDSTYLE".
-        var genreBanner by remember { mutableStateOf<String?>(null) }
-        // Shown once per song (what the app thinks it is) and whenever the profile changes.
-        var bannerShownFor by remember { mutableLongStateOf(genreAnnouncedAt) }
-        fun genreName() = genreLabel()
-        // One banner at a time: a newer text is never cleared early by an older one's timer.
-        var bannerToken by remember { mutableIntStateOf(0) }
-        suspend fun banner(text: String, ms: Long) {
-            val token = ++bannerToken
-            genreBanner = text; delay(ms)
-            if (bannerToken == token) genreBanner = null
-        }
-        LaunchedEffect(genreAnnouncedAt) {
-            if (genreAnnouncedAt > 0L && genreAnnouncedAt != bannerShownFor) {
-                bannerShownFor = genreAnnouncedAt
-                // Announce what the app found (the bar is strength now, so it never hides the genre).
-                banner(genreName(), 1600)
-            }
-        }
-        // Hardstyle sub-genre found (e.g. "RAW", "UPTEMPO"). Song parts ("BUILD-UP", "DROP" …) are no longer announced
-        // on screen (Espen 2026-11-20): the analysis view shows them.
-        var subShownFor by remember { mutableLongStateOf(subChangedAt) }
-        LaunchedEffect(subChangedAt) {
-            if (subChangedAt > 0L && subChangedAt != subShownFor && hardWeight(vibe) > .5f && rockness < .5f) { subShownFor = subChangedAt; banner(genreName(), 1600) }
-        }
+        // On screen only «PARTY ON / PARTY OFF» is announced (Espen 2026-11-20): no genre or song-part text; the analysis view shows those.
         var partyAnnounceReady by remember { mutableStateOf(false) }
         LaunchedEffect(hardstyleOn) {
             // Not on first start, only when Party is switched.
@@ -1744,8 +1720,6 @@ class RaveActivity : ComponentActivity() {
             ) {
                 VibeSlider(minOf(maxHeight - 62.u, 300.u).coerceAtLeast(120.u))
             }
-            if (genreBanner != null && hardstyleOn && announcement == null) Text(genreBanner!!, color=Color.White,
-                modifier=Modifier.align(Alignment.TopCenter).padding(16.u).background(Color.Black.copy(alpha=.7f)).padding(12.u))
             if (announcement != null) Text(announcement!!, color=Color.White,
                 modifier=Modifier.align(Alignment.TopCenter).padding(16.u).background(Color.Black.copy(alpha=.7f)).padding(12.u))
             if (!hasAccess) Notice("Rave trenger tilgang til hva som spilles.\nInnstillinger → Varsler → Enhetstilgang til varsler → Bilnett Rave.")

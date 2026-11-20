@@ -195,10 +195,10 @@ export function PartyGrain() {
   return <div ref={ref} className="party-grain" style={{ backgroundImage: `url(${tile})` }} aria-hidden />
 }
 
-/** Short announcements, as the app's banner: PARTY ON/OFF and a new genre. (Song parts are not announced: the AI trainer shows them.) */
+/** The only on-screen announcement: PARTY ON / PARTY OFF (no genre or song-part text: the AI trainer shows those). */
 export function PartyBanner({ party }: { party: Party }) {
   const [text, setText] = useState<string | null>(null)
-  const seen = useRef({ genreAt: 0, on: party.on, first: true })
+  const seen = useRef({ on: party.on })
   useEffect(() => {
     const s = seen.current
     if (s.on !== party.on) {
@@ -206,15 +206,6 @@ export function PartyBanner({ party }: { party: Party }) {
       setText(party.on ? 'PARTY ON' : 'PARTY OFF')
     }
   }, [party.on])
-  useEffect(() => party.onFrame(() => {
-    const e = party.engine
-    const s = seen.current
-    if (e.genreAnnouncedAt > s.genreAt) {
-      s.genreAt = e.genreAnnouncedAt
-      if (!s.first) setText(e.genreLabel)
-      s.first = false
-    }
-  }), [party])
   useEffect(() => {
     if (!text) return
     const t = setTimeout(() => setText(null), 1_800)
