@@ -109,6 +109,11 @@ object BuildUpModel {{
     private val COEF = floatArrayOf({f(m.coef_[0])})
     private const val BIAS = {float(m.intercept_[0]):.6f}f
 
+    /** Hvor mye måling [i] skyver mot build-up (positivt) eller bort (negativt), i modellens egne enheter. */
+    fun contribution(x: FloatArray, i: Int): Float = COEF[i] * (x[i] - MEAN[i]) / SCALE[i]
+    val bias: Float get() = BIAS
+    val size: Int get() = COEF.size
+
     fun probability(x: FloatArray): Float {{
         var z = BIAS
         for (i in COEF.indices) z += COEF[i] * (x[i] - MEAN[i]) / SCALE[i]

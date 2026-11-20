@@ -54,6 +54,9 @@ class SongListener {
     val features = FloatArray(LISTENER_FEATURES.size)
     /** Skygge: build-up-modellens sannsynlighet (glattet over fire slag) og uglattet. Styrer ingenting. */
     var pBuildModel = 0f; private set
+    /** Siste input til [BuildUpModel] (48 tall) og kravet til hopp for å melde drop nå — brukes til å vise «hvorfor» i AI-treneren. */
+    val modelInput = FloatArray(MODEL_BASE.size * (1 + MODEL_LAGS.size))
+    var jumpNeeded = DROP_JUMP; private set
     var pBuildModelRaw = 0f; private set
     private val modelHistory = ArrayList<FloatArray>(); private val modelProbs = ArrayList<Float>()
     /** Råverdier for siste slag: sub-, høyde- og nærværs-nivå i dB, antall kick og snare (til offline-analyse og rettings-verktøyet). */
@@ -208,6 +211,7 @@ class SongListener {
         // Rekkefølge: en build-up like lang som forrige ventes å ende i drop → da holder et mindre hopp.
         val expectDrop = part == SongPart.BUILDUP && lastBuildSlots > 0 && buildSlots >= lastBuildSlots - 2
         val jumpNeeded = if (expectDrop) DROP_JUMP_BUILD else DROP_JUMP
+        this.jumpNeeded = jumpNeeded
         val jump = posNow - posPre
         pDrop = if (range < MIN_RANGE_DB) 0f else (jump / jumpNeeded).coerceIn(0f, 1f) * (if (kickNow > 0) 1f else .3f)
         val fromBuild = part == SongPart.BUILDUP
@@ -252,6 +256,7 @@ class SongListener {
             val past = modelHistory[max(modelHistory.size - 1 - lag, 0)]
             for (i in base.indices) x[base.size * (li + 1) + i] = base[i] - past[i]
         }
+        x.copyInto(modelInput)
         pBuildModelRaw = BuildUpModel.probability(x)
         modelProbs.add(pBuildModelRaw)
         val from = max(0, modelProbs.size - 4)
