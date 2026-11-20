@@ -112,7 +112,7 @@ def ingest_web():
         if not os.path.isdir(d):
             continue
         for name in sorted(os.listdir(d)):
-            if not WEB_NAME.match(name) or not name.endswith(".csv"):
+            if not WEB_NAME.match(name) or not name.endswith(".csv") or name.endswith(".events.csv"):
                 continue
             stem = name[:-4]
             csv_src = os.path.join(d, name); fft_src = os.path.join(d, stem + ".fft.gz")
@@ -121,13 +121,19 @@ def ingest_web():
             if os.path.exists(os.path.join(RAW, name)):
                 continue
             sig = song_signature(csv_src)
-            marked = ",espen" in open(csv_src, encoding="utf-8", errors="replace").read()
+            text = open(csv_src, encoding="utf-8", errors="replace").read()
+            # Dine merker: live (part_by=espen) eller rettet/merket i AI-treneren og rettings-verktøyet (part_by=review).
+            marked = ",espen" in text or ",review" in text or "# kilde: review" in text
             # Samme sang spilt til samme sted regnes som duplikat – men et opptak med Espens merker kastes aldri.
             if sig and sig[0] and sig in known and not marked:
                 continue
             os.makedirs(os.path.join(RAW, "fft"), exist_ok=True)
             shutil.copy2(fft_src, os.path.join(RAW, "fft", stem + ".fft.gz"))
             shutil.copy2(csv_src, os.path.join(RAW, name))
+            events_src = os.path.join(d, stem + ".events.csv")  # hendelser fra AI-treneren (feil nå, fake drop, bra …)
+            if os.path.exists(events_src):
+                os.makedirs(os.path.join(RAW, "events"), exist_ok=True)
+                shutil.copy2(events_src, os.path.join(RAW, "events", stem + ".events.csv"))
             if sig and sig[0]:
                 known.add(sig)
             copied += 1

@@ -2260,7 +2260,7 @@ class RaveActivity : ComponentActivity() {
     private var feedbackAt by mutableLongStateOf(0L)
 
     /** Espen corrects the song part: switch now, remember it for this song, log it as the answer key. */
-    private fun correctPart(next: SongPart) {
+    private fun correctPart(next: SongPart, logFake: Boolean = true) {
         val fake = songPhase.force(next, SystemClock.uptimeMillis(), "Espen")
         shownPart = songPhase.part
         val pos = positionMs()
@@ -2269,7 +2269,7 @@ class RaveActivity : ComponentActivity() {
         val from = if (back > 0L && pos >= 0L) (pos - back).coerceAtLeast(0L) else pos
         analysisLog.mark("rett_${next.name.lowercase()}", atPosMs = from)
         if (back > 0L && pos >= 0L) analysisLog.relabel(next.name, from, pos)
-        if (fake) analysisLog.mark("fake_drop")
+        if (fake && logFake) analysisLog.mark("fake_drop")
         if (songKey.isNotBlank()) { songMarks.add(songKey, from, next.name); marksForSong = songMarks.marks(songKey) }
     }
 
@@ -2348,7 +2348,7 @@ class RaveActivity : ComponentActivity() {
             Text("Si fra", color = dim, fontSize = 12.us)
             Row(horizontalArrangement = Arrangement.spacedBy(6.u)) {
                 button("STEMMER IKKE", false) { analysisLog.mark("feil_na"); "Lagret: stemmer ikke nå" }
-                button("FAKE DROP", false) { analysisLog.mark("fake_drop"); correctPart(SongPart.BUILDUP); null }
+                button("FAKE DROP", false) { analysisLog.mark("fake_drop"); correctPart(SongPart.BUILDUP, logFake = false); null }
             }
             button("INGEN DROP I SANGEN", false) { analysisLog.mark("ingen_drop"); null }
             Text("Følelse", color = dim, fontSize = 12.us)

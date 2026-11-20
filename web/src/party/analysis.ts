@@ -25,16 +25,57 @@ const STORE = 'songs'
 const MAX_RAW_BYTES = 60_000_000
 const MAX_SAVED = 40
 
+/** v2: «drafts» (metadata for sangen som tas opp nå) og «parts» (lyd-biter) sjekkpunktes underveis, så ingenting går tapt ved krasj/lukket fane. */
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB, 1)
-    req.onupgradeneeded = () => req.result.createObjectStore(STORE, { keyPath: 'id', autoIncrement: true })
+    const req = indexedDB.open(DB, 2)
+    req.onupgradeneeded = () => {
+      const db = req.result
+      if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, { keyPath: 'id', autoIncrement: true })
+      if (!db.objectStoreNames.contains('drafts')) db.createObjectStore('drafts', { keyPath: 'rec' })
+      if (!db.objectStoreNames.contains('parts')) db.createObjectStore('parts', { keyPath: 'id', autoIncrement: true })
+    }
     req.onsuccess = () => resolve(req.result)
     req.onerror = () => reject(req.error)
   })
 }
-const tx = <T,>(db: IDBDatabase, mode: IDBTransactionMode, run: (s: IDBObjectStore) => IDBRequest<T>): Promise<T> =>
-  new Promise((resolve, reject) => { const r = run(db.transaction(STORE, mode).objectStore(STORE)); r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error) })
+const txs = <T,>(db: IDBDatabase, store: string, mode: IDBTransactionMode, run: (s: IDBObjectStore) => IDBRequest<T>): Promise<T> =>
+  new Promise((resolve, reject) => { const r = run(db.transaction(store, mode).objectStore(store)); r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error) })
+const tx = <T,>(db: IDBDatabase, mode: IDBTransactionMode, run: (s: IDBObjectStore) => IDBRequest<T>): Promise<T> => txs(db, STORE, mode, run)
+
+/** Det som gjelder i posisjon [pos]: siste merke ≤ pos (merkelisten er sortert), ellers null. */
+function labelIn(marks: readonly Mark[], pos: number): MarkPart | null {
+  let part: MarkPart | null = null
+  for (const m of marks) { if (m.pos <= pos) part = m.part; else break }
+  return part
+}
+
+/**
+ * Sang-CSV: rader per sekund + en rad ved hvert merke. Rader som er merket av deg har part_by=review. Et merke uten del
+ * («her slutter det jeg merket») skrives som en review-rad med tom del, så fasiten ikke fortsetter ut over det du merket.
+ */
+function csvFrom(artist: string, title: string, rowMap: Iterable<Row>, marks: readonly Mark[]): string {
+  const head = `# ${artist} – ${title}\n# kilde: review\npos_s,part,drop,genre,sub,fps,effects_on,auto_part,auto_drop,part_by,new_part,p_model\n`
+  const all = [...rowMap]
+  const rows: { pos: number; row: Row; end: boolean }[] = all.map(r => ({ pos: r.pos, row: r, end: false }))
+  for (const m of marks) {
+    const near = all.reduce<Row | null>((best, r) => (!best || Math.abs(r.pos - m.pos) < Math.abs(best.pos - m.pos) ? r : best), null)
+    rows.push({ pos: m.pos, row: near ? { ...near, pos: m.pos } : { pos: m.pos, auto: '', listener: '', pModel: 0, genre: '' }, end: m.part === null })
+  }
+  rows.sort((x, y) => x.pos - y.pos || Number(x.end) - Number(y.end))
+  const lines = rows.map(({ pos, row, end }) => {
+    const lab = labelIn(marks, pos)
+    const part = end ? '' : lab ?? row.auto
+    return `${(pos / 1000).toFixed(1)},${part},,${row.genre.replace(/,/g, ' ')},,60,1,${row.auto},,${end || lab ? 'review' : 'auto'},${row.listener},${row.pModel.toFixed(2)}`
+  })
+  return head + lines.join('\n') + '\n'
+}
+
+function eventsFrom(artist: string, title: string, events: readonly AnalysisEvent[]): string {
+  if (!events.length) return ''
+  return `# ${artist} – ${title}\npos_s,type,detail,auto_part,new_part\n` +
+    events.map(e => `${(e.pos / 1000).toFixed(1)},${e.type},${e.detail.replace(/,/g, ' ')},${e.auto},${e.listener}`).join('\n') + '\n'
+}
 
 function utf(s: string): Uint8Array {
   const b = new TextEncoder().encode(s)
@@ -152,7 +193,9 @@ export class AnalysisRecorder {
 
   private begin() {
     this.chunks = []; this.rawBytes = 0; this.rows = new Map(); this.markList = []; this.eventList = []; this.undoStack = []
+    this.savedChunks = 2; this.partSeq = 0; this.lastEditPos = -1
     this.startedAt = Date.now()
+    this.startCheckpoints()
     this.chunks.push(utf('BNFFT1'), utf(`${this.artist} – ${this.title}`))
   }
 
@@ -201,48 +244,61 @@ export class AnalysisRecorder {
     try { const s = JSON.parse(localStorage.getItem('rave.trainer.marks') ?? '{}'); return s.day === new Date().toISOString().slice(0, 10) ? s.n : 0 } catch { return 0 }
   }
 
+  /** Posisjonen til merket du satte sist (setMark eller starten på et tidsrom), så «flytt siste merke» flytter riktig merke. */
+  private lastEditPos = -1
+
   /** «Fra [fromPos] gjelder X» (standard: nå minus reaksjonstid). Merker senere enn dette fjernes (det du sier nå gjelder siden da). */
-  setMark(part: MarkPart, fromPos?: number) {
+  setMark(part: MarkPart, fromPos?: number): boolean {
     const now = this.positionMs()
-    if (now < 0 || !this.startedAt) return
+    if (now < 0 || !this.startedAt) return false
     const from = Math.max(0, Math.round(fromPos ?? now - this.reactionMs))
     this.snapshot()
     this.markList = this.markList.filter(m => m.pos < from)
     this.markList.push({ pos: from, part })
+    this.lastEditPos = from
     this.bump('rave.trainer.marks')
-    this.emit()
-  }
-
-  /** «Fra [from] til [to] er det X»; etter [to] gjelder det som gjaldt der før. */
-  setRange(part: MarkPart, from: number, to: number) {
-    if (!this.startedAt) return
-    const a = Math.max(0, Math.round(Math.min(from, to))), b = Math.round(Math.max(from, to))
-    const after = this.labelAt(b)
-    this.snapshot()
-    this.markList = this.markList.filter(m => m.pos < a || m.pos > b)
-    this.markList.push({ pos: a, part })
-    if (after !== part) this.markList.push({ pos: b + 1, part: after })
-    this.markList.sort((x, y) => x.pos - y.pos)
-    this.bump('rave.trainer.marks')
-    this.emit()
-  }
-
-  /** Flytter det siste merket [deltaMs] (negativt = tidligere). Brukes av «1 takt tidligere/senere». */
-  moveLastMark(deltaMs: number) {
-    const last = this.markList[this.markList.length - 1]
-    if (!last || !this.startedAt) return false
-    this.snapshot()
-    last.pos = Math.max(0, Math.round(last.pos + deltaMs))
-    this.markList.sort((x, y) => x.pos - y.pos)
     this.emit()
     return true
   }
 
-  /** Angre siste endring av merker. */
-  undo() {
+  /** «Fra [from] til [to] er det X»; etter [to] gjelder det som gjaldt der før (eller en tom slutt hvis ingenting var merket). */
+  setRange(part: MarkPart, from: number, to: number): boolean {
+    if (!this.startedAt || this.positionMs() < 0) return false
+    const a = Math.max(0, Math.round(Math.min(from, to))), b = Math.round(Math.max(from, to))
+    const after = labelIn(this.markList, b)
+    this.snapshot()
+    this.markList = this.markList.filter(m => m.pos < a || m.pos > b)
+    this.markList.push({ pos: a, part })
+    // Etter tidsrommet: det som gjaldt der før. Var ingenting merket, skrives en tom slutt (null), ikke en gjetning.
+    if (after !== part) this.markList.push({ pos: b + 1, part: after })
+    this.markList.sort((x, y) => x.pos - y.pos)
+    this.lastEditPos = a
+    this.bump('rave.trainer.marks')
+    this.emit()
+    return true
+  }
+
+  /** Flytter merket du satte sist [deltaMs] (negativt = tidligere), men aldri forbi nabomerkene. */
+  moveLastMark(deltaMs: number): boolean {
+    if (!this.startedAt || this.lastEditPos < 0) return false
+    const i = this.markList.findIndex(m => m.pos === this.lastEditPos)
+    if (i < 0) return false
+    this.snapshot()
+    const lo = i > 0 ? this.markList[i - 1].pos + 1 : 0
+    const hi = i + 1 < this.markList.length ? this.markList[i + 1].pos - 1 : Number.MAX_SAFE_INTEGER
+    const pos = Math.min(Math.max(Math.round(this.markList[i].pos + deltaMs), lo), hi)
+    this.markList[i] = { ...this.markList[i], pos }
+    this.lastEditPos = pos
+    this.emit()
+    return true
+  }
+
+  /** Angre siste endring av merker. Returnerer false når det ikke er noe å angre. */
+  undo(): boolean {
     const prev = this.undoStack.pop()
     if (!prev) return false
     this.markList = prev
+    this.lastEditPos = -1
     this.logEvent('angre')
     return true
   }
@@ -258,32 +314,81 @@ export class AnalysisRecorder {
   /** Sangen hoppet (spoling): bare en hendelse, radene overskrives per sekund. */
   noteSeek(toPos: number) { this.logEvent('spol', String(Math.round(toPos))) }
 
-  private buildCsv(): string {
-    const head = `# ${this.artist} – ${this.title}\n# kilde: review\npos_s,part,drop,genre,sub,fps,effects_on,auto_part,auto_drop,part_by,new_part,p_model\n`
-    const rows: { pos: number; row: Row }[] = [...this.rows.values()].map(r => ({ pos: r.pos, row: r }))
-    // Merker som starter mellom to sekunder får sin egen rad (riktig tid på overgangen)
-    for (const m of this.markList) {
-      const near = [...this.rows.values()].reduce<Row | null>((best, r) => (!best || Math.abs(r.pos - m.pos) < Math.abs(best.pos - m.pos) ? r : best), null)
-      rows.push({ pos: m.pos, row: near ? { ...near, pos: m.pos } : { pos: m.pos, auto: '', listener: '', pModel: 0, genre: '' } })
-    }
-    rows.sort((x, y) => x.pos - y.pos)
-    const lines = rows.map(({ pos, row }) => {
-      const lab = this.labelAt(pos)
-      return `${(pos / 1000).toFixed(1)},${lab ?? row.auto},,${row.genre},,60,1,${row.auto},,${lab ? 'review' : 'auto'},${row.listener},${row.pModel.toFixed(2)}`
-    })
-    return head + lines.join('\n') + '\n'
+  private buildCsv(): string { return csvFrom(this.artist, this.title, this.rows.values(), this.markList) }
+  private buildEvents(): string { return eventsFrom(this.artist, this.title, this.eventList) }
+
+  // ---- Sjekkpunkter: merker, hendelser og lyd lagres underveis (hvert 20. sekund og når fanen skjules), ikke bare når sangen er ferdig ----
+  private savedChunks = 2
+  private partSeq = 0
+  private checkpointTimer = 0
+  private checkpointing = false
+
+  /** Skriver det som har kommet til siden sist til IndexedDB (utkast). Feiler stille: sangen lagres uansett ved slutten. */
+  async checkpoint() {
+    if (!this.startedAt || this.checkpointing || this.chunks.length <= 2) return
+    this.checkpointing = true
+    const rec = this.startedAt
+    try {
+      const db = await openDb()
+      const upTo = this.chunks.length
+      const slice = this.chunks.slice(this.savedChunks, upTo)
+      if (slice.length) {
+        await txs(db, 'parts', 'readwrite', st => st.add({ rec, n: this.partSeq++, blob: new Blob(slice as BlobPart[]) }))
+        this.savedChunks = upTo
+      }
+      await txs(db, 'drafts', 'readwrite', st => st.put({
+        rec, artist: this.artist, title: this.title, rows: [...this.rows.values()], marks: this.markList, events: this.eventList, parts: this.partSeq,
+      }))
+      db.close()
+    } catch { /* utkast er en bekvemmelighet */ } finally { this.checkpointing = false }
   }
 
-  private buildEvents(): string {
-    if (!this.eventList.length) return ''
-    return `# ${this.artist} – ${this.title}\npos_s,type,detail,auto_part,new_part\n` +
-      this.eventList.map(e => `${(e.pos / 1000).toFixed(1)},${e.type},${e.detail.replace(/,/g, ' ')},${e.auto},${e.listener}`).join('\n') + '\n'
+  private startCheckpoints() {
+    window.clearInterval(this.checkpointTimer)
+    this.checkpointTimer = window.setInterval(() => void this.checkpoint(), 20_000)
+  }
+  private stopCheckpoints() { window.clearInterval(this.checkpointTimer); this.checkpointTimer = 0 }
+
+  /** Gjør utkast fra tidligere (krasj, lukket fane) om til lagrede sanger. Kalles når siden åpnes. */
+  async recover() {
+    try {
+      const db = await openDb()
+      const drafts = await txs(db, 'drafts', 'readonly', st => st.getAll()) as { rec: number; artist: string; title: string; rows: Row[]; marks: Mark[]; events: AnalysisEvent[] }[]
+      const parts = await txs(db, 'parts', 'readonly', st => st.getAll()) as { id: number; rec: number; n: number; blob: Blob }[]
+      for (const d of drafts) {
+        if (d.rec === this.startedAt) continue
+        const mine = parts.filter(p => p.rec === d.rec).sort((a, b) => a.n - b.n)
+        if (mine.length && d.rows.length >= 8) {
+          const header = [utf('BNFFT1'), utf(`${d.artist} – ${d.title}`)]
+          const fft = await gzip([...header, ...(await Promise.all(mine.map(async p => new Uint8Array(await p.blob.arrayBuffer()))))])
+          const name = `${stampOf(d.rec)}-${slug(`${d.artist}-${d.title}`)}`
+          const events = eventsFrom(d.artist, d.title, d.events)
+          await txs(db, STORE, 'readwrite', st => st.add({ name, at: d.rec, fft, csv: csvFrom(d.artist, d.title, d.rows, d.marks), marks: d.marks.length, ...(events ? { events } : {}) } satisfies SavedSong))
+        }
+        for (const p of mine) await txs(db, 'parts', 'readwrite', st => st.delete(p.id))
+        await txs(db, 'drafts', 'readwrite', st => st.delete(d.rec))
+      }
+      db.close()
+    } catch { /* ingenting å berge */ }
+    await this.writeUnexported()
+    await this.refreshCount()
+  }
+
+  private async dropDraft(rec: number) {
+    try {
+      const db = await openDb()
+      const parts = await txs(db, 'parts', 'readonly', st => st.getAll()) as { id: number; rec: number }[]
+      for (const p of parts.filter(x => x.rec === rec)) await txs(db, 'parts', 'readwrite', st => st.delete(p.id))
+      await txs(db, 'drafts', 'readwrite', st => st.delete(rec))
+      db.close()
+    } catch { /* ok */ }
   }
 
   /** Lagrer sangen i nettleseren (hvis den har nok lyd og minst ett merke). */
   async finishSong() {
     if (!this.startedAt || this.chunks.length <= 2) { this.startedAt = 0; return }
     const chunks = this.chunks, marks = this.markList.length, at = this.startedAt, nRows = this.rows.size
+    this.stopCheckpoints()
     const name = `${stampOf(at)}-${slug(`${this.artist}-${this.title}`)}`
     const csv = this.buildCsv(), events = this.buildEvents()
     this.startedAt = 0; this.chunks = []; this.rows = new Map(); this.markList = []; this.eventList = []; this.undoStack = []
@@ -297,6 +402,7 @@ export class AnalysisRecorder {
       const sorted = all.sort((a, b) => a.at - b.at)
       for (const old of sorted.filter(s => s.exported).slice(0, Math.max(0, sorted.length - MAX_SAVED))) await tx(db, 'readwrite', s => s.delete(old.id!))
       db.close()
+      await this.dropDraft(at)
     } catch { this.note = 'Fikk ikke lagret opptaket i nettleseren' }
     await this.writeUnexported()
   }
@@ -330,4 +436,12 @@ export const analysis = new AnalysisRecorder()
 export function useAnalysis() {
   useSyncExternalStore(analysis.subscribe, () => analysis.version)
   return analysis
+}
+
+// Sjekkpunkt når fanen skjules/lukkes, og berging av utkast fra forrige gang siden ble åpnet.
+if (typeof window !== 'undefined') {
+  const flush = () => { void analysis.checkpoint() }
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush() })
+  window.addEventListener('pagehide', flush)
+  void analysis.recover()
 }

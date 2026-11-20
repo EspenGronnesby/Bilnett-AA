@@ -50,3 +50,23 @@ export class Timeline {
 }
 
 export const timeline = new Timeline()
+// Bare i utviklermodus: lar tester sette inn kunstige punkter (demo-lyden får aldri den nye lytteren til å bytte del).
+if (import.meta.env.DEV && typeof window !== 'undefined') (window as unknown as { __raveTimeline?: Timeline }).__raveTimeline = timeline
+
+/**
+ * Finner trolig starten på en ny del: det slaget i [endPos − windowMs, endPos] der fylden (svakeste av sub og lys klang)
+ * hopper mest mellom to slag før og to slag etter. Gir pos = slutten av slaget før hoppet. snapped=false når ingen tydelig endring finnes
+ * (da brukes reaksjonstiden).
+ */
+export function snapOnset(points: readonly TimePoint[], endPos: number, windowMs: number): { pos: number; snapped: boolean } {
+  const pts = points.filter(p => p.pos >= endPos - windowMs && p.pos <= endPos)
+  const full = (p: TimePoint) => Math.min(p.sub, p.bright)
+  let best = 0, bestPos = -1
+  for (let i = 2; i < pts.length - 1; i++) {
+    if (pts[i - 2].seg !== pts[i + 1].seg) continue // ikke over et hopp i sangen
+    const before = (full(pts[i - 2]) + full(pts[i - 1])) / 2, after = (full(pts[i]) + full(pts[i + 1])) / 2
+    const jump = Math.abs(after - before)
+    if (jump > best) { best = jump; bestPos = pts[i - 1].pos }
+  }
+  return best >= 0.2 && bestPos >= 0 ? { pos: bestPos, snapped: true } : { pos: -1, snapped: false }
+}

@@ -138,6 +138,13 @@ først ved lagring: merker kan settes bakover i tid, filen får `# kilde: review
 Appen (Analyse-modus): AI-blokk i `AnalysisHud` (hjerner + live tidslinje, `TrainerTimeline.kt`), «Startet for …»-knapper, «Stemmer ikke», «Fake drop», «Ingen drop»;
 bakover-merker skrives som `# RELABEL <fra_s> <til_s> <DEL>` i sang-CSV (`AnalysisLog.relabel`) og leses av `PartyReplayTest.truth()` (uten reaksjonstid).
 
+**AI-trener gjort enklere (2026-11-20, etter kritiker).** Standard er «Enkel modus»: når den nye lytteren bytter del, kommer et stort «Stemmer det? ✔ Ja (mellomrom) / ✖ Nei (N) / ▶ Hør igjen»;
+«Stopp sangen og spør» (standard på) setter sangen på pause ved bytte (maks hvert 20. s), du kan spole 6 s tilbake og høre igjen, og sangen fortsetter der den stoppet når du har svart (eller etter 45 s).
+«Finn starten automatisk» legger starten der fylden (sub/lys klang) faktisk hopper (`snapOnset`), ellers reaksjonstiden. «Flere valg» viser resten. Rettelser etter kritiker: sjekkpunkter hvert 20. s og ved skjuling
+(IndexedDB `drafts`/`parts`, `recover()` berger utkast ved neste åpning), tomt slutt-merke (`part=''`, `part_by=review`) når et tidsrom dras først (testen leser tom del som «her slutter det du merket»),
+`sync.py` kaster aldri opptak med `espen`/`review`, `.events.csv` kopieres til `raw/events/` og forveksles ikke med sang-CSV, ærlige «Lagret»/«Angret»-meldinger, «flytt siste merke» flytter riktig merke, lærlingen
+trener først på slag eldre enn 6 s og lagrer en modell-signatur. Ikke testet: ekte Spotify (pause/spol/fortsett), ekte PC-lyd, hvordan det oppleves å bruke mens du hører på, appen på telefon.
+
 Gammel plan for trening:
 
 1. Hent loggene og lydopptakene (sync).

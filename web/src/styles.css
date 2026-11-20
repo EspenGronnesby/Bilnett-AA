@@ -716,3 +716,11 @@ select option { background: #211827; color: white; }
 @media (max-width: 900px) { .tr-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .tr-cols { grid-template-columns: 1fr; } }
 .trainer .chip, .trainer .chip.small { height: calc(30 * var(--tu)); padding: 0 calc(11 * var(--tu)); font-size: calc(12.5 * var(--tu)); }
 .trainer .tr-react { font-size: calc(12 * var(--tu)); }
+
+.tr-prompt { position: fixed; left: 50%; bottom: calc(26 * var(--tu)); translate: -50% 0; z-index: 14; background: var(--fg); color: var(--on-pill); border-radius: calc(22 * var(--tu)); padding: calc(18 * var(--tu)) calc(26 * var(--tu)); display: grid; gap: calc(12 * var(--tu)); justify-items: center; box-shadow: 0 calc(10 * var(--tu)) calc(40 * var(--tu)) hsl(0 0% 0% / .5); max-width: 94vw; }
+.tr-prompt-q { font-size: calc(26 * var(--tu)); font-weight: 600; text-align: center; }
+.tr-prompt-sub { font-size: calc(18 * var(--tu)); }
+.tr-prompt .tr-btn { height: calc(64 * var(--tu)); font-size: calc(24 * var(--tu)); padding: 0 calc(34 * var(--tu)); color: var(--fg); }
+.tr-prompt .tr-yes { background: #1f9d55; }
+.tr-prompt .tr-no { background: #c43c3c; }
+.tr-prompt .tr-part { height: calc(52 * var(--tu)); font-size: calc(18 * var(--tu)); padding: 0 calc(16 * var(--tu)); min-width: 0; }

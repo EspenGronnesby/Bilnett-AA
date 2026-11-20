@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type MutableRefObject } from 'react'
 import type { Party } from './useParty'
 import { analysis, MARK_LABEL, useAnalysis, type MarkPart } from './analysis'
-import { timeline } from './timeline'
+import { snapOnset, timeline } from './timeline'
 import { apprentice } from './trainerModel'
 
 // «AI-trener»: egen visning som åpnes når Analyse er på. Du ser live hva hver «hjerne» tror og hvorfor, og retter den
@@ -77,12 +77,14 @@ interface Props {
   durationMs: number
   seek: (ms: number) => void
   next: () => void
+  /** Pause/spill (brukes når AI-treneren stopper sangen for å spørre). */
+  togglePlay: () => void
   reaction: number
   setReaction: (seconds: number) => void
   onClose: () => void
 }
 
-export function Trainer({ party, title, artist, playing, positionMs, durationMs, seek, next, reaction, setReaction, onClose }: Props) {
+export function Trainer({ party, title, artist, playing, positionMs, durationMs, seek, next, togglePlay, reaction, setReaction, onClose }: Props) {
   useAnalysis()
   useTick(250)
   const root = useRef<HTMLDivElement>(null)
@@ -91,6 +93,31 @@ export function Trainer({ party, title, artist, playing, positionMs, durationMs,
   const [chip, setChip] = useState(0)
   const [genreOpen, setGenreOpen] = useState(false)
   const [toast, setToast] = useState('')
+  // Enkel modus (standard): bare det viktigste. «Flere valg» viser resten. Husker valget.
+  const [simple, setSimple] = useState(() => { try { return localStorage.getItem('rave.trainer.simple') !== '0' } catch { return true } })
+  const toggleSimple = () => { const v = !simple; setSimple(v); try { localStorage.setItem('rave.trainer.simple', v ? '1' : '0') } catch { /* ok */ } }
+  // Finn starten automatisk (standard på): trykket justeres til der lyden faktisk skifter.
+  const [snap, setSnap] = useState(() => { try { return localStorage.getItem('rave.trainer.snap') !== '0' } catch { return true } })
+  const toggleSnap = () => { const v = !snap; setSnap(v); try { localStorage.setItem('rave.trainer.snap', v ? '1' : '0') } catch { /* ok */ } }
+  // Ja/nei-spørsmål: kommer når den nye lytteren bytter del.
+  const [prompt, setPrompt] = useState<{ part: string; pos: number; denied: boolean } | null>(null)
+  const lastListener = useRef<{ part: string; pos: number } | null>(null)
+  // «Stopp sangen og spør» (standard på): sangen settes på pause ved et bytte, du kan høre igjen, svarer, og den fortsetter der den stoppet.
+  const [pauseAsk, setPauseAsk] = useState(() => { try { return localStorage.getItem('rave.trainer.pause') !== '0' } catch { return true } })
+  const togglePause = () => { const v = !pauseAsk; setPauseAsk(v); try { localStorage.setItem('rave.trainer.pause', v ? '1' : '0') } catch { /* ok */ } }
+  const live = useRef({ playing, pauseAsk, togglePlay, seek, positionMs })
+  live.current = { playing, pauseAsk, togglePlay, seek, positionMs }
+  const held = useRef<{ at: number } | null>(null)
+  const lastPause = useRef(0)
+  /** Fortsett sangen der vi stoppet den (om vi stoppet den). */
+  const resume = () => {
+    const h = held.current
+    if (!h) return
+    held.current = null
+    live.current.seek(h.at)
+    if (!live.current.playing) live.current.togglePlay()
+  }
+  const closePrompt = () => { setPrompt(null); resume() }
   const e = party.engine
 
   const bar = Math.max(800, (e.slotLengthMs || 400) * 4)
@@ -103,26 +130,85 @@ export function Trainer({ party, title, artist, playing, positionMs, durationMs,
   const apply = (p: MarkPart) => {
     if (!analysis.hasRecording) { say('Ingen opptak ennå – start en sang og vent til lyd mottas'); return }
     const sel = selRef.current
-    if (sel?.range) analysis.setRange(p, Math.min(sel.a, sel.b), Math.max(sel.a, sel.b))
-    else if (sel) analysis.setMark(p, sel.a)
-    else analysis.setMark(p, positionMs() - offsets[chip].ms)
-    selRef.current = null; setChip(0)
-    say(`Lagret: ${MARK_LABEL[p]}`)
+    let note = '', ok: boolean
+    if (sel?.range) ok = analysis.setRange(p, Math.min(sel.a, sel.b), Math.max(sel.a, sel.b))
+    else if (sel) ok = analysis.setMark(p, sel.a)
+    else {
+      const at = positionMs()
+      const found = snap && chip === 0 ? snapOnset(timeline.points, at, 8000) : { pos: -1, snapped: false }
+      if (found.snapped) { ok = analysis.setMark(p, found.pos); note = ` (startet for ${((at - found.pos) / 1000).toFixed(1).replace('.', ',')} s siden – funnet automatisk)` }
+      else ok = analysis.setMark(p, at - offsets[chip].ms)
+    }
+    if (!ok) { say('Ikke lagret: posisjonen i sangen er ukjent ennå'); return }
+    selRef.current = null; setChip(0); if (prompt) closePrompt()
+    say(`Lagret: ${MARK_LABEL[p]}${note}`)
+  }
+  /** «Ja»: den nye lytteren hadde rett. Starten settes der lyden skiftet rundt lytterens bytte (ellers litt før). */
+  const confirmPrompt = () => {
+    if (!prompt || !analysis.hasRecording) return
+    const part = toMark(prompt.part)
+    const found = snap ? snapOnset(timeline.points, prompt.pos + 1500, 6000) : { pos: -1, snapped: false }
+    if (!analysis.setMark(part, found.snapped ? found.pos : prompt.pos - 1000)) { say('Ikke lagret: posisjonen i sangen er ukjent ennå'); return }
+    analysis.logEvent('riktig', `ny:${prompt.part}`)
+    closePrompt(); say(`Lagret: ${MARK_LABEL[part]} stemte`)
+  }
+  /** Spol litt tilbake og spill, så du kan høre øyeblikket før du svarer. */
+  const listenAgain = () => {
+    if (!prompt) return
+    const to = Math.max(0, prompt.pos - 6000)
+    seek(to); analysis.noteSeek(to)
+    if (!playing) togglePlay()
+    say('Spiller siste sekunder på nytt')
+  }
+  const denyPrompt = () => {
+    if (!prompt) return
+    analysis.logEvent('feil', `ny:${prompt.part}`)
+    setPrompt(p => (p ? { ...p, denied: true } : p))
   }
   const log = (type: Parameters<typeof analysis.logEvent>[0], detail = '', msg = '') => { analysis.logEvent(type, detail); say(msg || 'Lagret') }
   const rate = (brain: string, part: string, ok: boolean) => log(ok ? 'riktig' : 'feil', `${brain}:${part}`, ok ? `Riktig: ${brain}` : `Feil: ${brain}`)
   const seekBack = () => { const to = Math.max(0, positionMs() - 10_000); seek(to); analysis.noteSeek(to); say('Spoler 10 s tilbake') }
 
   useEffect(() => { root.current?.focus({ preventScroll: true }) }, [])
+  // Oppdager bytte hos den nye lytteren (per slag) og spør «stemmer det?». Intro i starten og samme del på nytt gir ikke spørsmål.
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      const last = timeline.points[timeline.points.length - 1]
+      if (!last || !analysis.enabled) return
+      const prev = lastListener.current
+      if (!prev || last.pos < prev.pos - 1500) { lastListener.current = { part: last.listener, pos: last.pos }; return } // første slag / spoling
+      if (last.listener !== prev.part) {
+        lastListener.current = { part: last.listener, pos: last.pos }
+        setPrompt({ part: last.listener, pos: last.pos, denied: false })
+        const L = live.current
+        if (L.pauseAsk && L.playing && last.listener !== 'INTRO' && Date.now() - lastPause.current > 20_000) {
+          held.current = { at: L.positionMs() }; lastPause.current = Date.now(); L.togglePlay()
+        }
+      } else lastListener.current = { part: prev.part, pos: last.pos }
+    }, 250)
+    return () => clearInterval(id)
+  }, [])
+  // Spørsmålet forsvinner av seg selv etter 10 s (uten å lagre noe).
+  useEffect(() => {
+    if (!prompt) return
+    const id = window.setTimeout(() => { setPrompt(p => (p === prompt ? null : p)); resume() }, held.current ? 45_000 : 10_000)
+    return () => clearTimeout(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prompt])
+  // Lukkes visningen mens sangen står på pause for oss, fortsetter den.
+  useEffect(() => () => { const h = held.current; if (h) { held.current = null; live.current.seek(h.at); if (!live.current.playing) live.current.togglePlay() } }, [])
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
       if (ev.metaKey || ev.ctrlKey || ev.altKey || ev.repeat) return
       const t = ev.target as HTMLElement | null
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return
+      if (document.querySelectorAll('[role=dialog]').length > 1) return // et annet vindu (Innstillinger) er over treneren
       const k = ev.key.toLowerCase()
+      if (prompt && (k === ' ' || k === 'enter')) { confirmPrompt(); ev.preventDefault(); return }
+      if (prompt && !prompt.denied && k === 'n') { denyPrompt(); ev.preventDefault(); return }
       if (k === 'escape') { onClose(); ev.preventDefault() }
       else if (k >= '1' && k <= '5') { apply(PARTS[Number(k) - 1]); ev.preventDefault() }
-      else if (k === 'z') { analysis.undo(); say('Angret'); ev.preventDefault() }
+      else if (k === 'z') { say(analysis.undo() ? 'Angret' : 'Ingenting å angre'); ev.preventDefault() }
       else if (k === 'b') { log('bra', '', 'Bra!'); ev.preventDefault() }
       else if (k === 'arrowleft') { seekBack(); ev.preventDefault() }
     }
@@ -132,8 +218,10 @@ export function Trainer({ party, title, artist, playing, positionMs, durationMs,
 
   // Live treffsikkerhet siste minutt: der du har merket, hvor ofte stemte hver hjerne med deg?
   const nowPos = positionMs()
+  const lastMarkAt = analysis.marks.length ? analysis.marks[analysis.marks.length - 1].pos : -1
   const recent = timeline.points.filter(p => p.pos > nowPos - 60_000 && p.pos <= nowPos)
-  const labelled = recent.filter(p => analysis.labelAt(p.pos) !== null)
+  // Bare slag der du har merket og der merket er ferskt (ikke mer enn 20 s etter ditt siste merke): ellers måler vi mot en utdatert fasit.
+  const labelled = recent.filter(p => analysis.labelAt(p.pos) !== null && p.pos <= lastMarkAt + 20_000)
   const agree = (pick: (p: (typeof recent)[number]) => string) =>
     labelled.length >= 5 ? pct(labelled.filter(p => toMark(pick(p)) === analysis.labelAt(p.pos)).length / labelled.length) : '–'
 
@@ -174,14 +262,14 @@ export function Trainer({ party, title, artist, playing, positionMs, durationMs,
         <div className="tr-card" style={{ borderColor: '#5ad68a' }}>
           <div className="tr-card-name">Min lærling</div>
           <div className="tr-card-part" style={{ color: '#5ad68a' }}>{pct(apprentice.p)}</div>
-          <div className="tr-card-sub">Grunnmodellen sier {pct(modelP)}</div>
-          <div className="tr-card-sub">Har lært av {apprentice.updates} rettelser</div>
+          <div className="tr-card-sub">Grunnmodellen (uten læring): {pct(e.pBuildModelRaw)}</div>
+          <div className="tr-card-sub">Har trent på {apprentice.updates} slag · viser at den lærer av deg, ikke at den er bedre</div>
           <div className="tr-card-btns">
             <button className="chip small" onClick={() => { apprentice.reset(); say('Lærlingen er nullstilt') }}>Nullstill</button>
           </div>
         </div>
         <div className="tr-card tr-score">
-          <div className="tr-card-name">Enige med deg siste minutt</div>
+          <div className="tr-card-name">Treffer det du merket (siste minutt)</div>
           <div className="tr-scoreline"><span>Ny lytter</span><b>{agree(p => p.listener)}</b></div>
           <div className="tr-scoreline"><span>Gammel hjerne</span><b>{agree(p => p.old)}</b></div>
           <div className="tr-card-sub">Merker i dag: {analysis.marksToday} · hendelser denne sangen: {analysis.events.length}</div>
@@ -209,11 +297,19 @@ export function Trainer({ party, title, artist, playing, positionMs, durationMs,
               </button>
             ))}
           </div>
+          <div className="tr-row">
+            <button className={snap ? 'chip small on' : 'chip small'} onClick={toggleSnap} title="Når du trykker en del, justeres starten til der lyden faktisk skifter (ellers regnes reaksjonstiden din)">Finn starten automatisk: {snap ? 'på' : 'av'}</button>
+            <button className={pauseAsk ? 'chip small on' : 'chip small'} onClick={togglePause} title="Når den nye lytteren bytter del, stopper sangen og spør om det stemmer. Den fortsetter når du har svart.">Stopp sangen og spør: {pauseAsk ? 'på' : 'av'}</button>
+            <button className="chip small" onClick={() => say(analysis.undo() ? 'Angret' : 'Ingenting å angre')}>Angre (Z)</button>
+            <button className="chip small" onClick={toggleSimple}>{simple ? 'Flere valg ▾' : 'Færre valg ▴'}</button>
+          </div>
+          {!simple && (
+            <>
           <div className="tr-sublabel">Når startet det? (gjelder neste trykk)</div>
           <div className="tr-row">
             {offsets.map((o, i) => <button key={o.label} className={chip === i ? 'chip small on' : 'chip small'} onClick={() => { selRef.current = null; setChip(i) }}>{i === 0 ? `Nå (−${(o.ms / 1000).toFixed(1).replace('.', ',')} s)` : `for ${o.label} siden`}</button>)}
-            <button className="chip small" onClick={() => { analysis.moveLastMark(-bar); say('Flyttet siste merke 1 takt tidligere') }}>‹ siste merke 1 takt tidligere</button>
-            <button className="chip small" onClick={() => { analysis.moveLastMark(bar); say('Flyttet siste merke 1 takt senere') }}>1 takt senere ›</button>
+            <button className="chip small" onClick={() => say(analysis.moveLastMark(-bar) ? 'Flyttet siste merke 1 takt tidligere' : 'Ingen merke å flytte')}>‹ siste merke 1 takt tidligere</button>
+            <button className="chip small" onClick={() => say(analysis.moveLastMark(bar) ? 'Flyttet siste merke 1 takt senere' : 'Ingen merke å flytte')}>1 takt senere ›</button>
           </div>
           <div className="tr-sublabel">Dette stemmer ikke / dette er sangen</div>
           <div className="tr-row">
@@ -231,12 +327,31 @@ export function Trainer({ party, title, artist, playing, positionMs, durationMs,
           </div>
           {genreOpen && <div className="tr-row">{GENRES.map(g => <button key={g} className="chip small" onClick={() => { log('feil_sjanger', g, `Lagret: sjangeren er ${g}`); setGenreOpen(false) }}>{g}</button>)}</div>}
           <div className="tr-row tr-tools">
-            <button className="tr-btn" onClick={() => { analysis.undo(); say('Angret') }}>Angre (Z)</button>
             <button className="tr-btn" onClick={seekBack}>Spol tilbake 10 s (←)</button>
             <button className="tr-btn" onClick={next}>Neste sang</button>
           </div>
+            </>
+          )}
         </div>
       </div>
+      {prompt && analysis.enabled && (
+        <div className="tr-prompt" role="group" aria-label="Stemmer det?">
+          {held.current && <div className="tr-prompt-sub">Sangen står på pause – den fortsetter når du har svart</div>}
+          <div className="tr-prompt-q">Ny lytter sier <b style={{ color: col(prompt.part) }}>{PART_NAME[prompt.part] ?? prompt.part}</b> nå. Stemmer det?</div>
+          {!prompt.denied ? (
+            <div className="tr-row">
+              <button className="tr-btn tr-yes" onClick={confirmPrompt}>✔ Ja (mellomrom)</button>
+              <button className="tr-btn tr-no" onClick={denyPrompt}>✖ Nei (N)</button>
+              <button className="tr-btn" onClick={listenAgain}>▶ Hør igjen</button>
+            </div>
+          ) : (
+            <>
+              <div className="tr-prompt-sub">Hva er det egentlig? <button className="chip small" onClick={listenAgain}>▶ Hør igjen</button></div>
+              <div className="tr-row">{PARTS.map((p, i) => <button key={p} className="tr-btn tr-part" style={{ borderColor: PART_COL[p] }} onClick={() => apply(p)}><span className="tr-key" style={{ background: PART_COL[p] }}>{i + 1}</span> {MARK_LABEL[p]}</button>)}</div>
+            </>
+          )}
+        </div>
+      )}
       {toast && <div className="tr-toast">{toast}</div>}
       {!analysis.enabled && <div className="tr-toast tr-off">Analyse er av – slå den på for å lagre</div>}
     </div>

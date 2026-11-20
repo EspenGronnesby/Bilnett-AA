@@ -10,6 +10,8 @@ const LR = 0.03        // læringshastighet per eksempel
 const POS_WEIGHT = 3   // build-up er sjeldent: telle et ja som tre nei
 const PULL = 0.02      // drar vektene svakt tilbake mot startmodellen, så de ikke løper løpsk
 const RING = 240       // slag vi husker, så rettelser satt BAKOVER i tid også lærer lærlingen
+/** Slag trenes først når de er så gamle (ms): da har du hatt tid til å rette dem, ellers lærer den av slag du ikke har sagt noe om ennå. */
+const SETTLE_MS = 6000
 
 interface Remembered { pos: number; x: Float32Array; trained: -1 | 0 | 1 }
 
@@ -24,6 +26,8 @@ export class Apprentice {
   private mean = new Float32Array(0)
   private scale = new Float32Array(1)
   private ready = false
+  /** Fingeravtrykk av grunnmodellen: lagrede vekter fra en annen modell (ny trening på Mac) brukes ikke. */
+  private sig = ''
   private lastSlots = -1
   private lastVersion = -1
   private ring: Remembered[] = []
@@ -33,10 +37,11 @@ export class Apprentice {
     this.mean = Float32Array.from(e.modelMean)
     this.scale = Float32Array.from(e.modelScale)
     this.b0 = e.modelBias
+    this.sig = `${this.w0.length}:${Array.from(this.w0.slice(0, 6)).map(v => v.toFixed(4)).join(',')}:${this.b0.toFixed(4)}`
     this.w = Float64Array.from(this.w0); this.b = this.b0
     try {
       const s = JSON.parse(localStorage.getItem(KEY) ?? 'null')
-      if (s && Array.isArray(s.w) && s.w.length === this.w.length) { this.w = Float64Array.from(s.w); this.b = Number(s.b) || this.b0; this.updates = Number(s.updates) || 0 }
+      if (s && s.sig === this.sig && Array.isArray(s.w) && s.w.length === this.w.length) { this.w = Float64Array.from(s.w); this.b = Number(s.b) || this.b0; this.updates = Number(s.updates) || 0 }
     } catch { /* starter fra grunnmodellen */ }
     this.ready = true
   }
@@ -60,7 +65,7 @@ export class Apprentice {
   }
 
   private save() {
-    try { localStorage.setItem(KEY, JSON.stringify({ w: Array.from(this.w), b: this.b, updates: this.updates })) } catch { /* lagring er en bekvemmelighet */ }
+    try { localStorage.setItem(KEY, JSON.stringify({ sig: this.sig, w: Array.from(this.w), b: this.b, updates: this.updates })) } catch { /* lagring er en bekvemmelighet */ }
   }
 
   /** Nullstill til grunnmodellen. */
@@ -93,6 +98,7 @@ export class Apprentice {
     this.lastVersion = analysis.version
     if (!analysis.enabled) return
     for (const r of this.ring) {
+      if (r.pos > posMs - SETTLE_MS) continue
       const lab = analysis.labelAt(r.pos)
       const target = lab === null ? -1 : lab === 'BUILDUP' ? 1 : 0
       if (target !== r.trained) { if (target >= 0) this.train(r.x, target); r.trained = target }
