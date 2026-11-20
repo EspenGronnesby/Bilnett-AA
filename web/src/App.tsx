@@ -21,6 +21,8 @@ import { Clock } from './ui/Clock'
 import { ShortcutsSheet } from './ui/Shortcuts'
 import { PartyBanner, PartyControls, PartyCoverFx, PartyGrain, PartyParticles, PartyScene, PartyShaker } from './party/PartyLayers'
 import { useParty, type Party } from './party/useParty'
+import { Trainer } from './party/Trainer'
+import { useAnalysis } from './party/analysis'
 import { Koko } from './party/Koko'
 import { useZone, ZoneLinger } from './ui/useZone'
 
@@ -94,7 +96,7 @@ const DEMO: Now = {
   device: { id: 'phone', name: 'Pixel 9', type: 'Smartphone', volume: 70, supportsVolume: true },
   // Starts a minute into the song (or ?at=<seconds>) and runs in real time.
   positionMs: (() => { const t0 = performance.now(); const at = Number(new URLSearchParams(location.search).get('at') ?? 60) * 1000; return () => at + performance.now() - t0 })(),
-  controls: { toggle: noop, next: noop, previous: noop, setVolume: noop, playHere: noop, unlock: noop },
+  controls: { toggle: noop, next: noop, previous: noop, seek: noop, setVolume: noop, playHere: noop, unlock: noop },
   playerReady: true,
   raveDeviceId: null,
   playerProblem: null,
@@ -140,7 +142,9 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
     setSource: kind => updateSettings({ partySource: kind }),
     demoSound: demo,
     calm: settings.noFlash || reduceMotion,
+    trainerAuto: settings.trainerAuto, trainerReaction: settings.trainerReaction,
   })
+  const trainer = useAnalysis()
   const zoneHeight = useZoneHeight()
   const dockHeight = useDockHeight()
   // Each layout remembers its lyrics style: saved when it changes, restored when the layout changes
@@ -233,6 +237,12 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
       </div>
       </Zone>
       {keysOpen && <ShortcutsSheet onClose={() => setKeysOpen(false)} />}
+      {party.on && trainer.trainerOpen && (
+        <Trainer party={party} title={track?.title ?? ''} artist={track?.artist ?? ''} playing={status === 'playing'} positionMs={now.positionMs}
+          durationMs={track?.durationMs ?? -1} seek={now.controls.seek} next={now.controls.next}
+          reaction={settings.trainerReaction} setReaction={trainerReaction => updateSettings({ trainerReaction })}
+          onClose={() => trainer.closeTrainer()} />
+      )}
       {settingsOpen && (
         <SettingsSheet now={now} settings={settings} update={updateSettings} wide={wide}
           onClose={() => setSettingsOpen(false)} />

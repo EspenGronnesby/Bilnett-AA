@@ -47,6 +47,10 @@ export interface Settings {
   koko: boolean
   /** Calm Party: no strobe or white flashes (ring, particles and shake stay). */
   noFlash: boolean
+  /** «AI-trener» åpnes av seg selv når Analyse slås på. */
+  trainerAuto: boolean
+  /** Sekunder før knappetrykket en del regnes å ha startet (reaksjonstid), 0–3. */
+  trainerReaction: number
   /** Size of the lyrics text in % (80–150); the buttons under the lyrics keep their size. */
   lyricsScale: number
   /** How dark the background behind the text is, 0–100 (50 = the original look). */
@@ -74,7 +78,7 @@ const KEY = 'rave.settings'
 export const DEFAULTS: Settings = {
   portraitLayoutVersion: 1, portraitLayout: 'poster', landscapeLayout: 'standard', orientation: 'auto', keepAwake: true, autoHide: true, autoFullscreen: false, volume: 80, player: true,
   showLyrics: true, lyricsStyle: 'scroll', lyricsGlass: true, lyricsOffsets: {}, videoOn: true,
-  party: false, partySource: 'system', partyStrength: {}, koko: false, noFlash: false, lyricsScale: 100, dim: 50, hideAfter: 3, clean: false, clock: false, lyricsStyleByLayout: {},
+  party: false, partySource: 'system', partyStrength: {}, koko: false, noFlash: false, trainerAuto: true, trainerReaction: 1, lyricsScale: 100, dim: 50, hideAfter: 3, clean: false, clock: false, lyricsStyleByLayout: {},
 }
 
 function read(): Settings {

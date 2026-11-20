@@ -268,15 +268,15 @@ function AnalysisPanel() {
   const [, redraw] = useState(0)
   const [busy, setBusy] = useState(false)
   useEffect(() => {
-    analysis.onChange = () => redraw(n => n + 1)
     void analysis.refreshCount()
-    return () => { analysis.onChange = () => {} }
+    return analysis.subscribe(() => redraw(n => n + 1))
   }, [])
   const on = analysis.enabled
   return (
     <div className="analysis">
       <button className={on ? 'chip small on' : 'chip small'} onClick={() => analysis.setEnabled(!on)}
         title="Tar opp lyden og lar deg merke sangdelene. Lagres i nettleseren til du eksporterer.">Analyse {on ? 'på' : 'av'}</button>
+      {on && <button className={analysis.trainerOpen ? 'chip small on' : 'chip small'} onClick={() => analysis.trainerOpen ? analysis.closeTrainer() : analysis.openTrainer()}>AI-trener</button>}
       {on && (Object.keys(MARK_LABEL) as MarkPart[]).map(p =>
         <button key={p} className={analysis.mark === p ? 'chip small on' : 'chip small'} onClick={() => analysis.setMark(p)}>{MARK_LABEL[p]}</button>)}
       {on && <button className={analysis.dirName ? 'chip small on' : 'chip small'} onClick={() => void analysis.pickDir()}

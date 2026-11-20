@@ -6,6 +6,8 @@ const KEYS: [string[], string][] = [
   [['Esc'], 'Avslutt ren visning eller lukk vindu'],
   [['←', '→'], 'Bytt tekststil'],
   [['?'], 'Vis hurtigtastene'],
+  [['1', '2', '3', '4', '5'], 'AI-trener: Intro, Build-up, Drop, Breakdown, Outro'],
+  [['Z', 'B'], 'AI-trener: angre, «bra»'],
 ]
 
 /** The keyboard shortcuts as rows in a card (used in the «?» window and in the settings). */
