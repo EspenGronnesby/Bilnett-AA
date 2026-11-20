@@ -56,6 +56,10 @@ class SongListener {
     var pBuildModel = 0f; private set
     var pBuildModelRaw = 0f; private set
     private val modelHistory = ArrayList<FloatArray>(); private val modelProbs = ArrayList<Float>()
+    /** Råverdier for siste slag: sub-, høyde- og nærværs-nivå i dB, antall kick og snare (til offline-analyse og rettings-verktøyet). */
+    val levels = FloatArray(5)
+    /** Lengden på et slag akkurat nå (ms). */
+    val slotLengthMs get() = slotMs
     /** Antall slag lukket så langt (for å vite når [features] er ferske). */
     val slots get() = sub.size
     val effectsAllowed get() = part == SongPart.DROP
@@ -142,6 +146,7 @@ class SongListener {
         sub.add(db(sumSub / n)); air.add(db(sumAir / n)); pres.add(db(sumPres / n))
         noise.add(sumNoise / n); cent.add(sumCent / n); kicks.add(nKicks); snares.add(nSnares)
         val c = sub.size
+        levels[0] = sub[c - 1]; levels[1] = air[c - 1]; levels[2] = pres[c - 1]; levels[3] = nKicks.toFloat(); levels[4] = nSnares.toFloat()
         partSince++
         if (c < WARMUP_SLOTS) { setPart(SongPart.INTRO, pos, now, dur); return }
         // Etter pause/hopp trengs nok sammenhengende slag til «nå» og «rett før» før vi uttaler oss igjen.

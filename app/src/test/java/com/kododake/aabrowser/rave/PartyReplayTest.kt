@@ -669,6 +669,44 @@ class PartyReplayTest {
         File(raw.parentFile, "listener-features.csv").writeText(sb.toString())
     }
 
+    /**
+     * Målinger per slag for ALLE opptak (også de uten fasit) → slots-all.csv. Brukes av læreren (teacher.py),
+     * rettings-verktøyet (review.py) og modelltreningen. `truth` er tom når Espen ikke har merket sangen.
+     */
+    @Test fun exportAllSlots() {
+        assumeTrue("ingen opptak på denne maskinen", File(raw, "fft").isDirectory)
+        val csvs = raw.listFiles { f -> f.name.endsWith(".csv") && f.name != "feedback.csv" }?.toList().orEmpty()
+        val sb = StringBuilder("song,title,pos_ms,slot_ms,truth,old,p_model_raw,subDb,airDb,presDb,kicks,snares," +
+            LISTENER_FEATURES.joinToString(",") + "," + (0 until 12).joinToString(",") { "b$it" } + "\n")
+        val fftFiles = File(raw, "fft").listFiles { f -> f.name.endsWith(".fft.gz") }.orEmpty().sortedBy { it.name }
+        for (fft in fftFiles) {
+            val fs = frames(fft); if (fs.size < 200) continue
+            val csv = csvFor(fft, csvs)
+            val key = csv?.let { cleanKey(truth(it), it) }.orEmpty()
+            val title = csv?.useLines { it.firstOrNull() }.orEmpty().removePrefix("# ").ifBlank { fft.name.drop(16).substringBefore(".") }
+            val audio = HardstyleAudio()
+            val ln = SongListener(); val old = HardstyleStructure()
+            var slots = 0; val bandSum = FloatArray(12); var nb = 0
+            for ((i, f) in fs.withIndex()) {
+                val fr = audio.accept(f.fft, f.rate, f.now)
+                if (i == 0) { ln.newTrack(f.now); old.newTrack(f.now) }
+                old.update(fr, f.now, f.pos, -1L); ln.update(fr, f.now, f.pos, -1L)
+                for (b in 0 until 12) bandSum[b] += (0 until 4).sumOf { fr.spectrum[b * 4 + it].toDouble() }.toFloat() / 4f
+                nb++
+                if (ln.slots > slots) {
+                    slots = ln.slots
+                    val t = key.lastOrNull { it.first <= f.pos }?.second?.takeIf { key.isNotEmpty() && f.pos >= key.first().first } ?: ""
+                    sb.append("${fft.name.take(15)}-${slug(fft.name)},\"${title.replace('"', ' ')}\",${f.pos},%.0f,$t,${norm(old.part.name)},%.4f,".format(Locale.US, ln.slotLengthMs, ln.pBuildModelRaw))
+                    sb.append(ln.levels.joinToString(",") { "%.2f".format(Locale.US, it) }).append(',')
+                    sb.append(ln.features.joinToString(",") { "%.4f".format(Locale.US, it) }).append(',')
+                    sb.append(bandSum.joinToString(",") { "%.4f".format(Locale.US, it / nb) }).append('\n')
+                    bandSum.fill(0f); nb = 0
+                }
+            }
+        }
+        File(raw.parentFile, "slots-all.csv").writeText(sb.toString())
+    }
+
     private companion object {
         /** How long after a change Espen typically presses (moved back in the cleaned key). */
         const val REACTION_MS = 600L
