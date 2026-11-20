@@ -81,6 +81,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import com.kododake.aabrowser.rave.party.TrainerTimeline
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.graphics.Brush
@@ -192,6 +194,10 @@ class RaveActivity : ComponentActivity() {
 
     /** «FEIL SJANGER» opens a row with every genre (most likely first, rejected ones last). */
     private var genrePickerOpen by mutableStateOf(false)
+    /** AI-trener (Analyse): the brains' history for the small live timeline, and «started N s ago» for the next part tap. */
+    private val trainer = TrainerTimeline()
+    private var trainerTick by mutableLongStateOf(0L)
+    private var retroBackMs by mutableLongStateOf(0L)
 
     /** The song's mood from the Mac's style teacher (null = unknown → neutral motion). */
     private var songMood: com.kododake.aabrowser.rave.party.SongMood? = null
@@ -637,6 +643,7 @@ class RaveActivity : ComponentActivity() {
             songPhase.newTrack(SystemClock.uptimeMillis())
             autoPhase.newTrack(SystemClock.uptimeMillis())
             listener.newTrack(SystemClock.uptimeMillis())
+            trainer.reset()
             loudNoDropS = 0f
             beatClock.reset(); halfClock.reset(); dip = 0f; dropHit = 0f; lastPart = SongPart.INTRO; dropLook = 0
             dipStartedAt = 0L; dipSpent = false
@@ -1118,6 +1125,7 @@ class RaveActivity : ComponentActivity() {
                     if (playing && fresh) {
                         autoPhase.update(rawTarget, nowMs, positionMs(), if (songDurationMs > 0L) songDurationMs else -1L)
                         listener.update(rawTarget, nowMs, positionMs(), if (songDurationMs > 0L) songDurationMs else -1L)
+                        trainer.feed(listener, autoPhase.part, positionMs())
                     }
                     if (autoShownPart != autoPhase.part) autoShownPart = autoPhase.part
                     // Remembered corrections for this song: switch when playback passes one (a little
@@ -1137,7 +1145,7 @@ class RaveActivity : ComponentActivity() {
                     if (shownPart != songPhase.part) shownPart = songPhase.part
                     partLabelAt = songPhase.labelAt
                     // HUD: only while shown, at most ~7 times a second (no needless recomposition).
-                    if (showAnalysis && hardstyleOn && nowMs - lastHudAt >= 150L) { hudData = songPhase.hud; lastHudAt = nowMs }
+                    if (showAnalysis && hardstyleOn && nowMs - lastHudAt >= 150L) { hudData = songPhase.hud; trainerTick = nowMs; lastHudAt = nowMs }
                     if (playing && fresh && hardW > 0f) { hardSub = hardSubDetector.update(rawTarget, nowMs); subChangedAt = hardSubDetector.changedAt }
                     // How much the song structure holds the effects back: full from EDM up, but live
                     // drums (rock) don't build to drops, so rockness lets go of it at the top.
@@ -2256,9 +2264,13 @@ class RaveActivity : ComponentActivity() {
         val fake = songPhase.force(next, SystemClock.uptimeMillis(), "Espen")
         shownPart = songPhase.part
         val pos = positionMs()
-        analysisLog.mark("rett_${next.name.lowercase()}")
+        // «Startet for N s siden» (AI-trener): the part began earlier than the tap. One-shot.
+        val back = retroBackMs; retroBackMs = 0L
+        val from = if (back > 0L && pos >= 0L) (pos - back).coerceAtLeast(0L) else pos
+        analysisLog.mark("rett_${next.name.lowercase()}", atPosMs = from)
+        if (back > 0L && pos >= 0L) analysisLog.relabel(next.name, from, pos)
         if (fake) analysisLog.mark("fake_drop")
-        if (songKey.isNotBlank()) { songMarks.add(songKey, pos, next.name); marksForSong = songMarks.marks(songKey) }
+        if (songKey.isNotBlank()) { songMarks.add(songKey, from, next.name); marksForSong = songMarks.marks(songKey) }
     }
 
     /**
@@ -2276,8 +2288,8 @@ class RaveActivity : ComponentActivity() {
             if (feedbackAt > 0L) { kotlinx.coroutines.delay(1500L); feedbackShown = null }
         }
         @Composable
-        fun button(label: String, on: Boolean, onClick: () -> String?) = Box(
-            Modifier.height(46.u).widthIn(min = 112.u).clip(RoundedCornerShape(50))
+        fun button(label: String, on: Boolean, minW: Dp = 112.u, onClick: () -> String?) = Box(
+            Modifier.height(46.u).widthIn(min = minW).clip(RoundedCornerShape(50))
                 .background(if (on) Color(0xFFF5F2EC) else Color(0x33FFFFFF))
                 .clickable { feedbackShown = onClick() ?: "Lagret: $label"; feedbackAt = SystemClock.uptimeMillis() }
                 .padding(horizontal = 14.u),
@@ -2327,6 +2339,18 @@ class RaveActivity : ComponentActivity() {
             }
             // While the play buttons show at the bottom, the feelings rows would cover them.
             if (compact) return@Column
+            Text("Startet for … (gjelder neste trykk)", color = dim, fontSize = 12.us)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.u)) {
+                listOf(0L to "NÅ", 2000L to "2 s", 4000L to "4 s", 8000L to "8 s").forEach { (ms, label) ->
+                    button(label, retroBackMs == ms, minW = 62.u) { retroBackMs = ms; if (ms == 0L) "Fra nå" else "Neste del-trykk: fra $label siden" }
+                }
+            }
+            Text("Si fra", color = dim, fontSize = 12.us)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.u)) {
+                button("STEMMER IKKE", false) { analysisLog.mark("feil_na"); "Lagret: stemmer ikke nå" }
+                button("FAKE DROP", false) { analysisLog.mark("fake_drop"); correctPart(SongPart.BUILDUP); null }
+            }
+            button("INGEN DROP I SANGEN", false) { analysisLog.mark("ingen_drop"); null }
             Text("Følelse", color = dim, fontSize = 12.us)
             feelings.chunked(2).forEach { row ->
                 Row(horizontalArrangement = Arrangement.spacedBy(6.u)) {
@@ -2381,8 +2405,49 @@ class RaveActivity : ComponentActivity() {
             meter("Rock", rockness, "%.0f %%".format(rockness * 100f))
             Text("takt-klokke ${if (beatClock.active) "på" else "av"} · look ${dropLook + 1} · blink/s $flashesNow${if (dip > .05f) " · pust inn" else ""}",
                 color = dim, fontSize = 11.us, maxLines = 1)
+            AiTrainerBlock(dim)
             SongInfoBlock(h.bpm, dim)
         }
+    }
+
+    /** «AI-trener»: what each brain thinks right now, and a small live timeline of the last 90 seconds. */
+    @Composable
+    private fun AiTrainerBlock(dim: Color) {
+        val tick = trainerTick // recompose / redraw a few times a second (the listener's fields are not Compose state)
+        Spacer(Modifier.height(6.u))
+        Text("AI-trener${if (tick > 0L) "" else ""}", color = Color(0xFF5AD68A), fontSize = 12.us, fontWeight = FontWeight.SemiBold)
+        Text("Gammel: ${autoPhase.part.label} · Ny: ${listener.part.label}", color = dim, fontSize = 11.us, maxLines = 1)
+        Text("fylde ${(listener.level * 100).toInt()} % · drop ${(listener.pDrop * 100).toInt()} %", color = dim, fontSize = 11.us, maxLines = 1)
+        val pm = listener.pBuildModel
+        Text("Modell: build-up ${(pm * 100).toInt()} %${if (pm >= .8f) " → sier build-up" else ""}", color = dim, fontSize = 11.us, maxLines = 1)
+        val partColor = { p: SongPart -> when (p) {
+            SongPart.INTRO -> Color(0xFF6AA5FF); SongPart.BUILDUP -> Color(0xFFFFB347); SongPart.DROP -> Color(0xFFFF4D6D)
+            SongPart.OUTRO -> Color(0xFF7A7690); else -> Color(0xFF8E7CFF) } }
+        Canvas(Modifier.fillMaxWidth().height(84.u).padding(top = 4.u)) {
+            @Suppress("UNUSED_EXPRESSION") tick
+            val now = positionMs()
+            val win = 90_000f
+            val pts = trainer.points
+            if (now < 0L || pts.isEmpty()) return@Canvas
+            val w = size.width; val h = size.height
+            val laneH = 9.dp.toPx(); val curveH = h - 2 * laneH - 6.dp.toPx()
+            fun x(pos: Long) = w * (1f - (now - pos) / win)
+            fun y(v: Float) = curveH - (v.coerceIn(-.2f, 1.2f) + .2f) / 1.4f * curveH
+            var prev: TrainerTimeline.Pt? = null
+            for (p in pts) {
+                val a = prev
+                if (a != null && p.pos - a.pos < 3000L) {
+                    drawLine(Color(0xFF4AA3FF), Offset(x(a.pos), y(a.sub)), Offset(x(p.pos), y(p.sub)), strokeWidth = 1.5.dp.toPx())
+                    drawLine(Color.White, Offset(x(a.pos), y(a.pModel)), Offset(x(p.pos), y(p.pModel)), strokeWidth = 1.5.dp.toPx())
+                    val x0 = x(a.pos).coerceAtLeast(0f); val x1 = x(p.pos)
+                    drawRect(partColor(p.old), Offset(x0, curveH + 3.dp.toPx()), Size((x1 - x0).coerceAtLeast(1f), laneH))
+                    drawRect(partColor(p.listener), Offset(x0, curveH + 3.dp.toPx() + laneH + 1.dp.toPx()), Size((x1 - x0).coerceAtLeast(1f), laneH))
+                }
+                prev = p
+            }
+            drawLine(Color.White, Offset(w - 1f, 0f), Offset(w - 1f, h), strokeWidth = 1.dp.toPx())
+        }
+        Text("blå: sub · hvit: build-up-modell · felt: gammel / ny", color = dim, fontSize = 10.us, maxLines = 1)
     }
 
     /**

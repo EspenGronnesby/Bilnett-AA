@@ -129,6 +129,15 @@ Løype: `sync.py --web` → `exportAllSlots` → `teacher.py --write` → `revie
 6–11 sanger (AUC 0,7; boosting/MLP 0,45–0,7); spektrum-målinger hjalp på drop-musikk (0,82) men skadet på alle sanger; lærerens svake merker ga ingen sikker gevinst.
 **Ingen modell velges av dette: for lite data (6 unike drop-sanger, ~15 build-ups).** Neste reelle steg er flere menneskemerkede sanger (ca. 25–30), ikke flere modeller.
 
+**AI-trener (2026-11-20).** Når Analyse slås på åpnes en egen visning («Trener AI-en») på nettsiden (`web/src/party/Trainer.tsx`, motor-getters i
+`WebPartyEngine`, historikk i `timeline.ts`): kort for gammel hjerne, ny lytter og build-up-modell (med «Riktig/Feil»), live tidslinje (siste 2 min; dra for å velge
+tidsrom, klikk for «fra her»), forklaring («slik tenker den nå», modellens tre viktigste grunner) og mange valg (deler 1–5, «startet for 2/4/8 s / 1–4 takter siden»,
+flytt siste merke, stemmer ikke, fake drop, ingen drop, ikke drop-musikk, bra/for mye/for lite/feil sjanger, angre, spol tilbake 10 s). `analysis.ts` bygger CSV
+først ved lagring: merker kan settes bakover i tid, filen får `# kilde: review`, kolonnene `new_part,p_model`, og `<navn>.events.csv`. «Min lærling»
+(`trainerModel.ts`) er en liten kopi av build-up-modellen som justerer seg av rettelsene dine i nettleseren (viser AT den lærer, ikke at den er bedre; nullstill-knapp).
+Appen (Analyse-modus): AI-blokk i `AnalysisHud` (hjerner + live tidslinje, `TrainerTimeline.kt`), «Startet for …»-knapper, «Stemmer ikke», «Fake drop», «Ingen drop»;
+bakover-merker skrives som `# RELABEL <fra_s> <til_s> <DEL>` i sang-CSV (`AnalysisLog.relabel`) og leses av `PartyReplayTest.truth()` (uten reaksjonstid).
+
 Gammel plan for trening:
 
 1. Hent loggene og lydopptakene (sync).

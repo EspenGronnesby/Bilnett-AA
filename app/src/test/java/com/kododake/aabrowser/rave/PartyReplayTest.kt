@@ -1,6 +1,7 @@
 package com.kododake.aabrowser.rave
 
 import org.junit.Assume.assumeTrue
+import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.io.DataInputStream
 import java.io.EOFException
@@ -35,11 +36,22 @@ class PartyReplayTest {
         val head = lines.first().split(",")
         val iPos = head.indexOf("pos_s"); val iPart = head.indexOf("part"); val iBy = head.indexOf("part_by")
         if (iPos < 0 || iPart < 0 || iBy < 0) return emptyList()
-        return lines.drop(1).mapNotNull { l ->
+        val base = lines.drop(1).mapNotNull { l ->
             val c = l.split(",")
             if (c.size <= iBy || (c[iBy] != "espen" && c[iBy] != "review")) null
             else c[iPos].toFloatOrNull()?.let { (it * 1000).toLong() to norm(c[iPart]) }
         }
+        // «Startet for N s siden» (AI-treneren i appen): fra–til er delen satt om, resten av nøkkelen beholdes.
+        var key = base
+        for ((from, to, part) in relabels(csv)) key = (key.filter { it.first < from || it.first > to } + (from to part)).sortedBy { it.first }
+        return key
+    }
+
+    /** `# RELABEL <fra_s> <til_s> <DEL>`-linjer i sang-CSV (AnalysisLog.relabel): (fra ms, til ms, del). */
+    private fun relabels(csv: File): List<Triple<Long, Long, String>> = csv.readLines().filter { it.startsWith("# RELABEL ") }.mapNotNull { l ->
+        val p = l.removePrefix("# RELABEL ").trim().split(" ")
+        if (p.size < 3) null
+        else p[0].toFloatOrNull()?.let { a -> p[1].toFloatOrNull()?.let { b -> Triple((a * 1000).toLong(), (b * 1000).toLong(), norm(p[2])) } }
     }
 
     /** Espen's «it is X now» presses per song CSV (song position ms), from feedback.csv. */
@@ -74,9 +86,10 @@ class PartyReplayTest {
             if (first != null) k = k.filter { it.first >= first - REACTION_MS }
         }
         val out = ArrayList<Pair<Long, String>>(k.size)
+        val exact = relabels(csv).map { it.first }.toSet() // satt bakover med riktig tid: ingen reaksjonstid å trekke fra
         for ((i, e) in k.withIndex()) {
             val changed = i > 0 && e.second != k[i - 1].second
-            val pos = if (changed) maxOf(e.first - REACTION_MS, out.last().first + 1) else e.first
+            val pos = if (changed && e.first !in exact) maxOf(e.first - REACTION_MS, out.last().first + 1) else e.first
             out.add(pos to e.second)
         }
         return out
@@ -707,6 +720,22 @@ class PartyReplayTest {
             }
         }
         File(raw.parentFile, "slots-all.csv").writeText(sb.toString())
+    }
+
+    /** `# RELABEL` (bakover-merke fra appens AI-trener) bytter ut delen mellom fra og til, og trekkes ikke fra reaksjonstid. */
+    @Test fun relabelIsApplied() {
+        val f = File.createTempFile("relabel", ".csv")
+        try {
+            f.writeText("# A – B\npos_s,part,part_by\n" + (0..20).joinToString("\n") { "$it.0,${if (it < 10) "INTRO" else "DROP"},espen" } +
+                "\n# RELABEL 6.0 12.0 BUILDUP\n")
+            val key = truth(f)
+            assertEquals("BUILDUP", key.last { it.first <= 8_000L }.second)   // 6–12 s er nå build-up
+            assertEquals("BUILDUP", key.last { it.first <= 12_000L }.second)
+            assertEquals("DROP", key.last { it.first <= 14_000L }.second)      // etter «til» gjelder det som var
+            assertEquals("INTRO", key.last { it.first <= 5_000L }.second)      // før «fra» er uendret
+            val clean = cleanKey(key, f)
+            assertEquals(6_000L, clean.first { it.second == "BUILDUP" }.first) // ingen 600 ms-forskyvning på bakover-merket
+        } finally { f.delete() }
     }
 
     private companion object {
