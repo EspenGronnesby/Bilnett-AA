@@ -116,6 +116,14 @@ sang dit av seg selv, uten å trykke noe, så en spilleliste kan gå alene. `syn
 (også uten telefon: `python3 tools/party-analyse/sync.py --web`), hopper over sanger vi allerede har (samme tittel og lengde).
 Mappevalget er ikke testet i en ekte nettleser (kan ikke automatiseres); hentingen i `sync.py` er testet med falske filer.
 
+**Læreren og rettings-verktøyet (2026-11-20).** `teacher.py` ser hele sangen i etterkant (offline, selvrelativ: Foote-novelty + fylde = svakeste av sub og lys
+klang + frasenett) og gir forslag; `teacher.py --eval` måler mot fasit (`teacher.txt`). Første måling på de 9 drop-sangene: færre falske drops (0,6 mot 1,6/min)
+og 4/14 build-ups (gammel 2/14), men dårligere på drop-tidspunkt (±3 s: 4/12 mot 10/12) → forslag, ikke fasit. Målt: Espens trykk kommer i snitt ca. 1,6 s
+(kvartiler 0,8–2,8 s) etter lærerens drop-start, mer enn testens antatte 0,6 s; «innen én takt» kan derfor ikke måles skarpere enn menneskets timing.
+`review.py` lager `review.html` (kurver + gammel/lærer/Din, sortert etter uenighet; 1–5 setter del, A godtar læreren, Lagre → `corrections.json`);
+`review_apply.py` gjør det til fasit (`part_by=review`, `# kilde: review`, original i `raw/pre-review/`). `PartyReplayTest.truth()` leser `review` og trekker ikke fra
+reaksjonstid for slike filer. Løypen: `sync.py --web` → `exportAllSlots` → `teacher.py --write` → `review.py --open` → rett → `review_apply.py`.
+
 Gammel plan for trening:
 
 1. Hent loggene og lydopptakene (sync).

@@ -37,7 +37,7 @@ class PartyReplayTest {
         if (iPos < 0 || iPart < 0 || iBy < 0) return emptyList()
         return lines.drop(1).mapNotNull { l ->
             val c = l.split(",")
-            if (c.size <= iBy || c[iBy] != "espen") null
+            if (c.size <= iBy || (c[iBy] != "espen" && c[iBy] != "review")) null
             else c[iPos].toFloatOrNull()?.let { (it * 1000).toLong() to norm(c[iPart]) }
         }
     }
@@ -65,6 +65,8 @@ class PartyReplayTest {
      */
     private fun cleanKey(key: List<Pair<Long, String>>, csv: File): List<Pair<Long, String>> {
         if (key.isEmpty()) return key
+        // Rettet i rettings-verktøyet mot kurvene (ikke trykket live): ingen reaksjonstid å trekke fra.
+        if (csv.useLines { l -> l.take(3).any { it.startsWith("# kilde: review") } }) return key
         var k = key
         if (k.first().first > MID_SONG_START_MS) {
             val first = presses[csv.name]?.firstOrNull { it >= k.first().first - REACTION_MS }
