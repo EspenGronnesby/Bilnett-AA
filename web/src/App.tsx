@@ -286,7 +286,6 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
   const partyControls = party.on && (
     <div className="hideable dock-party">
       <PartyControls party={party} strength={settings.partyStrength[party.engine.genre]}
-        koko={settings.koko} setKoko={koko => updateSettings({ koko })}
         setStrength={v => {
           const next = { ...settings.partyStrength }
           if (v === undefined) delete next[party.engine.genre]; else next[party.engine.genre] = v

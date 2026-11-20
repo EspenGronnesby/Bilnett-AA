@@ -221,6 +221,8 @@ function Look({ settings, update }: Pick<Props, 'settings' | 'update'>) {
         <Toggle label="Vis klokke øverst til venstre" on={settings.clock} onChange={clock => update({ clock })} />
         <div className="divider" />
         <Toggle label="Ingen blinking i Party (strobe og lysglimt av)" on={settings.noFlash} onChange={noFlash => update({ noFlash })} />
+        <div className="divider" />
+        <Toggle label="Koko, det dansende spøkelset i Party" on={settings.koko} onChange={koko => update({ koko })} />
       </div>
     </section>
   )

@@ -160,6 +160,10 @@ bevegelse); ingen `will-change`/blur på kort; bevegelse via tokens (120/180/250
 Profil-revisjon (automatisk, i nettleseren, 67 stilregler for AI-treneren): 0× `transition: all`, 0× `will-change`, 0× `scale(0)`, 0× `backdrop-filter`, alle `:hover` i `@media (hover: hover)`,
 0 bokstavelige farger i regler (alt via tokens), 0 transisjoner på width/height/margin/top/left, 0 bokstavelig easing, 0 emoji, ingen animasjon på coveret, redusert bevegelse = bare opacity-fade, knapper ≥ 28 px.
 
+**Party-skjermen ryddet (2026-11-20, siden AI-treneren viser det).** Ingen tekst midt på skjermen om sangdel eller sjanger (bare «PARTY ON / OFF»), i appen og på nettsiden. Nettsiden: dock har bare lydkilde,
+styrke, tilkoblingsstatus (kun når noe er galt) og «Analyse på/av» + «AI-trener»; delknappene, sjanger-prikken og Koko-knappen er borte (Koko ligger i Innstillinger → Utseende). Appen: Analyse-panelet viser bare AI-blokken
+(hjerner + live tidslinje), uten Sub-bass/Diskant/Zaag-målere, sang-info (`SongInfoBlock` slettet) og «Nå er det …»-overskriften.
+
 Gammel plan for trening:
 
 1. Hent loggene og lydopptakene (sync).

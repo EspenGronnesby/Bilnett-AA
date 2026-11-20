@@ -210,7 +210,6 @@ class RaveActivity : ComponentActivity() {
     private var subChangedAt by mutableLongStateOf(0L)
     private var lastStrobeAt = 0L
     /** Live analysis panel (HUD): what the structure engine sees right now. */
-    private var hudData by mutableStateOf(StructureHud())
     private var showAnalysis by mutableStateOf(true)
     /** Koko the ghost dancing in a corner now and then (Party). Off until Espen wants him. */
     private var showKoko by mutableStateOf(false)
@@ -1114,7 +1113,7 @@ class RaveActivity : ComponentActivity() {
                     if (shownPart != songPhase.part) shownPart = songPhase.part
                     partLabelAt = songPhase.labelAt
                     // HUD: only while shown, at most ~7 times a second (no needless recomposition).
-                    if (showAnalysis && hardstyleOn && nowMs - lastHudAt >= 150L) { hudData = songPhase.hud; trainerTick = nowMs; lastHudAt = nowMs }
+                    if (showAnalysis && hardstyleOn && nowMs - lastHudAt >= 150L) { trainerTick = nowMs; lastHudAt = nowMs }
                     if (playing && fresh && hardW > 0f) { hardSub = hardSubDetector.update(rawTarget, nowMs); subChangedAt = hardSubDetector.changedAt }
                     // How much the song structure holds the effects back: full from EDM up, but live
                     // drums (rock) don't build to drops, so rockness lets go of it at the top.
@@ -2130,48 +2129,6 @@ class RaveActivity : ComponentActivity() {
     }
 
     /**
-     * «Sang»: everything the app knows about the song — beat tempo (Deezer, else measured), how fast
-     * the vocals/rap go (syllables per second and per beat), where the lyrics timing came from.
-     */
-    @Composable
-    private fun SongInfoBlock(measuredBpm: Float, dim: Color) {
-        val f = songFacts
-        val deezerBpm = f?.bpm ?: 0f
-        val bpm = if (deezerBpm > 0f) deezerBpm else measuredBpm
-        Spacer(Modifier.height(6.u))
-        Text("Sang", color = Color(0xFFF5F2EC), fontSize = 14.us, fontWeight = FontWeight.SemiBold, maxLines = 1)
-        Text(if (bpm > 0f) "Beat %.0f BPM (%s)".format(bpm, if (deezerBpm > 0f) "Deezer" else "målt") else "Beat: ukjent",
-            color = dim, fontSize = 11.us, maxLines = 1)
-        fun flow(perBeat: Float) = when {
-            perBeat < 1.5f -> "4-dels"
-            perBeat < 2.5f -> "8-dels"
-            perBeat < 3.5f -> "triol"
-            else -> "16-dels"
-        }
-        if (vocalSylPerSec > 0f) {
-            val perBeat = if (bpm > 0f) vocalSylPerSec * 60f / bpm else 0f
-            // With guessed word timing the speed is the app's own estimate, not measured — say so.
-            val est = if (lyricsTiming == LyricsTiming.GUESSED) " (gjettet)" else ""
-            Text("Vokal %.1f stav/s".format(vocalSylPerSec) + est + (if (perBeat > 0f) " · %.1f per slag (%s flow)".format(perBeat, flow(perBeat)) else ""),
-                color = dim, fontSize = 11.us, maxLines = 1)
-            // The line being sung right now (rap verses are much faster than a chorus).
-            val now = pos - lyricsOffsetMs
-            lyrics.lastOrNull { it.words.isNotEmpty() && it.startMs <= now && now <= it.endMs + 300L }?.let { line ->
-                val r = LyricsSource.sylPerSec(line)
-                if (r > 0f) Text("Linja nå %.1f stav/s".format(r) + (if (bpm > 0f) " · %.1f per slag".format(r * 60f / bpm) else ""),
-                    color = dim, fontSize = 11.us, maxLines = 1)
-            }
-        }
-        lyricsTiming?.let { Text("Tekst: ${it.label}", color = dim, fontSize = 11.us, maxLines = 1) }
-        val extra = listOfNotNull(
-            songGenre.takeIf { it.isNotBlank() },
-            f?.gainDb?.let { "%.1f dB".format(it) },
-            f?.releaseDate?.take(4)?.takeIf { it.isNotBlank() && it != "0000" }
-        )
-        if (extra.isNotEmpty()) Text(extra.joinToString(" · "), color = dim, fontSize = 11.us, maxLines = 1)
-    }
-
-    /**
      * The genre list: the song playing now and the last songs, each with its genre and why
      * (Apple, Deezer, the sound, or «du»). Tap a song to set its genre by hand:
      * AUTO → POP → RAP → ROCK → EDM → HARDSTYLE → ROLIG → REGGAE → REGGAETON → AUTO. Used from the first second next time.
@@ -2289,7 +2246,6 @@ class RaveActivity : ComponentActivity() {
                 }
                 return@Column
             }
-            Text("Nå er det …  (appen tror: ${autoShownPart.label})", color = dim, fontSize = 12.us)
             parts.chunked(2).forEach { row ->
                 Row(horizontalArrangement = Arrangement.spacedBy(6.u)) {
                     row.forEach { (label, part) ->
@@ -2336,44 +2292,15 @@ class RaveActivity : ComponentActivity() {
         }
     }
 
+    /** Analyse-modus: bare AI-blokken (hva hjernene tror + live tidslinje). De tekniske målerne er tatt bort (Espen 2026-11-20). */
     @Composable
     private fun AnalysisHud(modifier: Modifier) {
-        val h = hudData
         val dim = Color(0xB3F5F2EC)
         Column(
             modifier.widthIn(max = 260.u).clip(RoundedCornerShape(14.u))
                 .background(Color.Black.copy(alpha = .55f)).padding(horizontal = 12.u, vertical = 10.u)
         ) {
-            Text(h.part, color = Color(0xFFF5F2EC), fontSize = 18.us, fontWeight = FontWeight.SemiBold, maxLines = 1)
-            Text("${genreLabel()} · styrke ${(strength * 100).toInt()} %% · %.0f BPM".format(h.bpm),
-                color = dim, fontSize = 12.us, maxLines = 1)
-            Text("Lyd: ${if (micMode) (micSource?.deviceName ?: "mikrofon") else "telefonens lyd"}", color = dim, fontSize = 12.us, maxLines = 1)
-            Text("takt ${h.barInPhrase}/8 · frase ${h.phrase} · ${if (h.ready) "klar for drop" else "ikke klar"}",
-                color = dim, fontSize = 12.us, maxLines = 1)
-            Spacer(Modifier.height(6.u))
-            @Composable
-            fun meter(name: String, value: Float, text: String) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(name, color = dim, fontSize = 11.us, modifier = Modifier.width(62.u), maxLines = 1)
-                    Box(Modifier.width(110.u).height(6.u).clip(RoundedCornerShape(3.u)).background(Color(0x22FFFFFF))) {
-                        Box(Modifier.fillMaxHeight().fillMaxWidth(value.coerceIn(0f, 1f)).clip(RoundedCornerShape(3.u))
-                            .background(Color(0xFFF5F2EC)))
-                    }
-                    Spacer(Modifier.width(6.u))
-                    Text(text, color = dim, fontSize = 11.us, maxLines = 1)
-                }
-                Spacer(Modifier.height(3.u))
-            }
-            meter("Sub-bass", (h.subRelDb + 12f) / 24f, "%+.0f dB".format(h.subRelDb))
-            meter("Diskant", (h.airTrendDb + 6f) / 12f, "%+.0f dB".format(h.airTrendDb))
-            meter("Build-up", h.build, "%.0f %%".format(h.build * 100f))
-            meter("Zaag/grit", h.grit / .6f, "%.2f".format(h.grit))
-            meter("Screech", h.screech, "%.2f".format(h.screech))
-            meter("Rock", rockness, "%.0f %%".format(rockness * 100f))
-            Text("takt-klokke ${if (beatClock.active) "på" else "av"} · look ${dropLook + 1} · blink/s $flashesNow${if (dip > .05f) " · pust inn" else ""}",
-                color = dim, fontSize = 11.us, maxLines = 1)
             AiTrainerBlock(dim)
-            SongInfoBlock(h.bpm, dim)
         }
     }
 
@@ -2382,7 +2309,7 @@ class RaveActivity : ComponentActivity() {
     private fun AiTrainerBlock(dim: Color) {
         val tick = trainerTick // recompose / redraw a few times a second (the listener's fields are not Compose state)
         Spacer(Modifier.height(6.u))
-        Text("AI-trener${if (tick > 0L) "" else ""}", color = Color(0xFF5AD68A), fontSize = 12.us, fontWeight = FontWeight.SemiBold)
+        Text("AI-trener${if (tick > 0L) "" else ""}", color = Color(0xFFF5F2EC), fontSize = 14.us, fontWeight = FontWeight.SemiBold)
         Text("Gammel: ${autoPhase.part.label} · Ny: ${listener.part.label}", color = dim, fontSize = 11.us, maxLines = 1)
         Text("fylde ${(listener.level * 100).toInt()} % · drop ${(listener.pDrop * 100).toInt()} %", color = dim, fontSize = 11.us, maxLines = 1)
         val pm = listener.pBuildModel

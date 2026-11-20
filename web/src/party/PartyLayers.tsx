@@ -1,4 +1,4 @@
-import { analysis, MARK_LABEL, type MarkPart } from './analysis'
+import { analysis } from './analysis'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Rgb } from '../ui/colors'
 import { SOURCE_LABEL, type PartySource } from './audio'
@@ -215,12 +215,10 @@ export function PartyBanner({ party }: { party: Party }) {
 }
 
 /** Where Party listens, and the vibe slider (Auto or a fixed strength per genre, as in the app). */
-export function PartyControls({ party, strength, setStrength, koko, setKoko }: {
+export function PartyControls({ party, strength, setStrength }: {
   party: Party
   strength: number | undefined
   setStrength: (value: number | undefined) => void
-  koko: boolean
-  setKoko: (on: boolean) => void
 }) {
   const [, redraw] = useState(0)
   // The genre label and live level change with the music: refresh the row a few times a second.
@@ -230,22 +228,23 @@ export function PartyControls({ party, strength, setStrength, koko, setKoko }: {
   }, [])
   const e = party.engine
   const shown = strength ?? e.vibeLive
+  // Tilkoblingen vises bare når noe er galt (ikke ved «Mottar lyd» eller pause).
+  const status = party.connecting ? 'Kobler til …' : party.listening ? (party.paused ? 'Pause' : party.listening.status()) : 'Ikke tilkoblet'
+  const connection = status === 'Mottar lyd' || status === 'Pause' ? '' : status
   return (
     <div className="party-controls">
       <div className="mode-buttons">
         <div data-audio-choice>
           {(['system', 'tab', 'mic'] as PartySource[]).map(source => <button key={source} className={party.listening?.source === source ? 'chip on' : 'chip'} onClick={() => party.listenTo(source)}>{SOURCE_LABEL[source]}</button>)}
         </div>
-        <button className={koko ? 'chip on' : 'chip'} onClick={() => setKoko(!koko)}>Koko</button>
       </div>
-      {/* Vibe, connection and genre on one row (the name of the shared sound shows on hover). */}
+      {/* Vibe and (only when something is off) the connection (the name of the shared sound shows on hover). */}
       <div className="vibe">
         <button className={strength === undefined ? 'chip small on' : 'chip small'} onClick={() => setStrength(undefined)}>Auto</button>
         <input type="range" min={0} max={100} step={1} aria-label="Vibe-styrke"
           value={Math.round(shown * 100)}
           onChange={ev => setStrength(Number(ev.currentTarget.value) / 100)} />
-        <span className="chip info" title={party.listening?.label}>{party.connecting ? 'Kobler til …' : party.listening ? party.paused ? 'Pause' : party.listening.status() : 'Ikke tilkoblet'}</span>
-        {party.listening && e.hearing && <span className="chip info">{e.genreLabel}</span>}
+        {connection && <span className="chip info" title={party.listening?.label}>{connection}</span>}
       </div>
       {party.error && <p className="notice">{party.error}</p>}
       <AnalysisPanel />
@@ -266,8 +265,6 @@ function AnalysisPanel() {
       <button className={on ? 'chip small on' : 'chip small'} onClick={() => analysis.setEnabled(!on)}
         title="Tar opp lyden og lar deg merke sangdelene. Lagres i nettleseren til du eksporterer.">Analyse {on ? 'på' : 'av'}</button>
       {on && <button className={analysis.trainerOpen ? 'chip small on' : 'chip small'} onClick={() => analysis.trainerOpen ? analysis.closeTrainer() : analysis.openTrainer()}>AI-trener</button>}
-      {on && (Object.keys(MARK_LABEL) as MarkPart[]).map(p =>
-        <button key={p} className={analysis.mark === p ? 'chip small on' : 'chip small'} onClick={() => analysis.setMark(p)}>{MARK_LABEL[p]}</button>)}
       {on && analysis.note && <span className="chip info">{analysis.note}</span>}
     </div>
   )
