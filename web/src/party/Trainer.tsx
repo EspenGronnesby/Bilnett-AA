@@ -7,8 +7,9 @@ import { apprentice } from './trainerModel'
 // «AI-trener»: egen visning som åpnes når Analyse er på. Du ser live hva hver «hjerne» tror og hvorfor, og retter den
 // med store knapper (eller på tidslinjen, også bakover i tid). Alt du gjør lagres med en gang som fasit (se analysis.ts).
 
+// Delene som en lysstyrke-skala i dempede toner (Drop = lysest = sterkest). Resten av visningen er nøytral med én aksent (kremhvit).
 const PART_COL: Record<string, string> = {
-  INTRO: '#6aa5ff', BUILDUP: '#ffb347', DROP: '#ff4d6d', BREAKDOWN: '#8e7cff', OUTRO: '#7a7690',
+  INTRO: '#5b6784', BUILDUP: '#a58f6e', DROP: '#f5f2ec', BREAKDOWN: '#4d4a68', OUTRO: '#3d3b50',
 }
 const PART_NAME: Record<string, string> = {
   INTRO: 'Intro', BUILDUP: 'Build-up', DROP: 'Drop', BREAKDOWN: 'Breakdown', OUTRO: 'Outro',
@@ -17,7 +18,6 @@ const PART_NAME: Record<string, string> = {
 const PARTS = Object.keys(MARK_LABEL) as MarkPart[]
 const toMark = (p: string): MarkPart => (p === 'INTRO' || p === 'BUILDUP' || p === 'DROP' || p === 'OUTRO' ? p : 'BREAKDOWN')
 const col = (p: string) => PART_COL[toMark(p)]
-const EMOJI: Record<string, string> = { INTRO: '🌅', BUILDUP: '🚀', DROP: '💥', BREAKDOWN: '🌊', OUTRO: '🌙' }
 const GENRES = ['HARDSTYLE', 'EDM', 'RAP', 'ROCK', 'POP', 'REGGAE', 'REGGAETON', 'ROLIG']
 
 const mmss = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` }
@@ -37,25 +37,6 @@ function featureWord(name: string) {
 }
 
 const reducedMotion = () => { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches } catch { return false } }
-
-/** Små «poff» av farget konfetti ut fra en knapp når du svarer (av ved «Ingen blinking» / reduser bevegelse). */
-function burst(from: Element | null, host: HTMLElement | null, color: string, emoji?: string) {
-  if (!from || !host) return
-  const r = from.getBoundingClientRect()
-  for (let i = 0; i < 16; i++) {
-    const d = document.createElement('span')
-    d.className = 'tr-conf'
-    const big = emoji && i % 4 === 0
-    if (big) d.textContent = emoji
-    else d.style.background = i % 2 ? color : '#fff'
-    d.style.left = `${r.left + r.width / 2}px`; d.style.top = `${r.top + r.height / 2}px`
-    host.appendChild(d)
-    const a = Math.random() * Math.PI * 2, dist = 60 + Math.random() * 110
-    d.animate([{ transform: 'translate(-50%,-50%) scale(1)', opacity: 1 },
-      { transform: `translate(calc(-50% + ${Math.cos(a) * dist}px), calc(-50% + ${Math.sin(a) * dist - 40}px)) scale(${big ? 1.3 : .4}) rotate(${Math.random() * 360}deg)`, opacity: 0 }],
-      { duration: 650 + Math.random() * 450, easing: 'cubic-bezier(.2,.8,.3,1)' }).onfinish = () => d.remove()
-  }
-}
 
 function useTick(ms: number) {
   const [, set] = useState(0)
@@ -151,12 +132,6 @@ export function Trainer({ party, title, artist, playing, positionMs, durationMs,
     { label: 'Nå', ms: reaction * 1000 }, { label: '2 s', ms: 2000 }, { label: '4 s', ms: 4000 }, { label: '8 s', ms: 8000 },
     { label: '1 takt', ms: bar }, { label: '2 takter', ms: bar * 2 }, { label: '4 takter', ms: bar * 4 },
   ]
-  /** Konfetti fra knappen for [p] (eller en knapp med klassen [sel]). */
-  const celebrate = (p: MarkPart | null, sel?: string) => {
-    if (party.calm || reducedMotion()) return
-    const el = sel ? root.current?.querySelector(sel) : root.current?.querySelector(`[data-part="${p}"]`)
-    burst(el ?? null, root.current, p ? PART_COL[p] : '#5ad68a', p ? EMOJI[p] : '🎉')
-  }
   const say = (t: string) => { setToast(t); window.setTimeout(() => setToast(s => (s === t ? '' : s)), 1600) }
 
   const apply = (p: MarkPart) => {
@@ -173,7 +148,6 @@ export function Trainer({ party, title, artist, playing, positionMs, durationMs,
     }
     if (!ok) { say('Ikke lagret: posisjonen i sangen er ukjent ennå'); return }
     selRef.current = null; setChip(0); if (prompt) closePrompt()
-    celebrate(p)
     say(`Lagret: ${MARK_LABEL[p]}${note}`)
   }
   /** «Ja»: den nye lytteren hadde rett. Starten settes der lyden skiftet rundt lytterens bytte (ellers litt før). */
@@ -183,7 +157,6 @@ export function Trainer({ party, title, artist, playing, positionMs, durationMs,
     const found = snap ? snapOnset(timeline.points, prompt.pos + 1500, 6000) : { pos: -1, snapped: false }
     if (!analysis.setMark(part, found.snapped ? found.pos : prompt.pos - 1000)) { say('Ikke lagret: posisjonen i sangen er ukjent ennå'); return }
     analysis.logEvent('riktig', `ny:${prompt.part}`)
-    celebrate(null, '.tr-yes')
     closePrompt(); say(`Lagret: ${MARK_LABEL[part]} stemte`)
   }
   /** Spol litt tilbake og spill, så du kan høre øyeblikket før du svarer. */
@@ -269,7 +242,7 @@ export function Trainer({ party, title, artist, playing, positionMs, durationMs,
   const guess = e.listenerPart
   return (
     <div className="trainer" role="dialog" aria-label="AI-trener" tabIndex={-1} ref={root}
-      style={{ '--tr-accent': col(guess), '--tr-cover': cover ? `url("${cover}")` : 'none' } as CSSProperties}>
+      style={{ '--tr-cover': cover ? `url("${cover}")` : 'none' } as CSSProperties}>
       <div className="tr-bg" aria-hidden />
       <div className="tr-head">
         <div className="tr-title">
@@ -288,7 +261,7 @@ export function Trainer({ party, title, artist, playing, positionMs, durationMs,
         <CoverPulse party={party} cover={cover} />
         <div className="tr-hero-text">
           <span className="tr-hero-label">AI-en tror {status !== 'Mottar lyd' ? `· ${status}` : ''}</span>
-          <span className="tr-hero-part" style={{ color: col(guess) }}>{EMOJI[toMark(guess)]} {PART_NAME[guess] ?? guess}</span>
+          <span className="tr-hero-part">{PART_NAME[guess] ?? guess}</span>
         </div>
         <Equalizer party={party} />
       </div>
@@ -297,8 +270,8 @@ export function Trainer({ party, title, artist, playing, positionMs, durationMs,
 
       <div className="tr-row tr-parts">
         {PARTS.map((p, i) => (
-          <button key={p} data-part={p} className={analysis.mark === p ? 'tr-btn tr-part on-part' : 'tr-btn tr-part'} style={{ '--pc': PART_COL[p] } as CSSProperties} onClick={() => apply(p)}>
-            <span className="tr-emoji">{EMOJI[p]}</span> {MARK_LABEL[p]}<span className="tr-keyhint">{i + 1}</span>
+          <button key={p} data-part={p} className={analysis.mark === p ? 'tr-btn tr-part on-part' : 'tr-btn tr-part'} onClick={() => apply(p)}>
+            {MARK_LABEL[p]}<span className="tr-keyhint">{i + 1}</span>
           </button>
         ))}
       </div>
@@ -316,11 +289,11 @@ export function Trainer({ party, title, artist, playing, positionMs, durationMs,
               lines={[`bygger opp: ${pct(e.hudBuild)}`, `takt ${e.hudBar} i frasen${e.hudReady ? ' · klar for drop' : ''}`]} />
             <Brain name="Ny lytter" part={brainParts.nu} onRate={ok => rate('ny', brainParts.nu, ok)}
               lines={[`fylde ${pct(e.listenerLevel)} · drop ${pct(e.pDrop)}`, `build (regel) ${pct(e.pBuild)}`]} />
-            <Brain name="Build-up-modell" part={modelP >= 0.8 ? 'BUILDUP' : ''} big={pct(modelP)} sure={modelP >= 0.8} onRate={ok => rate('modell', modelP >= 0.8 ? 'BUILDUP' : 'IKKE', ok)}
+            <Brain name="Build-up-modell" part={modelP >= 0.8 ? 'BUILDUP' : ''} big={pct(modelP)} onRate={ok => rate('modell', modelP >= 0.8 ? 'BUILDUP' : 'IKKE', ok)}
               lines={[modelP >= 0.8 ? 'sier build-up' : modelP >= 0.5 ? 'usikker' : 'sier ikke build-up']} />
-            <div className="tr-card" style={{ borderColor: '#5ad68a' }}>
+            <div className="tr-card">
               <div className="tr-card-name">Min lærling</div>
-              <div className="tr-card-part" style={{ color: '#5ad68a' }}>{pct(apprentice.p)}</div>
+              <div className="tr-card-part">{pct(apprentice.p)}</div>
               <div className="tr-card-sub">Trent på {apprentice.updates} slag · lærer av deg</div>
               <div className="tr-card-btns"><button className="chip small" onClick={() => { apprentice.reset(); say('Nullstilt') }}>Nullstill</button></div>
             </div>
@@ -331,7 +304,7 @@ export function Trainer({ party, title, artist, playing, positionMs, durationMs,
             </div>
           </div>
           <div className="tr-think">
-            <div className="tr-thought"><b style={{ color: col(e.listenerPart) }}>{PART_NAME[e.listenerPart] ?? e.listenerPart}</b> (ny) · <b style={{ color: col(e.partName) }}>{PART_NAME[e.partName] ?? e.partName}</b> (gammel)</div>
+            <div className="tr-thought"><b>{PART_NAME[e.listenerPart] ?? e.listenerPart}</b> (ny) · <b>{PART_NAME[e.partName] ?? e.partName}</b> (gammel)</div>
             <ul>{[...explain(party), ...modelWhy(party)].map((l, i) => <li key={i}>{l}</li>)}</ul>
           </div>
         </>
@@ -372,8 +345,8 @@ export function Trainer({ party, title, artist, playing, positionMs, durationMs,
       )}
 
       {prompt && analysis.enabled && (
-        <div className="tr-prompt" role="group" aria-label="Stemmer det?" style={{ '--pc': col(prompt.part) } as CSSProperties}>
-          <div className="tr-prompt-q">{EMOJI[toMark(prompt.part)]} <b style={{ color: col(prompt.part) }}>{PART_NAME[prompt.part] ?? prompt.part}</b> nå – stemmer det?</div>
+        <div className="tr-prompt" role="group" aria-label="Stemmer det?">
+          <div className="tr-prompt-q"><b>{PART_NAME[prompt.part] ?? prompt.part}</b> nå – stemmer det?</div>
           {!prompt.denied ? (
             <div className="tr-row">
               <button className="tr-btn tr-yes" onClick={confirmPrompt}>✔ Ja</button>
@@ -382,7 +355,7 @@ export function Trainer({ party, title, artist, playing, positionMs, durationMs,
             </div>
           ) : (
             <>
-              <div className="tr-row">{PARTS.map(p => <button key={p} data-part={p} className="tr-btn tr-part" style={{ '--pc': PART_COL[p] } as CSSProperties} onClick={() => apply(p)}><span className="tr-emoji">{EMOJI[p]}</span> {MARK_LABEL[p]}</button>)}</div>
+              <div className="tr-row">{PARTS.map(p => <button key={p} data-part={p} className="tr-btn tr-part" onClick={() => apply(p)}>{MARK_LABEL[p]}</button>)}</div>
               <button className="chip small" onClick={listenAgain}>▶ Hør igjen</button>
             </>
           )}
@@ -402,8 +375,7 @@ function CoverPulse({ party, cover }: { party: Party; cover: string | null }) {
     return party.onFrame(() => {
       const el = ref.current; if (!el) return
       const k = party.calm ? 0 : party.engine.kick
-      el.style.transform = `scale(${1 + k * 0.07})`
-      el.style.boxShadow = `0 0 ${14 + k * 46}px color-mix(in srgb, var(--tr-accent) ${30 + k * 50}%, transparent)`
+      el.style.transform = `scale(${1 + k * 0.04})`
     })
   }, [party])
   return <div ref={ref} className="tr-cover" style={cover ? { backgroundImage: `url("${cover}")` } : undefined} />
@@ -421,10 +393,9 @@ function Equalizer({ party }: { party: Party }) {
     const still = reducedMotion()
     const off = party.onFrame(() => {
       ctx.clearRect(0, 0, w, h)
-      const accent = getComputedStyle(c).getPropertyValue('--tr-accent').trim() || '#6aa5ff'
       const sp = party.engine.spectrum, n = sp.length || 48, bw = w / n
       const kick = party.calm ? 0 : party.engine.kick
-      const g = ctx.createLinearGradient(0, h, 0, 0); g.addColorStop(0, accent); g.addColorStop(1, '#ffffff')
+      const g = ctx.createLinearGradient(0, h, 0, 0); g.addColorStop(0, 'rgba(245,242,236,.28)'); g.addColorStop(1, 'rgba(245,242,236,.85)')
       ctx.fillStyle = g
       for (let i = 0; i < n; i++) {
         const v = still ? 0.15 : Math.pow(Math.min(1, sp[i] ?? 0), 0.85)
@@ -439,12 +410,11 @@ function Equalizer({ party }: { party: Party }) {
   return <canvas ref={ref} className="tr-eq" aria-hidden />
 }
 
-function Brain({ name, part, lines, onRate, big, sure }: { name: string; part: string; lines: string[]; onRate: (ok: boolean) => void; big?: string; sure?: boolean }) {
-  const color = part ? col(part) : 'var(--faint)'
+function Brain({ name, part, lines, onRate, big }: { name: string; part: string; lines: string[]; onRate: (ok: boolean) => void; big?: string }) {
   return (
-    <div className="tr-card" style={{ borderColor: sure === false ? undefined : color }}>
+    <div className="tr-card">
       <div className="tr-card-name">{name}</div>
-      <div className="tr-card-part" style={{ color }}>{big ?? (PART_NAME[part] ?? part)}</div>
+      <div className="tr-card-part">{big ?? (PART_NAME[part] ?? part)}</div>
       {lines.map((l, i) => <div key={i} className="tr-card-sub">{l}</div>)}
       <div className="tr-card-btns">
         <button className="chip small" onClick={() => onRate(true)}>Riktig</button>
@@ -505,7 +475,7 @@ function LiveTimeline({ party, positionMs: positionProp, selRef, detail, onPick:
       }
       // fylt «bølge» under bassen
       if (pts.length > 1) {
-        const grad = ctx.createLinearGradient(0, curvesTop, 0, curvesBottom); grad.addColorStop(0, 'rgba(74,163,255,.38)'); grad.addColorStop(1, 'rgba(74,163,255,0)')
+        const grad = ctx.createLinearGradient(0, curvesTop, 0, curvesBottom); grad.addColorStop(0, 'rgba(245,242,236,.22)'); grad.addColorStop(1, 'rgba(245,242,236,0)')
         ctx.fillStyle = grad; ctx.beginPath(); let started = false, lastX = 0, segId = -1
         for (const p of pts) {
           const x = xOf(p.pos), y = yOf(p.sub)
@@ -514,10 +484,10 @@ function LiveTimeline({ party, positionMs: positionProp, selRef, detail, onPick:
         }
         if (started) { ctx.lineTo(lastX, curvesBottom); ctx.closePath(); ctx.fill() }
       }
-      line(p => p.sub, '#4aa3ff'); line(p => p.bright, '#ffb347')
-      if (full) { line(p => Math.min(p.kick / 3, 1.1), 'rgba(170,170,170,.7)', 1.5); line(p => p.pModel, '#ffffff', 2); line(p => p.pApp, '#5ad68a', 2); line(p => p.pDrop, '#ff4d6d', 1.5) }
+      line(p => p.sub, '#f5f2ec'); line(p => p.bright, '#8d97b3')
+      if (full) { line(p => Math.min(p.kick / 3, 1.1), 'rgba(170,170,170,.5)', 1.5); line(p => p.pModel, '#f5f2ec', 2); line(p => p.pApp, '#a58f6e', 2); line(p => p.pDrop, '#8d97b3', 1.5) }
       ctx.font = '12px system-ui'
-      const legend = full ? [['bass', '#4aa3ff'], ['lys klang', '#ffb347'], ['kick', '#aaa'], ['build-up (modell)', '#fff'], ['min lærling', '#5ad68a'], ['drop (lytter)', '#ff4d6d']] : [['bass', '#4aa3ff'], ['lys klang', '#ffb347']]
+      const legend = full ? [['bass', '#f5f2ec'], ['lys klang', '#8d97b3'], ['kick', '#aaa'], ['build-up (modell)', '#f5f2ec'], ['min lærling', '#a58f6e'], ['drop (lytter)', '#8d97b3']] : [['bass', '#f5f2ec'], ['lys klang', '#8d97b3']]
       legend.forEach(([n, cc], i) => { ctx.fillStyle = cc; ctx.fillText(n, 8 + i * 128, 12) })
       // felt: gammel, ny lytter, modell (≥ 80 %), Din
       const lanes: [string, (p: (typeof pts)[number]) => string | null][] = full
