@@ -31,6 +31,10 @@ private const val REDROP_GAP_SLOTS = 8
 private const val BUILD_SUB_POS = .55f
 private const val BUILD_RISE = .15f
 
+/** Navnene på målingene lytteren regner per slag ([SongListener.features]) — brukes til å trene en modell mot fasiten. */
+val LISTENER_FEATURES = listOf("posSub", "posFull", "posPre", "jump", "airRise", "presRise", "noiseRise", "centRise",
+    "snareNow", "snareRatio", "kickNow", "level", "range", "subDelta", "airPos", "presPos")
+
 class SongListener {
     var part = SongPart.INTRO; private set
     var dropKind = DropKind.NONE; private set
@@ -42,6 +46,10 @@ class SongListener {
     var pBuild = 0f; private set
     var pDrop = 0f; private set
     var drops = 0; private set
+    /** Målingene for siste slag, i rekkefølgen [LISTENER_FEATURES] (alle selvrelative: mot sangens egne p10–p90). */
+    val features = FloatArray(LISTENER_FEATURES.size)
+    /** Antall slag lukket så langt (for å vite når [features] er ferske). */
+    val slots get() = sub.size
     val effectsAllowed get() = part == SongPart.DROP
 
     // Slag-målinger (én verdi per slag)
@@ -56,6 +64,9 @@ class SongListener {
     private val bpmRing = FloatArray(32); private var bpmN = 0
 
     private var hitRun = 0
+    private var lastFrame: HardstyleFrame? = null
+    /** Slag-nummer der sangen sist hoppet/ble pauset: «rett før»-vinduene bruker bare slag etter dette. */
+    private var gapAt = 0
     private var dropRef = 0f; private var fallRun = 0; private var buildRun = 0; private var noBuildRun = 0
     private var partSince = 0; private var intensity = .4f
     /** Rekkefølge: lengden (i slag) på forrige build-up, så neste kan ventes like lang. */
@@ -67,23 +78,30 @@ class SongListener {
         slotStart = now; slotMs = 400f; bpmN = 0
         part = SongPart.INTRO; dropKind = DropKind.NONE; label = ""; labelAt = now
         level = 0f; pBuild = 0f; pDrop = 0f; drops = 0
-        hitRun = 0; dropRef = 0f; fallRun = 0; buildRun = 0; noBuildRun = 0; partSince = 0; intensity = .4f
+        lastFrame = null; gapAt = 0; hitRun = 0; dropRef = 0f; fallRun = 0; buildRun = 0; noBuildRun = 0; partSince = 0; intensity = .4f
         lastBuildSlots = 0; buildStart = 0
     }
 
     /** Samme form som [HardstyleStructure.update]: returnerer styrke 0.35–1.3 (ikke i bruk ennå). */
     fun update(f: HardstyleFrame, now: Long, positionMs: Long = -1L, durationMs: Long = -1L): Float {
         if (slotStart < 0) newTrack(now)
-        if (f.bpm in 100f..260f) { bpmRing[bpmN % bpmRing.size] = fold(f.bpm); bpmN++ }
-        // Kick og snare telles på stigende kant, så samme bilde to ganger ikke gir to treff.
-        if (f.kick > .7f && prevKick <= .7f) nKicks++
-        if (f.snare > .5f && prevSnare <= .5f) nSnares++
-        prevKick = f.kick; prevSnare = f.snare
-        sumNoise += f.noise; sumCent += ln(max(f.centroid, 250f)); sumSub += f.subLevel; sumAir += f.air; sumPres += f.presence; nFrames++
+        // Appen mater samme lydbilde flere ganger per skjermbilde: et bilde telles bare én gang
+        // (ellers veier live-målingene annerledes enn avspillingen i testen). Klokka går videre uansett.
+        if (f !== lastFrame) {
+            lastFrame = f
+            if (f.bpm in 100f..260f) { bpmRing[bpmN % bpmRing.size] = fold(f.bpm); bpmN++ }
+            // Kick og snare telles på stigende kant.
+            if (f.kick > .7f && prevKick <= .7f) nKicks++
+            if (f.snare > .5f && prevSnare <= .5f) nSnares++
+            prevKick = f.kick; prevSnare = f.snare
+            sumNoise += f.noise; sumCent += ln(max(f.centroid, 250f)); sumSub += f.subLevel; sumAir += f.air; sumPres += f.presence; nFrames++
+        }
 
         val gap = now - slotStart
-        if (gap > 4_000L) { // pause / hopp i sangen: ikke fyll inn tomme slag
-            slotStart = now; resetSlot(); return intensity
+        if (gap > 4_000L) { // pause / hopp i sangen: ikke fyll inn tomme slag, og start vinduene på nytt
+            slotStart = now; resetSlot()
+            gapAt = sub.size; hitRun = 0; fallRun = 0; buildRun = 0; noBuildRun = 0
+            return intensity
         }
         if (gap >= slotMs) {
             closeSlot(positionMs, durationMs, now)
@@ -117,6 +135,8 @@ class SongListener {
         val c = sub.size
         partSince++
         if (c < WARMUP_SLOTS) { setPart(SongPart.INTRO, pos, now, dur); return }
+        // Etter pause/hopp trengs nok sammenhengende slag til «nå» og «rett før» før vi uttaler oss igjen.
+        if (c - gapAt < NOW_SLOTS + BEFORE_SLOTS + 4) return
 
         val ss = sub.sorted()
         val p10 = ss[(c * .1f).toInt()]; val p90 = ss[(c * .9f).toInt().coerceAtMost(c - 1)]
@@ -157,6 +177,12 @@ class SongListener {
         val signs = (if (airRise > BUILD_RISE || presRise > BUILD_RISE) 1 else 0) + (if (snareRise) 1 else 0) +
             (if (noiseRise > BUILD_RISE || centRise > BUILD_RISE) 1 else 0)
         val rising = signs >= 2
+        features[0] = posSub; features[1] = posNow; features[2] = posPre; features[3] = posNow - posPre
+        features[4] = airRise; features[5] = presRise; features[6] = noiseRise; features[7] = centRise
+        features[8] = snareNow.toFloat(); features[9] = snareNow / (snareBefore + 1f); features[10] = kickNow.toFloat()
+        features[11] = level; features[12] = range
+        features[13] = posSub - posS(mean(sub, c - NOW_SLOTS - BEFORE_SLOTS, c - NOW_SLOTS))
+        features[14] = posA(curAir); features[15] = posP(curPres)
         val buildEvidence = range >= MIN_RANGE_DB && posSub < BUILD_SUB_POS && rising
         pBuild = if (range < MIN_RANGE_DB) 0f else
             (((BUILD_SUB_POS - posSub) / BUILD_SUB_POS).coerceIn(0f, 1f) * .5f +

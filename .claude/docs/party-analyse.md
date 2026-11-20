@@ -93,6 +93,14 @@ Rettelser per sang (`SongMarks`) bruker nå `GenreBook.key` + lengde i sekunder 
 flyttes og slås sammen ved neste avspilling.
 Plan: `~/.claude/plans/lag-en-plan-for-fizzy-parasol.md` (steg 0–6).
 
+**Steg 3 lettvekt (2026-11-20, 9 sanger):** `SongListener` eksporterer 16 selvrelative målinger per slag
+(`exportListenerFeatures` → `listener-features.csv`), og `tools/party-analyse/train_listener.py` trener logistisk regresjon for
+build-up med én sang utenfor om gangen (AUC 0,75; gradient boosting ga 0,77 – forskjellen er støy på 9 sanger). Hybrid = gammel
+hjerne bestemmer alt, men der den ikke sier DROP og modellen er ≥ 0,8 sikker → BUILDUP: enig 69 % (som gammel), drop 87 %
+(uendret), build-up fanget 7/15 (gammel 2/15), falsk build-up 43 s (gammel 27 s). Terskel 0,5 gir 13/15 men enig 64 %.
+Ikke i appen ennå (modellvekter + lagrede målinger i Kotlin mangler). `hybrid.txt` i assets har tallene.
+Lytteren: samme lydbilde telles bare én gang (live mater det flere ganger), og pause/spoling starter vinduene på nytt.
+
 Gammel plan for trening:
 
 1. Hent loggene og lydopptakene (sync).

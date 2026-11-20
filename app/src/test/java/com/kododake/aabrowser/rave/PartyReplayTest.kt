@@ -645,6 +645,30 @@ class PartyReplayTest {
         File(raw.parentFile, "listener-signal.txt").writeText(sb.toString())
     }
 
+    /** Målingene per slag (SongListener.features) + fasit + gammel hjernes del → listener-features.csv, til train_listener.py. */
+    @Test fun exportListenerFeatures() {
+        assumeTrue("ingen opptak på denne maskinen", File(raw, "fft").isDirectory)
+        val sb = StringBuilder("song,pos_ms,dur_ms,truth,old," + LISTENER_FEATURES.joinToString(",") + "\n")
+        for ((si, sg) in songs().withIndex()) {
+            if (sg.cleanKey.isEmpty()) continue
+            val ln = SongListener(); ln.newTrack(sg.now[0])
+            val old = HardstyleStructure(); old.newTrack(sg.now[0]); old.dropPrint = sg.print
+            var slots = 0; var lastPos = -1L
+            for (i in sg.frames.indices) {
+                old.update(sg.frames[i], sg.now[i], sg.pos[i], -1L)
+                ln.update(sg.frames[i], sg.now[i], sg.pos[i], -1L)
+                if (ln.slots > slots) {
+                    slots = ln.slots
+                    val t = sg.cleanKey.lastOrNull { it.first <= sg.pos[i] }?.second ?: continue
+                    val dur = if (lastPos < 0) 0L else sg.pos[i] - lastPos; lastPos = sg.pos[i]
+                    sb.append("$si,${sg.pos[i]},$dur,$t,${norm(old.part.name)},")
+                    sb.append(ln.features.joinToString(",") { "%.4f".format(Locale.US, it) }).append('\n')
+                }
+            }
+        }
+        File(raw.parentFile, "listener-features.csv").writeText(sb.toString())
+    }
+
     private companion object {
         /** How long after a change Espen typically presses (moved back in the cleaned key). */
         const val REACTION_MS = 600L
