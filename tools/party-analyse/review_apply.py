@@ -35,26 +35,34 @@ def main():
         sys.exit("Fant ingen corrections.json (lagre den fra rettings-verktøyet først).")
     data = json.load(open(path))
     os.makedirs(os.path.join(RAW, "pre-review"), exist_ok=True)
-    written = 0
+    written = skipped = 0
     for song_id, s in data["songs"].items():
         fft = os.path.join(RAW, "fft", song_id + ".fft.gz")
         if not os.path.exists(fft):
             print(f"hopper over {song_id}: finner ikke opptaket")
             continue
+        if not s.get("edited"):
+            skipped += 1  # «godta» alene er ikke menneskelig fasit (ellers blir læreren sin egen fasit)
+            continue
         rows = slots_for(song_id)
-        if len(rows) != len(s["t"]):
+        if len(rows) != len(s["t"]) or len(s["labels"]) != len(s["t"]):
             print(f"hopper over {song_id}: antall slag stemmer ikke ({len(rows)} mot {len(s['t'])}) – lag review.html på nytt")
             continue
         target = os.path.join(RAW, song_id + ".csv")
         if os.path.exists(target):
-            shutil.move(target, os.path.join(RAW, "pre-review", song_id + ".csv"))
+            backup = os.path.join(RAW, "pre-review", song_id + ".csv")
+            if os.path.exists(backup):  # aldri overskriv en eldre sikkerhetskopi (den kan være Espens opprinnelige fasit)
+                backup = os.path.join(RAW, "pre-review", f"{song_id}.{int(os.path.getmtime(target))}.csv")
+            shutil.copy2(target, backup)
         with open(target, "w", encoding="utf-8") as f:
             f.write(f"# {s['title']}\n# kilde: review\n")
             f.write("pos_s,part,drop,genre,sub,fps,effects_on,auto_part,auto_drop,part_by\n")
             for r, t, part in zip(rows, s["t"], s["labels"]):
+                if not part:
+                    continue  # tomt forblir tomt (slag før første trykk er ikke merket)
                 f.write(f"{t / 1000:.1f},{part},,,,60,1,{r['old']},,review\n")
         written += 1
-    print(f"{written} sanger skrevet som fasit (part_by=review). Neste: exportAllSlots + analyser.")
+    print(f"{written} sanger skrevet som fasit (part_by=review), {skipped} godkjent uten endring (ikke fasit). Neste: exportAllSlots + analyser.")
 
 
 if __name__ == "__main__":

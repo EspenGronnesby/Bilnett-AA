@@ -95,7 +95,7 @@ button:hover{border-color:var(--fg)}button.p{background:var(--fg);color:var(--bg
 <canvas id="cv" width="1400" height="420"></canvas>
 <div class="btns" id="btns"></div>
 <div class="key">Dra på «Din»-raden for å velge et tidsrom, trykk 1–5 for å sette del (1 Intro · 2 Build-up · 3 Drop · 4 Breakdown · 5 Outro).
-  <b>A</b> godta lærerens forslag for hele sangen · <b>G</b> bruk gammel · <b>←/→</b> forrige/neste sang · <b>Z</b> angre · mellomrom: spill smakebit</div>
+  <b>A</b> godta lærerens forslag (regnes IKKE som fasit, bare rettinger teller) · <b>G</b> bruk gammel · <b>←/→</b> forrige/neste sang · <b>Z</b> angre · mellomrom: spill smakebit</div>
 <audio id="au" controls style="margin-top:10px;width:100%;display:none"></audio></div>
 <script>
 const DATA=__DATA__;
@@ -104,11 +104,11 @@ const NAME={INTRO:'Intro',BUILDUP:'Build-up',DROP:'Drop',BREAKDOWN:'Breakdown',O
 const COL={INTRO:'#6aa5ff',BUILDUP:'#ffb347',DROP:'#ff4d6d',BREAKDOWN:'#8e7cff',OUTRO:'#7a7690'};
 let store={};try{store=JSON.parse(localStorage.getItem('rave-review')||'{}')}catch(e){}
 const save=()=>{try{localStorage.setItem('rave-review',JSON.stringify(store))}catch(e){}};
-let cur=0,sel=null,drag=null,undo=[];
+let cur=0,sel=null,drag=null,undoBy={};
 const cv=document.getElementById('cv'),cx=cv.getContext('2d');
 const mmss=ms=>{const s=Math.max(0,Math.round(ms/1000));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')};
-function mine(s){if(!store[s.id])store[s.id]={labels:null,done:false};return store[s.id]}
-function labelsOf(s){const m=mine(s);return m.labels||(s.truth.length?s.truth.map(x=>x||'BREAKDOWN'):s.teacher.slice())}
+function mine(s){const m=store[s.id];if(!m||m.n!==s.t.length||m.t0!==s.t[0]||m.t1!==s.t[s.t.length-1])store[s.id]={labels:null,done:false,edited:false,n:s.t.length,t0:s.t[0],t1:s.t[s.t.length-1]};return store[s.id]}
+function labelsOf(s){const m=mine(s);return m.labels||(s.truth.length?s.truth.slice():s.teacher.slice())}  /* tomt forblir tomt: slag før ditt første live-trykk er ikke merket */
 function done(s){return mine(s).done}
 function renderList(){const el=document.getElementById('list');el.innerHTML='';
   DATA.forEach((s,i)=>{const d=document.createElement('div');d.className='song'+(i===cur?' on':'');
@@ -136,7 +136,7 @@ function draw(){const s=DATA[cur];const g=geom();cx.clearRect(0,0,g.W,g.H);
   for(let m=0;m*60000<=s.t[n-1];m++){const x=xOf(s,m*60000);if(x<g.L)continue;cx.beginPath();cx.moveTo(x,g.top);cx.lineTo(x,g.H);cx.stroke();cx.fillText(m+':00',x+3,g.H-4)}
   const y0=g.top+g.curveH+g.gap;
   bar(s,y0,s.old,'Gammel',false);bar(s,y0+g.barH+g.gap,s.teacher,'Lærer',false);
-  if(s.truth.length)bar(s,y0+2*(g.barH+g.gap),s.truth.map(x=>x||'BREAKDOWN'),'Live',false);
+  if(s.truth.length)bar(s,y0+2*(g.barH+g.gap),s.truth,'Live',false);
   const yMine=y0+(s.truth.length?3:2)*(g.barH+g.gap);bar(s,yMine,labelsOf(s),'Din',true);
   s._yMine=yMine;
   if(sel){const x0=xOf(s,s.t[sel[0]]),x1=xOf(s,s.t[sel[1]]);cx.fillStyle='rgba(255,255,255,.22)';cx.fillRect(x0,g.top,x1-x0,g.H-g.top)}
@@ -144,15 +144,15 @@ function draw(){const s=DATA[cur];const g=geom();cx.clearRect(0,0,g.W,g.H);
 function renderBtns(){const s=DATA[cur];const el=document.getElementById('btns');el.innerHTML='';
   PARTS.forEach((p,i)=>{const b=document.createElement('button');b.innerHTML='<span class="chip" style="background:'+COL[p]+'">'+(i+1)+'</span> '+NAME[p];b.onclick=()=>setPart(p);el.appendChild(b)});
   [['Godta lærerens forslag (A)',acceptTeacher,'p'],['Bruk gammel (G)',useOld],['Angre (Z)',doUndo],['Lagre alt til corrections.json',exportAll,'p']].forEach(([t,f,c])=>{const b=document.createElement('button');b.textContent=t;if(c)b.className=c;b.onclick=f;el.appendChild(b)})}
-function commit(labels,markDone){const s=DATA[cur],m=mine(s);undo.push(m.labels?m.labels.slice():null);m.labels=labels;if(markDone)m.done=true;save();draw();renderList()}
+function commit(labels,edited){const s=DATA[cur],m=mine(s);(undoBy[s.id]=undoBy[s.id]||[]).push(m.labels?m.labels.slice():null);m.labels=labels;m.done=true;m.edited=m.edited||edited;save();draw();renderList()}
 function setPart(p){const s=DATA[cur];if(!sel)return;const l=labelsOf(s).slice();for(let i=sel[0];i<=sel[1];i++)l[i]=p;commit(l,true)}
-function acceptTeacher(){const s=DATA[cur];commit(s.teacher.slice(),true)}
-function useOld(){const s=DATA[cur];commit(s.old.slice(),true)}
-function doUndo(){const s=DATA[cur],m=mine(s);if(!undo.length)return;m.labels=undo.pop();save();draw();renderList()}
+function acceptTeacher(){const s=DATA[cur];commit(s.teacher.slice(),false)}
+function useOld(){const s=DATA[cur];commit(s.old.slice(),false)}
+function doUndo(){const s=DATA[cur],m=mine(s),u=undoBy[s.id]||[];if(!u.length)return;m.labels=u.pop();save();draw();renderList()}
 function exportAll(){const out={generated:new Date().toISOString(),songs:{}};
-  DATA.forEach(s=>{const m=mine(s);if(!m.done)return;const l=m.labels||labelsOf(s);const ch=[];l.forEach((p,i)=>{if(i===0||p!==l[i-1])ch.push([s.t[i],p])});out.songs[s.id]={title:s.title,t:s.t,labels:l,changes:ch}});
+  DATA.forEach(s=>{const m=mine(s);if(!m.done)return;const l=m.labels||labelsOf(s);const ch=[];l.forEach((p,i)=>{if(i===0||p!==l[i-1])ch.push([s.t[i],p])});out.songs[s.id]={title:s.title,t:s.t,labels:l,changes:ch,edited:!!m.edited}});
   const blob=new Blob([JSON.stringify(out)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='corrections.json';a.click();
-  alert(Object.keys(out.songs).length+' sanger lagret i corrections.json (Nedlastinger). Kjør review_apply.py på Mac-en.')}
+  alert(Object.keys(out.songs).length+' sanger lagret i corrections.json (Nedlastinger). Bare sanger du faktisk har rettet blir fasit; «godta» alene regnes ikke. Kjør review_apply.py på Mac-en.')}
 function px(ev){const r=cv.getBoundingClientRect();return(ev.clientX-r.left)*cv.width/r.width}
 cv.addEventListener('mousedown',ev=>{const s=DATA[cur];const i=idxAt(s,tOf(s,px(ev)));drag=i;sel=[i,i];draw()});
 cv.addEventListener('mousemove',ev=>{if(drag===null)return;const s=DATA[cur];const i=idxAt(s,tOf(s,px(ev)));sel=[Math.min(drag,i),Math.max(drag,i)];draw()});

@@ -116,13 +116,18 @@ sang dit av seg selv, uten å trykke noe, så en spilleliste kan gå alene. `syn
 (også uten telefon: `python3 tools/party-analyse/sync.py --web`), hopper over sanger vi allerede har (samme tittel og lengde).
 Mappevalget er ikke testet i en ekte nettleser (kan ikke automatiseres); hentingen i `sync.py` er testet med falske filer.
 
-**Læreren og rettings-verktøyet (2026-11-20).** `teacher.py` ser hele sangen i etterkant (offline, selvrelativ: Foote-novelty + fylde = svakeste av sub og lys
-klang + frasenett) og gir forslag; `teacher.py --eval` måler mot fasit (`teacher.txt`). Første måling på de 9 drop-sangene: færre falske drops (0,6 mot 1,6/min)
-og 4/14 build-ups (gammel 2/14), men dårligere på drop-tidspunkt (±3 s: 4/12 mot 10/12) → forslag, ikke fasit. Målt: Espens trykk kommer i snitt ca. 1,6 s
-(kvartiler 0,8–2,8 s) etter lærerens drop-start, mer enn testens antatte 0,6 s; «innen én takt» kan derfor ikke måles skarpere enn menneskets timing.
-`review.py` lager `review.html` (kurver + gammel/lærer/Din, sortert etter uenighet; 1–5 setter del, A godtar læreren, Lagre → `corrections.json`);
-`review_apply.py` gjør det til fasit (`part_by=review`, `# kilde: review`, original i `raw/pre-review/`). `PartyReplayTest.truth()` leser `review` og trekker ikke fra
-reaksjonstid for slike filer. Løypen: `sync.py --web` → `exportAllSlots` → `teacher.py --write` → `review.py --open` → rett → `review_apply.py`.
+**Læreren, rettings-verktøyet og modellsammenligning (2026-11-20).** `teacher.py` ser hele sangen offline (selvrelativ: Foote-novelty + fylde =
+svakeste av sub og lys klang + frasenett). Måling (`teacher.txt`, drop-musikk = **6 unike sanger** i 8 opptak, ikke 9): færre falske drops (0,6 mot 1,6/min) og
+4/14 build-ups (gammel 2/14, støy), men klart dårligere drop-tidspunkt (±3 s: 4/12 mot 10/12). **Læreren er ikke bedre enn gammel hjerne** → bare forslag til
+rettings-verktøyet, ikke treningsmerker. Påstanden «Espen trykker ca. 1,6 s sent» er IKKE etablert (regnet av de få treffene, samme data): `LAG` i `teacher.py`
+er en følsomhetsprøve; og «innen én takt» kan uansett ikke måles skarpere enn menneskets timing.
+`review.py` lager `review.html` (kurver + gammel/lærer/Live/Din, sortert etter uenighet; opptak under 60 s hoppes over; dra for å velge tidsrom, 1–5 setter del; **A/G «godta»
+regnes ikke som fasit**; tomme slag forblir tomme; angre per sang; Lagre → `corrections.json`). `review_apply.py` skriver bare sanger du faktisk har rettet (`edited`)
+som `part_by=review` + `# kilde: review`, originalen kopieres til `raw/pre-review/` (aldri overskrevet). `PartyReplayTest.truth()` leser `review` uten reaksjonstid-forskyvning.
+Løype: `sync.py --web` → `exportAllSlots` → `teacher.py --write` → `review.py --open` → rett → `review_apply.py`. `sync.py` kaster aldri et opptak med Espens merker som duplikat.
+`train_models.py` (én sang utenfor, gruppert på tittel, test bare på menneskemerkede, tomme slag holdt utenfor): logistisk er minst like god som boosting og nevralt nett på
+6–11 sanger (AUC 0,7; boosting/MLP 0,45–0,7); spektrum-målinger hjalp på drop-musikk (0,82) men skadet på alle sanger; lærerens svake merker ga ingen sikker gevinst.
+**Ingen modell velges av dette: for lite data (6 unike drop-sanger, ~15 build-ups).** Neste reelle steg er flere menneskemerkede sanger (ca. 25–30), ikke flere modeller.
 
 Gammel plan for trening:
 

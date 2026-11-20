@@ -262,10 +262,10 @@ def main():
         print("teacher-slots.csv skrevet")
         return
     hard = lambda n: "hardstyle" in n
-    LAG = 1.6  # målt: median (Espens trykk − lærerens drop) på 12 drops, kvartiler 0,8–2,8 s
+    LAG = 1.6  # FØLSOMHETSPRØVE, ikke etablert: regnet ut av samme data (få treff, svært spredt); brukes ikke som sannhet
     old_pred = lambda rows: ([r["old"] if r["old"] in CLASSES else "BREAKDOWN" for r in rows], None)
     for lag in (0.0, LAG):
-        print(f"\nDrop-musikk (hardstyle i navnet, samme 9 som baseline), fasit flyttet {lag:.1f} s:")
+        print(f"\nDrop-musikk (hardstyle i navnet: 6 unike sanger, 8 opptak), fasit flyttet {lag:.1f} s{' (følsomhetsprøve)' if lag else ''}:")
         evaluate(songs, hard, "gammel hjerne", old_pred, lag)
         evaluate(songs, hard, "læreren (offline)", lag_s=lag)
         print(f"Alle sanger med fasit, fasit flyttet {lag:.1f} s:")

@@ -75,7 +75,7 @@ export class AnalysisRecorder {
     if (!pick) { this.note = 'Nettleseren kan ikke velge mappe (bruk Chrome)'; this.onChange(); return false }
     try {
       this.dir = await pick({ mode: 'readwrite', id: 'rave-analyse' })
-      this.dirName = this.dir.name; this.note = ''
+      this.dirName = this.dir.name; this.note = ''  // først nå (ny mappe valgt) fjernes en gammel feilmelding
       await this.writeUnexported()
     } catch { return false } finally { this.onChange() }
     return true
@@ -98,7 +98,7 @@ export class AnalysisRecorder {
         await this.writeFile(`${s.name}.csv`, new Blob([s.csv], { type: 'text/csv' }))
         await tx(db, 'readwrite', st => st.put({ ...s, exported: true }))
       }
-    } catch { this.note = 'Fikk ikke skrevet til mappen – velg den på nytt'; this.dir = null; this.dirName = '' } finally { db.close() }
+    } catch { this.note = 'Autolagring til mappen står stille – velg mappen på nytt (sangene ligger trygt i nettleseren til da)'; this.dir = null; this.dirName = '' } finally { db.close() }
     await this.refreshCount()
   }
 
@@ -172,9 +172,10 @@ export class AnalysisRecorder {
       const db = await openDb()
       await tx(db, 'readwrite', s => s.add({ name, at, fft, csv, marks } satisfies SavedSong))
       const all = await tx(db, 'readonly', s => s.getAll()) as SavedSong[]
-      for (const old of all.sort((a, b) => a.at - b.at).slice(0, Math.max(0, all.length - MAX_SAVED))) await tx(db, 'readwrite', s => s.delete(old.id!))
+      // Når det er fullt, slettes bare sanger som allerede er eksportert (en ueksportert sang er aldri på spill å miste).
+      const sorted = all.sort((a, b) => a.at - b.at)
+      for (const old of sorted.filter(s => s.exported).slice(0, Math.max(0, sorted.length - MAX_SAVED))) await tx(db, 'readwrite', s => s.delete(old.id!))
       db.close()
-      this.note = ''
     } catch { this.note = 'Fikk ikke lagret opptaket i nettleseren' }
     await this.writeUnexported()
   }

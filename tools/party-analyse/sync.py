@@ -121,7 +121,9 @@ def ingest_web():
             if os.path.exists(os.path.join(RAW, name)):
                 continue
             sig = song_signature(csv_src)
-            if sig and sig[0] and sig in known:
+            marked = ",espen" in open(csv_src, encoding="utf-8", errors="replace").read()
+            # Samme sang spilt til samme sted regnes som duplikat – men et opptak med Espens merker kastes aldri.
+            if sig and sig[0] and sig in known and not marked:
                 continue
             os.makedirs(os.path.join(RAW, "fft"), exist_ok=True)
             shutil.copy2(fft_src, os.path.join(RAW, "fft", stem + ".fft.gz"))
