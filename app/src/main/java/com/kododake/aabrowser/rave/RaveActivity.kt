@@ -1712,8 +1712,9 @@ class RaveActivity : ComponentActivity() {
                             }
                             Spacer(Modifier.width(24.u))
                             // The buttons get the whole column while they show (3 s), then the lyrics come back.
+                            // Anchored at the top with Tekst/Video last, so nothing moves when those come or go.
                             Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
-                                if (mediaTogglesVisible || partyControls) Box(Modifier.verticalScroll(rememberScrollState())) { ModeButtons(mediaTogglesVisible) }
+                                if (mediaTogglesVisible || partyControls) Box(Modifier.align(Alignment.TopStart).padding(top = 8.u).verticalScroll(rememberScrollState())) { ModeButtons(mediaTogglesVisible, mediaLast = true) }
                                 else if (lyricsShift > 0.001f)
                                     LyricsPanel(Modifier.fillMaxWidth().heightIn(max = partyCover), lyricsShift, false, mediaTogglesVisible)
                             }
@@ -2021,16 +2022,19 @@ class RaveActivity : ComponentActivity() {
 
     @OptIn(ExperimentalLayoutApi::class)
     @Composable
-    private fun ModeButtons(mediaVisible: Boolean, stackGenres: Boolean = false) {
+    private fun ModeButtons(mediaVisible: Boolean, stackGenres: Boolean = false, mediaLast: Boolean = false) {
+        @OptIn(ExperimentalLayoutApi::class)
+        @Composable
+        fun media() {
+            LyricsButton()
+            if (showLyrics && lyrics.isNotEmpty()) LyricsSyncButtons()
+            if (videoId != null) VideoButton()
+            if (videoOn && videoClips.size > 1) NextVideoButton()
+        }
         Column(horizontalAlignment = if (stackGenres) Alignment.End else Alignment.Start) {
         FlowRow(horizontalArrangement=Arrangement.spacedBy(10.u), verticalArrangement=Arrangement.spacedBy(8.u)) {
             ModePicker()
-            if (mediaVisible) {
-                LyricsButton()
-                if (showLyrics && lyrics.isNotEmpty()) LyricsSyncButtons()
-                if (videoId != null) VideoButton()
-                if (videoOn && videoClips.size > 1) NextVideoButton()
-            }
+            if (mediaVisible && !mediaLast) media()
             // No Party button: 5 quick taps switch Party on/off.
         }
         // With Party on: the analysis toggle (the vibe slider itself sits on the left edge).
@@ -2038,6 +2042,11 @@ class RaveActivity : ComponentActivity() {
             Spacer(Modifier.height(10.u))
             if (stackGenres) Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.u)) { GenreChips() }
             else FlowRow(horizontalArrangement = Arrangement.spacedBy(8.u), verticalArrangement = Arrangement.spacedBy(6.u)) { GenreChips() }
+        }
+        // mediaLast: Tekst/Video come and go at the bottom, so the buttons above them never move.
+        if (mediaVisible && mediaLast) {
+            Spacer(Modifier.height(10.u))
+            FlowRow(horizontalArrangement=Arrangement.spacedBy(10.u), verticalArrangement=Arrangement.spacedBy(8.u)) { media() }
         }
         }
     }
@@ -2166,7 +2175,7 @@ class RaveActivity : ComponentActivity() {
         Column(
             // Trykk på panelet stopper her, så de ikke skjuler Party-kontrollene bak.
             modifier.pointerInput(Unit) { detectTapGestures { } }
-                .clip(RoundedCornerShape(20.u)).background(Color(0xF2171717))
+                .clip(RoundedCornerShape(20.u)).background(Color(0xFF171717)) // solid: the buttons behind must not show through
                 .verticalScroll(rememberScrollState()).padding(20.u)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
