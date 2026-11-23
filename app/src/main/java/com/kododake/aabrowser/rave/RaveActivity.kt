@@ -580,11 +580,13 @@ class RaveActivity : ComponentActivity() {
             lyricsGlass = prefs.getBoolean("lyricsGlass", true)
             lyricsOffsetMs = prefs.getInt("lyricsOffsetMs", 0).coerceIn(-LYRICS_OFFSET_LIMIT_MS, LYRICS_OFFSET_LIMIT_MS)
         } catch (_: Exception) { }
-        // Last chosen «Modus» with its preset (none saved: Standard, as before), after the lyrics prefs so the preset doesn't overwrite them. Party is set before onStart starts the analysis.
+        // Last chosen «Modus» and Tekst/Video as they were left (as the website keeps its settings; none saved:
+        // Standard with both on, as before). Party is set before onStart starts the analysis.
         try {
-            RaveMode.entries.firstOrNull { it.name == getSharedPreferences("rave", MODE_PRIVATE).getString("mode", null) }?.let {
-                raveMode = it; applyPreset(it); hardstyleOn = it == RaveMode.PARTY
-            }
+            val prefs = getSharedPreferences("rave", MODE_PRIVATE)
+            RaveMode.entries.firstOrNull { it.name == prefs.getString("mode", null) }?.let { raveMode = it; hardstyleOn = it == RaveMode.PARTY }
+            showLyrics = prefs.getBoolean("showLyrics", showLyrics)
+            videoOn = prefs.getBoolean("videoOn", videoOn)
         } catch (_: Exception) { }
         try {
             val prefs = getSharedPreferences("rave", MODE_PRIVATE)
@@ -1056,6 +1058,10 @@ class RaveActivity : ComponentActivity() {
             controls = controls.expire(SystemClock.elapsedRealtime())
         }
         LaunchedEffect(Unit) { controls = controls.touch(SystemClock.elapsedRealtime()) }
+        // Tekst and Video on/off are kept for the next start (the «Modus» preset only sets them when chosen).
+        LaunchedEffect(showLyrics, videoOn) {
+            try { getSharedPreferences("rave", MODE_PRIVATE).edit().putBoolean("showLyrics", showLyrics).putBoolean("videoOn", videoOn).apply() } catch (_: Exception) { }
+        }
         var announcement by remember { mutableStateOf<String?>(null) }
         // On screen only «PARTY ON / PARTY OFF» is announced (Espen 2026-11-20): no genre or song-part text; the analysis view shows those.
         var partyAnnounceReady by remember { mutableStateOf(false) }
@@ -1695,7 +1701,14 @@ class RaveActivity : ComponentActivity() {
                             Column(Modifier.align(Alignment.TopCenter).fillMaxWidth(0.5f), horizontalAlignment = Alignment.CenterHorizontally) {
                                 Info(Modifier.fillMaxWidth(), Alignment.CenterHorizontally, includeLyrics = false, transportVisible = false, mediaTogglesVisible = false, modeButtonsAllowed = false, compact = true)
                             }
-                            if (transportVisible) Box(Modifier.align(Alignment.BottomStart)) { TransportRow(::buttonInteraction) }
+                            // Bottom row: ⏮ ⏯ ⏭ on the left; with Tekst off the view buttons on the right of it (never on top of each other).
+                            Row(Modifier.align(Alignment.BottomStart).fillMaxWidth(if (showLyrics) 0.42f else 1f), verticalAlignment = Alignment.Bottom) {
+                                if (transportVisible) TransportRow(::buttonInteraction)
+                                Spacer(Modifier.width(16.u))
+                                Box(Modifier.weight(1f), contentAlignment = Alignment.BottomEnd) {
+                                    if (!showLyrics && (mediaTogglesVisible || partyControls)) ModeButtons(mediaTogglesVisible, stackGenres = true)
+                                }
+                            }
                             if (lyricsShift > 0.001f)
                                 LyricsPanel(
                                     Modifier.align(Alignment.BottomEnd).fillMaxWidth(0.56f)
@@ -1732,7 +1745,8 @@ class RaveActivity : ComponentActivity() {
                     }
                     // Without lyrics the mode buttons sit in the top-right corner: always free,
                     // so they never cover the play buttons, even on the small Kenwood screen.
-                    if (raveMode != RaveMode.PARTY && !showLyrics && (mediaTogglesVisible || partyControls)) {
+                    // (Party-scene and Filmvisning place them in their own layout.)
+                    if (raveMode != RaveMode.PARTY && raveMode != RaveMode.CINEMA && !showLyrics && (mediaTogglesVisible || partyControls)) {
                         Box(Modifier.align(Alignment.TopEnd)) { ModeButtons(mediaTogglesVisible, stackGenres = true) }
                     }
                 } else {
