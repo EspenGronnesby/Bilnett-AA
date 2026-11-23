@@ -59,6 +59,8 @@ import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -400,6 +402,36 @@ class RaveActivity : ComponentActivity() {
         startVisualizer()
         if (wasMic) startMic()
     }
+
+    /** The «Modus» picker is open: the buttons stay up until a choice is made (no 3 s auto-hide). */
+    private var modeMenuOpen by mutableStateOf(false)
+    /**
+     * «Modus» = the website's layout picker (web/src/settings.ts LANDSCAPE_LAYOUTS). Each one lays the
+     * car screen out as on the website, and choosing it switches on/off what the website's
+     * LAYOUT_PRESETS do; Tekst/Video can be changed afterwards as usual. Saved.
+     */
+    private var raveMode by mutableStateOf(RaveMode.STANDARD)
+    private fun selectMode(mode: RaveMode) {
+        raveMode = mode
+        applyPreset(mode)
+        // Party-scene also switches Party on (the app has no Party button); the other layouts switch it off.
+        if (hardstyleOn != (mode == RaveMode.PARTY)) setHardstyle()
+        try { getSharedPreferences("rave", MODE_PRIVATE).edit().putString("mode", mode.name).apply() } catch (_: Exception) { }
+    }
+    /** The website's LAYOUT_PRESETS: cinema = video + lyrics on, no glass; lyrics = lyrics on; party = video off. */
+    private fun applyPreset(mode: RaveMode) {
+        when (mode) {
+            RaveMode.STANDARD -> Unit
+            RaveMode.LYRICS -> showLyrics = true
+            RaveMode.CINEMA -> {
+                videoOn = true; showLyrics = true
+                if (lyricsGlass) { lyricsGlass = false; saveLyricsPrefs() }
+            }
+            RaveMode.PARTY -> videoOn = false
+        }
+        videoPlaying = false
+        if (showLyrics) pos = positionMs()
+    }
     private var reactive by mutableStateOf(false)
     private var hasAccess by mutableStateOf(true)
 
@@ -547,6 +579,12 @@ class RaveActivity : ComponentActivity() {
             lyricsStyle = LyricsStyle.entries.firstOrNull { it.name == prefs.getString("lyricsStyle", null) } ?: LyricsStyle.SCROLL
             lyricsGlass = prefs.getBoolean("lyricsGlass", true)
             lyricsOffsetMs = prefs.getInt("lyricsOffsetMs", 0).coerceIn(-LYRICS_OFFSET_LIMIT_MS, LYRICS_OFFSET_LIMIT_MS)
+        } catch (_: Exception) { }
+        // Last chosen «Modus» with its preset (none saved: Standard, as before), after the lyrics prefs so the preset doesn't overwrite them. Party is set before onStart starts the analysis.
+        try {
+            RaveMode.entries.firstOrNull { it.name == getSharedPreferences("rave", MODE_PRIVATE).getString("mode", null) }?.let {
+                raveMode = it; applyPreset(it); hardstyleOn = it == RaveMode.PARTY
+            }
         } catch (_: Exception) { }
         try {
             val prefs = getSharedPreferences("rave", MODE_PRIVATE)
@@ -1012,7 +1050,8 @@ class RaveActivity : ComponentActivity() {
     private fun RaveScreen() {
         val transportVisible = controls.transport
         val mediaTogglesVisible = controls.media
-        LaunchedEffect(controls.touchedAt) {
+        LaunchedEffect(controls.touchedAt, modeMenuOpen) {
+            if (modeMenuOpen) return@LaunchedEffect
             delay(3_000)
             controls = controls.expire(SystemClock.elapsedRealtime())
         }
@@ -1601,7 +1640,8 @@ class RaveActivity : ComponentActivity() {
             BoxWithConstraints(
                 Modifier.fillMaxSize()
                     .background(when {
-                        showVideo -> Color.Black.copy(alpha = 0.55f)
+                        // Filmvisning: a light veil, so the video is what you see (website: .landscape-cinema .veil).
+                        showVideo -> Color.Black.copy(alpha = if (raveMode == RaveMode.CINEMA) 0.3f else 0.55f)
                         else -> Color.Transparent
                     })
                     .padding(24.u),
@@ -1618,16 +1658,64 @@ class RaveActivity : ComponentActivity() {
                         tween(350, easing = androidx.compose.animation.core.CubicBezierEasing(.77f, 0f, .175f, 1f)),
                         label = "lyricsShift"
                     )
-                    Row(
+                    val scale = LocalRaveScale.current
+                    val mode = raveMode
+                    val buttonsInPanel = showLyrics && (mediaTogglesVisible || partyControls)
+                    if (mode == RaveMode.PARTY) {
+                        // Party-scene (as on the website): title | the cover, big, in the middle | lyrics.
+                        // ⏮ ⏯ ⏭ under the cover in a slot that is always kept free (as the website's dock),
+                        // so nothing moves when they show; the title column always leaves room for the vibe slider.
+                        val transportSlot = 100f * scale
+                        val partyCover = minOf(layoutWidth * 0.34f, layoutHeight - transportSlot).coerceAtLeast(120f).dp
+                        Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.weight(1f).padding(start = 84.u), contentAlignment = Alignment.Center) {
+                                Info(Modifier.fillMaxWidth(), Alignment.CenterHorizontally, includeLyrics = false, transportVisible = false, mediaTogglesVisible = false, modeButtonsAllowed = false, compact = layoutWidth < 800f * scale)
+                            }
+                            Spacer(Modifier.width(24.u))
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                ReactiveCover(partyCover, displayedFrame, showPalette, sceneOrigin) { center, _ ->
+                                    coverCenter = center
+                                }
+                                Box(Modifier.height(transportSlot.dp), contentAlignment = Alignment.BottomCenter) {
+                                    if (transportVisible) TransportRow(::buttonInteraction)
+                                }
+                            }
+                            Spacer(Modifier.width(24.u))
+                            // The buttons get the whole column while they show (3 s), then the lyrics come back.
+                            Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
+                                if (mediaTogglesVisible || partyControls) Box(Modifier.verticalScroll(rememberScrollState())) { ModeButtons(mediaTogglesVisible) }
+                                else if (lyricsShift > 0.001f)
+                                    LyricsPanel(Modifier.fillMaxWidth().heightIn(max = partyCover), lyricsShift, false, mediaTogglesVisible)
+                            }
+                        }
+                    } else if (mode == RaveMode.CINEMA) {
+                        // Filmvisning: just the video. The song's name on top, no cover; the lyrics (Tekst on/off)
+                        // low on the right over the video; ⏮ ⏯ ⏭ bottom left only while the buttons show.
+                        Box(Modifier.fillMaxSize()) {
+                            Column(Modifier.align(Alignment.TopCenter).fillMaxWidth(0.5f), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Info(Modifier.fillMaxWidth(), Alignment.CenterHorizontally, includeLyrics = false, transportVisible = false, mediaTogglesVisible = false, modeButtonsAllowed = false, compact = true)
+                            }
+                            if (transportVisible) Box(Modifier.align(Alignment.BottomStart)) { TransportRow(::buttonInteraction) }
+                            if (lyricsShift > 0.001f)
+                                LyricsPanel(
+                                    Modifier.align(Alignment.BottomEnd).fillMaxWidth(0.56f)
+                                        .height(minOf(minOf(layoutHeight * 0.4f, 420f * scale) + if (buttonsInPanel) 160f * scale else 0f, layoutHeight - 60f * scale).dp),
+                                    lyricsShift, buttonsInPanel, mediaTogglesVisible
+                                )
+                        }
+                    } else Row(
                         Modifier.fillMaxSize(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         // Cover gets what is left after title, artist and buttons (~150 dp scaled),
                         // so everything always fits vertically — tuned for the Kenwood 800x480 screen.
-                        val scale = LocalRaveScale.current
-                        val coverSize = minOf(layoutHeight - 150f * scale, layoutWidth * 0.4f, 300f * scale).coerceAtLeast(120f).dp
+                        // Tekstfokus: a narrow cover column (40/60) with a smaller cover.
+                        val coverSize = if (mode == RaveMode.LYRICS)
+                            minOf(layoutHeight - 150f * scale, layoutWidth * 0.18f, 200f * scale).coerceAtLeast(80f).dp
+                        else minOf(layoutHeight - 150f * scale, layoutWidth * 0.4f, 300f * scale).coerceAtLeast(120f).dp
+                        val left = if (mode == RaveMode.LYRICS) 0.40f else 0.44f
                         Column(
-                            Modifier.weight(0.44f + 0.56f * (1f - lyricsShift)),
+                            Modifier.weight(left + (1f - left) * (1f - lyricsShift)),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
@@ -1639,33 +1727,12 @@ class RaveActivity : ComponentActivity() {
                         }
                         if (lyricsShift > 0.001f) {
                             Spacer(Modifier.width((24f * lyricsShift).u))
-                            Column(
-                                Modifier.weight(0.56f * lyricsShift).fillMaxHeight()
-                                    .graphicsLayer { alpha = lyricsShift }
-                                    .clip(RoundedCornerShape(20.u))
-                                    .then(
-                                        if (lyricsGlass) Modifier
-                                            .background(Brush.verticalGradient(listOf(Color(0x33141018), Color(0x4D0A080C))))
-                                            .background(Brush.verticalGradient(listOf(Color(0x24FFFFFF), Color(0x0DFFFFFF))))
-                                            .border(1.dp, Color(0x29FFFFFF), RoundedCornerShape(20.u))
-                                        else Modifier
-                                    )
-                                    .padding(horizontal = 18.u, vertical = 12.u),
-                                horizontalAlignment = Alignment.Start
-                            ) {
-                                LyricsSwipeArea(Modifier.weight(1f).fillMaxWidth()) {
-                                    LyricsView(Alignment.Start, fill = true)
-                                }
-                                if (showLyrics && (mediaTogglesVisible || partyControls)) {
-                                    Spacer(Modifier.height(12.u))
-                                    ModeButtons(mediaTogglesVisible)
-                                }
-                            }
+                            LyricsPanel(Modifier.weight((1f - left) * lyricsShift).fillMaxHeight(), lyricsShift, buttonsInPanel, mediaTogglesVisible)
                         }
                     }
                     // Without lyrics the mode buttons sit in the top-right corner: always free,
                     // so they never cover the play buttons, even on the small Kenwood screen.
-                    if (!showLyrics && (mediaTogglesVisible || partyControls)) {
+                    if (raveMode != RaveMode.PARTY && !showLyrics && (mediaTogglesVisible || partyControls)) {
                         Box(Modifier.align(Alignment.TopEnd)) { ModeButtons(mediaTogglesVisible, stackGenres = true) }
                     }
                 } else {
@@ -1681,10 +1748,12 @@ class RaveActivity : ComponentActivity() {
                     }
                 } else {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                        ReactiveCover(artSize, displayedFrame, showPalette, sceneOrigin) { center, _ ->
-                            coverCenter = center
+                        if (raveMode != RaveMode.CINEMA) {
+                            ReactiveCover(artSize, displayedFrame, showPalette, sceneOrigin) { center, _ ->
+                                coverCenter = center
+                            }
+                            Spacer(Modifier.height(32.u))
                         }
-                        Spacer(Modifier.height(32.u))
                         Info(Modifier, Alignment.CenterHorizontally, transportVisible = transportVisible, mediaTogglesVisible = mediaTogglesVisible, onTransportInteraction = ::buttonInteraction)
                     }
                 }
@@ -1743,7 +1812,14 @@ class RaveActivity : ComponentActivity() {
             if (!isTap) return@awaitEachGesture
             val now = SystemClock.uptimeMillis()
             if (coverTaps == 0 || now - coverFirstTap > 1_500L) { coverTaps = 1; coverFirstTap = now } else coverTaps++
-            if (coverTaps >= 5) { coverTaps = 0; setHardstyle() }
+            if (coverTaps >= 5) {
+                coverTaps = 0; setHardstyle()
+                // Party off by 5 taps in Party-scene: back to Standard, so the next start doesn't switch Party on again.
+                if (!hardstyleOn && raveMode == RaveMode.PARTY) {
+                    raveMode = RaveMode.STANDARD
+                    try { getSharedPreferences("rave", MODE_PRIVATE).edit().putString("mode", raveMode.name).apply() } catch (_: Exception) { }
+                }
+            }
         }
     }
 
@@ -1780,6 +1856,48 @@ class RaveActivity : ComponentActivity() {
             Cover(coverSide, scale = orbCoverScale)
             // Snare → a soft, warm-white glow just outside the cover's edge (the website's party-edge); never over the cover.
             PartyEdgeGlow(size, coverSide, cornerRadius, partyLight, { orbCoverScale })
+        }
+    }
+
+    /** The lyrics panel of the car layouts (frosted glass unless «Åpen, uten boks»), with the view buttons under it. */
+    @Composable
+    private fun LyricsPanel(modifier: Modifier, alpha: Float, withButtons: Boolean, mediaTogglesVisible: Boolean) {
+        Column(
+            modifier
+                .graphicsLayer { this.alpha = alpha }
+                .clip(RoundedCornerShape(20.u))
+                .then(
+                    if (lyricsGlass) Modifier
+                        .background(Brush.verticalGradient(listOf(Color(0x33141018), Color(0x4D0A080C))))
+                        .background(Brush.verticalGradient(listOf(Color(0x24FFFFFF), Color(0x0DFFFFFF))))
+                        .border(1.dp, Color(0x29FFFFFF), RoundedCornerShape(20.u))
+                    else Modifier
+                )
+                .padding(horizontal = 18.u, vertical = 12.u),
+            horizontalAlignment = Alignment.Start
+        ) {
+            LyricsSwipeArea(Modifier.weight(1f, fill = false).fillMaxWidth()) {
+                LyricsView(Alignment.Start, fill = true)
+            }
+            if (withButtons) {
+                Spacer(Modifier.height(12.u))
+                ModeButtons(mediaTogglesVisible)
+            }
+        }
+    }
+
+    /** ⏮ ⏯ ⏭ */
+    @Composable
+    private fun TransportRow(onInteraction: () -> Unit) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Control(Icons.Rounded.SkipPrevious, 44.u, onInteraction) { controller?.transportControls?.skipToPrevious() }
+            Spacer(Modifier.width(28.u))
+            Control(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, 60.u, onInteraction) {
+                val tc = controller?.transportControls
+                if (playing) tc?.pause() else tc?.play()
+            }
+            Spacer(Modifier.width(28.u))
+            Control(Icons.Rounded.SkipNext, 44.u, onInteraction) { controller?.transportControls?.skipToNext() }
         }
     }
 
@@ -1838,16 +1956,7 @@ class RaveActivity : ComponentActivity() {
                 Spacer(Modifier.height(if (compact) 18.u else 28.u))
                 FlowRow(verticalArrangement = Arrangement.spacedBy(12.u), horizontalArrangement = Arrangement.spacedBy(28.u)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (transportVisible) {
-                        Control(Icons.Rounded.SkipPrevious, 44.u, onTransportInteraction) { controller?.transportControls?.skipToPrevious() }
-                        Spacer(Modifier.width(28.u))
-                        Control(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, 60.u, onTransportInteraction) {
-                            val tc = controller?.transportControls
-                            if (playing) tc?.pause() else tc?.play()
-                        }
-                        Spacer(Modifier.width(28.u))
-                        Control(Icons.Rounded.SkipNext, 44.u, onTransportInteraction) { controller?.transportControls?.skipToNext() }
-                    }
+                    if (transportVisible) TransportRow(onTransportInteraction)
                     }
                     if (modeButtonsAllowed && !narrow && (mediaTogglesVisible || (modeButtonsAllowed && partyControls))) ModeButtons(mediaTogglesVisible)
                 }
@@ -1865,6 +1974,7 @@ class RaveActivity : ComponentActivity() {
     private fun ModeButtons(mediaVisible: Boolean, stackGenres: Boolean = false) {
         Column(horizontalAlignment = if (stackGenres) Alignment.End else Alignment.Start) {
         FlowRow(horizontalArrangement=Arrangement.spacedBy(10.u), verticalArrangement=Arrangement.spacedBy(8.u)) {
+            ModePicker()
             if (mediaVisible) {
                 LyricsButton()
                 if (showLyrics && lyrics.isNotEmpty()) LyricsSyncButtons()
@@ -2098,6 +2208,47 @@ class RaveActivity : ComponentActivity() {
             Text("Neste · ${videoIndex + 1}/${videoClips.size} · ${clip.source.label}",
                 fontFamily = FontFamily.Default, maxLines = 1, softWrap = false,
                 color = Color(0xFFF5F2EC), fontSize = 18.us, fontWeight = FontWeight.SemiBold)
+        }
+    }
+
+    /** «Modus» drop-down, as on the website: Standard, Tekstfokus, Filmvisning (video), Party-scene. */
+    @Composable
+    private fun ModePicker() {
+        val cream = Color(0xFFF5F2EC)
+        val current = raveMode
+        // If the buttons move (layout change) while the menu is open, don't leave auto-hide paused for good.
+        androidx.compose.runtime.DisposableEffect(Unit) { onDispose { modeMenuOpen = false } }
+        Box {
+            Box(
+                Modifier.height(64.u).clip(RoundedCornerShape(50))
+                    .background(Color(0x22FFFFFF))
+                    .clickable { buttonInteraction(); modeMenuOpen = true }
+                    .padding(horizontal = 18.u),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("${current.label} ▾", fontFamily = FontFamily.Default, maxLines = 1, softWrap = false,
+                    color = cream, fontSize = 18.us, fontWeight = FontWeight.SemiBold)
+            }
+            DropdownMenu(
+                expanded = modeMenuOpen,
+                onDismissRequest = { modeMenuOpen = false; buttonInteraction() },
+                shape = RoundedCornerShape(16.u),
+                containerColor = Color(0xF21A1A1C),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x29FFFFFF))
+            ) {
+                RaveMode.entries.forEach { mode ->
+                    val on = mode == current
+                    DropdownMenuItem(
+                        text = {
+                            Text(mode.label, color = if (on) cream else Color(0xB3F5F2EC), fontSize = 18.us,
+                                fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, softWrap = false)
+                        },
+                        trailingIcon = { if (on) Text("✓", color = cream, fontSize = 18.us) },
+                        onClick = { modeMenuOpen = false; buttonInteraction(); selectMode(mode) },
+                        modifier = Modifier.heightIn(min = 56.u)
+                    )
+                }
+            }
         }
     }
 
@@ -2541,3 +2692,8 @@ internal val Int.u: Dp @Composable get() = (this * LocalRaveScale.current).dp
 internal val Float.u: Dp @Composable get() = (this * LocalRaveScale.current).dp
 private val Double.u: Dp @Composable get() = (this.toFloat() * LocalRaveScale.current).dp
 internal val Int.us: androidx.compose.ui.unit.TextUnit @Composable get() = (this * LocalRaveScale.current).sp
+
+/** The «Modus» choices; same names as the website's layout picker (web/src/settings.ts). */
+internal enum class RaveMode(val label: String) {
+    STANDARD("Standard"), LYRICS("Tekstfokus"), CINEMA("Filmvisning"), PARTY("Party-scene")
+}
