@@ -30,6 +30,14 @@ internal class MicFftSource(
     /** Name of the microphone in use, e.g. "bilens mikrofon (USB)" or "telefonens mikrofon". */
     @Volatile var deviceName: String = "telefonens mikrofon"
         private set
+    /**
+     * The sound comes through a microphone that cuts the bass: the car's own microphone, or the MIC
+     * fallback (with the phone's processing). Recordings from such a microphone (6 Nov) had mid/bass
+     * .4–.8 on hardstyle, the phone's UNPROCESSED microphone .05–.3, so the grit numbers differ
+     * ([HardstyleAudio.setBassCutInput]). Not measured on every car microphone: an educated guess.
+     */
+    @Volatile var bassCut: Boolean = false
+        private set
 
     /**
      * Prefer an external microphone — the car's (via the Android Auto / USB connection, or a
@@ -53,19 +61,20 @@ internal class MicFftSource(
         val rate = 44_100
         val minBuf = AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
         if (minBuf <= 0) return false
+        var fallback = false
         val rec = try {
             // UNPROCESSED = no automatic gain/noise suppression, so drops stay louder than build-ups.
             AudioRecord(MediaRecorder.AudioSource.UNPROCESSED, rate, AudioFormat.CHANNEL_IN_MONO,
                 AudioFormat.ENCODING_PCM_16BIT, max(minBuf, size * 4)).takeIf { it.state == AudioRecord.STATE_INITIALIZED }
                 ?: AudioRecord(MediaRecorder.AudioSource.MIC, rate, AudioFormat.CHANNEL_IN_MONO,
-                    AudioFormat.ENCODING_PCM_16BIT, max(minBuf, size * 4))
+                    AudioFormat.ENCODING_PCM_16BIT, max(minBuf, size * 4)).also { fallback = true }
         } catch (_: SecurityException) { return false } catch (_: Exception) { return false }
         if (rec.state != AudioRecord.STATE_INITIALIZED) { rec.release(); return false }
         val car = preferredInput()
-        if (car != null && rec.setPreferredDevice(car)) {
-            deviceName = "bilens mikrofon (${car.productName})"
-        }
-        Log.d("RaveGenre", "Party lytter via: $deviceName")
+        val carMic = car != null && rec.setPreferredDevice(car)
+        if (carMic) deviceName = "bilens mikrofon (${car!!.productName})"
+        bassCut = fallback || carMic
+        Log.d("RaveGenre", "Party lytter via: $deviceName${if (bassCut) " (kutter bass: gamle grit-tall for effektene)" else ""}")
         running = true
         thread = Thread({ loop(rec, rate) }, "rave-mic").apply { isDaemon = true; start() }
         return true

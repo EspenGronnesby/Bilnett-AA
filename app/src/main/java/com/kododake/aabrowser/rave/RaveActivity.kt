@@ -471,11 +471,11 @@ class RaveActivity : ComponentActivity() {
     private fun startMic() {
         if (micSource?.isRunning == true) return
         val src = MicFftSource(this, if (hardstyleOn) 2048 else 512) { fft, rate -> if (micMode) handleFft(fft, rate) }
-        if (src.start()) { micSource = src; micMode = true; reactive = true; hardstyleAudio.reset() }
+        if (src.start()) { micSource = src; micMode = true; reactive = true; hardstyleAudio.reset(); hardstyleAudio.setBassCutInput(src.bassCut) }
     }
 
     private fun stopMic() {
-        micSource?.stop(); micSource = null; micMode = false
+        micSource?.stop(); micSource = null; micMode = false; hardstyleAudio.setBassCutInput(false)
     }
 
     // Sangtekst
@@ -1143,7 +1143,8 @@ class RaveActivity : ComponentActivity() {
                     // In a build-up the snare roll must not become kicks, bass and grit through the rock
                     // half of the slider's top (that made the build-up wilder than the drop, log 2026-11-06).
                     val visualInput = if (songPhase.part == SongPart.BUILDUP) clocked.copy(snare = clocked.snare * .3f) else clocked
-                    val shapedFull = vibeShape(visualInput, v, r)
+                    // Effects: distortion measured for today's sources (the genre rules keep grit/heavy).
+                    val shapedFull = vibeShape(visualInput.forEffects(), v, r)
                     // Song structure (hardstyle/EDM): calm intro, rising build-up, max chaos on the drop.
                     val phaseIntensity = if (playing && fresh)
                         songPhase.update(rawTarget, nowMs, positionMs(), if (songDurationMs > 0L) songDurationMs else -1L) else 1f

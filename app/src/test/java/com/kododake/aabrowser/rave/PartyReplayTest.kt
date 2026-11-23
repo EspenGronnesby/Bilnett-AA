@@ -126,6 +126,49 @@ class PartyReplayTest {
             ?.takeIf { kotlin.math.abs((runCatching { fmt.parse(stamp(it.name))!!.time }.getOrNull() ?: 0L) - t) <= 10_000L }
     }
 
+    /**
+     * Grit for the effects (2026-11-23): how often a light wave could fire (bass > WAVE_BASS_FROM and grit >
+     * WAVE_GRIT_FROM) and how heavy the shake input is, old grit ([HardstyleFrame.grit]) against the
+     * effects' grit ([HardstyleFrame.gritFx]), hardstyle against everything else. Writes grit-effekter.txt.
+     * The 6 Nov microphone recordings (2048 bytes) count as a bass-cutting microphone ([HardstyleAudio.setBassCutInput]).
+     */
+    @Test fun gritForEffects() {
+        val fftDir = File(raw, "fft"); if (!fftDir.isDirectory) return
+        val hard = listOf("hennson","headhunterz","angerfist","warface","sickmode","phuture","d_sturb","tha_playah","sound_rush",
+            "psyko","deadly_guns","rebelion","aspire","state_one","bassfreq","hard_queen","dj_tani","luca_testa","delete",
+            "starfire","rob_gee","anderex","coone","d_block","toza","radical","lock_n_load","miss_k8","dual_damage","rayzen",
+            "deezl","n_vitral","ran_d","the_straikerz","galactixx","trye","lekkerfaces","kili","yoshiko","bass_mod","the_dark",
+            "italo","dimitri","brennan","toneshift","krowdexx","la_fuente")
+        val out = StringBuilder("sang | kilde | bølge-mulig gammel % | ny % | heavy (bass>.5) gammel | ny\n")
+        val groups = HashMap<String, MutableList<DoubleArray>>()
+        for (fft in fftDir.listFiles { f -> f.name.endsWith(".fft.gz") }.orEmpty().sortedBy { it.name }) {
+            val fs = frames(fft); if (fs.size < 300) continue
+            val mic = fs.first().fft.size == 2048
+            val bassCut = mic && fft.name.startsWith("20261106")
+            val audio = HardstyleAudio().apply { setBassCutInput(bassCut) }
+            var n = 0; var wOld = 0; var wNew = 0; var hn = 0; var hOld = 0.0; var hNew = 0.0
+            for (fr in fs) {
+                val f = audio.accept(fr.fft, fr.rate, fr.now)
+                n++
+                if (f.bass > WAVE_BASS_FROM && f.grit > WAVE_GRIT_FROM) wOld++
+                if (f.bass > WAVE_BASS_FROM && f.gritFx > WAVE_GRIT_FROM) wNew++
+                if (f.bass > .5f) { hn++; hOld += f.heavy; hNew += f.heavyFx }
+            }
+            val g = if (hard.any { fft.name.contains(it) }) "HARDSTYLE" else "annet"
+            val row = doubleArrayOf(100.0 * wOld / n, 100.0 * wNew / n, hOld / maxOf(1, hn), hNew / maxOf(1, hn))
+            groups.getOrPut("$g ${if (bassCut) "mikrofon som kutter bass" else if (mic) "mikrofon" else "Visualizer"}") { mutableListOf() }.add(row)
+            out.append(String.format(Locale.US, "%-48s %-6s %s | %5.1f | %5.1f | %.2f | %.2f%n", fft.name.drop(16).take(48),
+                if (bassCut) "kutt" else if (mic) "mik" else "vis", g, row[0], row[1], row[2], row[3]))
+        }
+        out.append("\nSnitt per gruppe (bølge-mulig % av tida gammel → ny, heavy gammel → ny):\n")
+        for ((k, rows) in groups.toSortedMap()) {
+            fun m(i: Int) = rows.map { it[i] }.average()
+            out.append(String.format(Locale.US, "  %-40s %3d sanger | bølge %5.1f %% → %5.1f %% | heavy %.2f → %.2f%n", k, rows.size, m(0), m(1), m(2), m(3)))
+        }
+        File(raw.parentFile, "grit-effekter.txt").writeText(out.toString())
+        println(out)
+    }
+
     /** What the sound measures in each part Espen named (means over time; dB relative to the song's median). */
     @Test fun featuresPerPart() {
         val fftDir = File(raw, "fft")

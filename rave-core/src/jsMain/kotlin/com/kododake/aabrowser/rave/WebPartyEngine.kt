@@ -377,7 +377,8 @@ class WebPartyEngine(fftSize: Int = 2048) {
         val strengthMul = GenreRules.strengthMul(strength)
         val clocked = if (clockKick != null) rawTarget.copy(kick = clockKick) else rawTarget
         val visualInput = if (songPhase.part == SongPart.BUILDUP) clocked.copy(snare = clocked.snare * .3f) else clocked
-        val shapedFull = vibeShape(visualInput, v, r)
+        // Effects: distortion measured for today's sources (the genre rules keep grit/heavy).
+        val shapedFull = vibeShape(visualInput.forEffects(), v, r)
         val phaseIntensity = if (playing && fresh) songPhase.update(rawTarget, now, pos, dur) else 1f
         if (playing && fresh) listener.update(rawTarget, now, pos, dur)
         partName = songPhase.part.name

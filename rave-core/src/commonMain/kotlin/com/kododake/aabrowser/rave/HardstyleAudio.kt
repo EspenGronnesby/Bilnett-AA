@@ -25,6 +25,22 @@ const val FLYWHEEL_BEATS = 8
 /** Kick value of a flywheel beat (under the .95 the song structure counts as a heard kick). */
 const val FLYWHEEL_KICK = .85f
 const val GRIT_TAIL_TO_MS = 250L
+/**
+ * Grit = distortion: mid (250–2500 Hz) / bass in the kick tail, counted from FROM, full at FROM + RANGE.
+ * These were set from the 6 Nov microphone, which cut the bass (mid/bass .4–.8 on hardstyle). The genre
+ * rules were tuned against them and keep using [HardstyleFrame.grit] / [HardstyleFrame.heavy] as before.
+ */
+const val GRIT_RATIO_FROM = .35f
+const val GRIT_RATIO_RANGE = .5f
+/**
+ * The same distortion for the EFFECTS ([HardstyleFrame.gritFx] / [HardstyleFrame.heavyFx]: shake, light
+ * waves), for sources that keep the bass: Android's Visualizer, the phone's UNPROCESSED microphone and the
+ * website's shared/raw sound. There mid/bass in the kick tail is only .05–.32, so with the numbers above
+ * grit was always 0 (23 Nov, 133 recordings: hardstyle p90 ≈ .12–.32, rap ≈ .09–.20). A microphone that
+ * cuts the bass ([HardstyleAudio.setBassCutInput]) keeps the old numbers for the effects too.
+ */
+const val GRIT_FX_FROM = .14f
+const val GRIT_FX_RANGE = .16f
 
 data class HardstyleFrame(val bass: Float = 0f, val kick: Float = 0f, val highs: Float = 0f,
     val energy: Float = 0f, val burst: Float = 0f, val build: Float = 0f,
@@ -68,7 +84,14 @@ data class HardstyleFrame(val bass: Float = 0f, val kick: Float = 0f, val highs:
     /** 0..1 while vocals / a melodic lead sing (tonal 300–3400 Hz above its usual level). */
     val vocal: Float = 0f,
     /** Pulse 0..1 when a new vocal phrase/syllable starts (not on kicks or snares). */
-    val vocalHit: Float = 0f)
+    val vocalHit: Float = 0f,
+    /** [grit] measured for today's sources ([GRIT_FX_FROM]); the effects use this, the genre rules [grit]. */
+    val gritFx: Float = 0f,
+    /** [heavy] built from [gritFx]; the effects use this, the genre rules [heavy]. */
+    val heavyFx: Float = 0f)
+
+/** The frame the effects (shake, waves, spikes, flashes) are shaped from: distortion measured for today's sources. */
+fun HardstyleFrame.forEffects(): HardstyleFrame = copy(grit = gritFx, heavy = heavyFx)
 
 /** Independent from the original visualizer. Input sample rate is Hz, not Android's milliHz. */
 class HardstyleAudio {
@@ -89,6 +112,11 @@ class HardstyleAudio {
     private var screechAvg = 0f
     private var songRef = 0f
     private var lastHeldGrit = 0f
+    private var lastHeldGritFx = 0f
+    /** True while the sound comes from a microphone that cuts the bass (see [GRIT_FX_FROM]). */
+    private var bassCutInput = false
+    /** The microphone in use cuts the bass (car microphone / fallback MIC source): effects keep the old grit numbers. */
+    @JvmSync fun setBassCutInput(on: Boolean) { bassCutInput = on }
     private var offbeatScore = 0f
     private var vocalAvg = 0f; private var lastVocalValue = 0f; private var lastVocalHit = -1000L
     private val beats = BeatTracker()
@@ -121,7 +149,7 @@ class HardstyleAudio {
         shortAverage = 0f; longAverage = 0f; beatPeriod = 0f
         vocalAvg = 0f; lastVocalValue = 0f; lastVocalHit = -1000
         snareAvg = 0f; lastSnareValue = 0f; lastSnare = -1000; crashAvg = 0f; lastCrashValue = 0f; lastCrash = -1000; screechAvg = 0f
-        songRef = 0f; lastHeldGrit = 0f; offbeatScore = 0f
+        songRef = 0f; lastHeldGrit = 0f; lastHeldGritFx = 0f; offbeatScore = 0f
         beats.reset(); fluxAvg = 0f; lastCandidate = -1000
         frame = HardstyleFrame()
     }
@@ -211,26 +239,33 @@ class HardstyleAudio {
         // away while risers/screeches fill the mids, which made mid/bass (= grit) highest right
         // BEFORE the drop and low in it (log 2026-11-06). That screech is tension, not heaviness.
         val bassPresent = if (songRef > 0f) ((value / songRef - GRIT_BASS_FROM) / GRIT_BASS_RANGE).coerceIn(0f, 1f) else 0f
-        val gritNow = ((mid / max(value, 12f) - .35f) / .5f).coerceIn(0f, 1f) * (value / 20f).coerceIn(0f, 1f) * bassPresent
+        val ratio = mid / max(value, 12f)
+        val level = (value / 20f).coerceIn(0f, 1f) * bassPresent
+        val gritNow = ((ratio - GRIT_RATIO_FROM) / GRIT_RATIO_RANGE).coerceIn(0f, 1f) * level
+        val gritFxNow = if (bassCutInput) gritNow else ((ratio - GRIT_FX_FROM) / GRIT_FX_RANGE).coerceIn(0f, 1f) * level
         // Measure distortion only in the kick tail; between kicks just hold it (pads/leads don't count).
         // No kick heard for a while (long zaag tails can hide the attack) → measure as before.
         val anchor = max(lastKick, beats.lastBeat)
         val sinceKick = now - anchor
-        val grit = when {
-            // No kick for a while: nothing to measure the distortion of (fades out instead of
-            // reading pads, risers and screeches as zaag).
-            sinceKick > 600L -> lastHeldGrit * exp(-dt / .3f)
-            sinceKick in GRIT_TAIL_FROM_MS..GRIT_TAIL_TO_MS -> gritNow
-            else -> lastHeldGrit * exp(-dt / .6f)
+        // No kick for a while: nothing to measure the distortion of (fades out instead of
+        // reading pads, risers and screeches as zaag).
+        fun held(now: Float, last: Float) = when {
+            sinceKick > 600L -> last * exp(-dt / .3f)
+            sinceKick in GRIT_TAIL_FROM_MS..GRIT_TAIL_TO_MS -> now
+            else -> last * exp(-dt / .6f)
         }
+        val grit = held(gritNow, lastHeldGrit)
         lastHeldGrit = grit
+        val gritFx = held(gritFxNow, lastHeldGritFx)
+        lastHeldGritFx = gritFx
         val lift = ((shortAverage / max(4f, longAverage) - 1f) / .8f).coerceIn(0f, 1f)
         // How loud the bass is against this song's own loud parts (songRef falls over ~25 s), so a
         // long drop stays heavy instead of adapting away like `lift` (log 2026-11-06: heavy .13 at
         // the drop, .00 fifteen seconds later — the shake died in the middle of the drop).
         val loudRel = if (songRef > 0f) ((shortAverage / songRef - .45f) / .45f).coerceIn(0f, 1f) else 0f
-        val heavyRaw = norm * norm * (.4f * grit + .15f * lift + .25f * loudRel + .2f * norm)
-        val heavyTarget = ((heavyRaw - .12f) / .4f).coerceIn(0f, 1f)
+        fun heavyFrom(g: Float) = ((norm * norm * (.4f * g + .15f * lift + .25f * loudRel + .2f * norm) - .12f) / .4f).coerceIn(0f, 1f)
+        val heavyTarget = heavyFrom(grit)
+        val heavyFxTarget = heavyFrom(gritFx)
         frame = HardstyleFrame(
             smooth(frame.bass, norm, if (norm > frame.bass) .025f else .18f),
             // Grid beats hit fully; off-grid onsets (syncopated rap/rock kicks) still pulse a bit.
@@ -278,7 +313,9 @@ class HardstyleAudio {
                         (1f - frame.screech) else 0f
                 smooth(frame.vocal, target, if (target > frame.vocal) .08f else .4f)
             },
-            if (vocalOnset) 1f else frame.vocalHit * exp(-dt/.3f))
+            if (vocalOnset) 1f else frame.vocalHit * exp(-dt/.3f),
+            smooth(frame.gritFx, gritFx, if (gritFx > frame.gritFx) .02f else .25f),
+            smooth(frame.heavyFx, heavyFxTarget, if (heavyFxTarget > frame.heavyFx) .02f else .5f))
         average = smooth(average, value, .5f); lastBass = value
         vocalAvg = if (vocalAvg == 0f) voice else smooth(vocalAvg, voice, 8f); lastVocalValue = voice
         screechAvg = if (screechAvg == 0f) scr else smooth(screechAvg, scr, 6f)
