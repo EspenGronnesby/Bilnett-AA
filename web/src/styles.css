@@ -714,7 +714,7 @@ select option { background: #211827; color: white; }
 .tr-hero-text { display: grid; gap: calc(4 * var(--tu)); flex: none; min-width: calc(190 * var(--tu)); }
 .tr-hero-label { color: var(--muted); font-size: calc(13 * var(--tu)); }
 .tr-hero-part { font-size: calc(44 * var(--tu)); font-weight: 700; line-height: 1; letter-spacing: -0.01em; }
-.tr-eq { flex: 1 1 0; min-width: 0; width: 0; height: calc(76 * var(--tu)); }
+.tr-eq { flex: 1 1 0; min-width: 0; width: 0; height: calc(84 * var(--tu)); }
 
 .tr-timeline { width: 100%; min-width: 0; height: clamp(190px, 38vh, 420px); background: var(--card); border-radius: calc(16 * var(--tu)); display: block; cursor: crosshair; touch-action: none; }
 
