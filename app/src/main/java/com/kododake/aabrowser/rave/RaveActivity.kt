@@ -1669,7 +1669,7 @@ class RaveActivity : ComponentActivity() {
                         val partyCover = minOf(layoutWidth * 0.34f, layoutHeight - transportSlot).coerceAtLeast(120f).dp
                         Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
                             Box(Modifier.weight(1f).padding(start = 84.u), contentAlignment = Alignment.Center) {
-                                Info(Modifier.fillMaxWidth(), Alignment.CenterHorizontally, includeLyrics = false, transportVisible = false, mediaTogglesVisible = false, modeButtonsAllowed = false, compact = layoutWidth < 800f * scale)
+                                Info(Modifier.fillMaxWidth(), Alignment.CenterHorizontally, includeLyrics = false, transportVisible = false, mediaTogglesVisible = false, modeButtonsAllowed = false, compact = false, fitTitle = true)
                             }
                             Spacer(Modifier.width(24.u))
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1926,7 +1926,9 @@ class RaveActivity : ComponentActivity() {
         onTransportInteraction: () -> Unit = {},
         modeButtonsAllowed: Boolean = true,
         /** Smaller title/artist, as in the lyrics layout. The car layout always uses this. */
-        compact: Boolean = showLyrics
+        compact: Boolean = showLyrics,
+        /** One line that shrinks (36 → 18) until the whole title fits, never split inside a word (Party-scene's narrow column). */
+        fitTitle: Boolean = false
     ) {
         val ta = if (align == Alignment.CenterHorizontally) TextAlign.Center else TextAlign.Start
         val narrow = align == Alignment.CenterHorizontally
@@ -1938,7 +1940,13 @@ class RaveActivity : ComponentActivity() {
             alpha = p; translationY = (1f - p) * 12.dp.toPx()
         }
         Column(modifier, horizontalAlignment = align) {
-            Text(
+            if (fitTitle) androidx.compose.foundation.text.BasicText(
+                title.ifBlank { "Start Spotify" }, modifier = Modifier.introIn(0f),
+                style = androidx.compose.ui.text.TextStyle(color = Color(0xFFF5F2EC), fontFamily = FontFamily.Default,
+                    fontWeight = FontWeight.SemiBold, textAlign = ta),
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 18.us, maxFontSize = 36.us)
+            ) else Text(
                 title.ifBlank { "Start Spotify" }, modifier = Modifier.introIn(0f), textAlign = ta, fontFamily = FontFamily.Default,
                 color = Color(0xFFF5F2EC), fontSize = if (compact) 20.us else 36.us, fontWeight = FontWeight.SemiBold,
                 maxLines = if (compact) 1 else 2, overflow = TextOverflow.Ellipsis, lineHeight = if (compact) 24.us else 40.us
