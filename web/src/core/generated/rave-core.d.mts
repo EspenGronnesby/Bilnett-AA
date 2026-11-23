@@ -85,6 +85,13 @@ export declare class WebPartyEngine {
     get particleBase(): number;
     get particleMax(): number;
     get rippleGapMs(): number;
+    get partyFxKeys(): Array<string>;
+    setPartyFx(key: string, value: number): void;
+    partyFx(key: string): number;
+    resetPartyFx(): void;
+    partyFxFromSlider(key: string, position: number): number;
+    partyFxToSlider(key: string, value: number): number;
+    partyFxText(value: number): string;
     get edgeGlow(): number;
     set edgeGlow(value: number);
     get backlightHitTravel(): number;

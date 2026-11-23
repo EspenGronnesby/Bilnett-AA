@@ -20,6 +20,7 @@ import { useShortcut } from './ui/useShortcut'
 import { Clock } from './ui/Clock'
 import { ShortcutsSheet } from './ui/Shortcuts'
 import { PartyBanner, PartyControls, PartyCoverFx, PartyGrain, PartyParticles, PartyScene, PartyShaker } from './party/PartyLayers'
+import { PartySettingsSheet, usePartyFx } from './party/PartySettings'
 import { useParty, type Party } from './party/useParty'
 import { Trainer } from './party/Trainer'
 import { useAnalysis } from './party/analysis'
@@ -121,9 +122,11 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
   const { wide, scale: dp } = useScreen(settings.orientation)
   const [fullscreen, toggleFullscreen] = useFullscreen(settings.autoFullscreen)
   const [settingsOpen, setSettingsOpen] = useState(() => demo && new URLSearchParams(location.search).has('settings'))
+  /** «Party-innstillinger» (åpnes fra Party-kontrollene; i demoen også med ?partyfx). */
+  const [partyFxOpen, setPartyFxOpen] = useState(() => demo && new URLSearchParams(location.search).has('partyfx'))
   useWakeLock(settings.keepAwake)
   // The mouse pointer hides after 3 s still; the buttons only show over their own area.
-  const idle = useIdle(settings.autoHide && !settingsOpen, settings.hideAfter * 1000)
+  const idle = useIdle(settings.autoHide && !settingsOpen && !partyFxOpen, settings.hideAfter * 1000)
   const autoHide = settings.autoHide && !settingsOpen
   const problem = playerProblemText(now)
   const lyrics = useLyrics(track)
@@ -144,6 +147,7 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
     calm: settings.noFlash || reduceMotion,
     trainerAuto: settings.trainerAuto, trainerReaction: settings.trainerReaction,
   })
+  usePartyFx(party.engine, settings.partyFx)
   const trainer = useAnalysis()
   const zoneHeight = useZoneHeight()
   const dockHeight = useDockHeight()
@@ -243,6 +247,10 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
           reaction={settings.trainerReaction} setReaction={trainerReaction => updateSettings({ trainerReaction })}
           onClose={() => trainer.closeTrainer()} cover={track?.coverUrl ?? null} />
       )}
+      {party.on && partyFxOpen && !settingsOpen && (
+        <PartySettingsSheet engine={party.engine} values={settings.partyFx}
+          onChange={partyFx => updateSettings({ partyFx })} onClose={() => setPartyFxOpen(false)} />
+      )}
       {settingsOpen && (
         <SettingsSheet now={now} settings={settings} update={updateSettings} wide={wide}
           onClose={() => setSettingsOpen(false)} />
@@ -291,7 +299,8 @@ function NowPlaying({ demo = false }: { demo?: boolean }) {
           if (v === undefined) delete next[party.engine.genre]; else next[party.engine.genre] = v
           updateSettings({ partyStrength: next })
           party.engine.setStrength(v ?? null)
-        }} />
+        }}
+        settingsOpen={partyFxOpen} onToggleSettings={() => setPartyFxOpen(open => !open)} />
     </div>
   )
   const cover = (

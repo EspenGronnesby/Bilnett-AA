@@ -30,6 +30,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -256,8 +257,15 @@ class RaveActivity : ComponentActivity() {
     private val flashBudget = FlashBudget()
     /** 0..1: the "breath in" before a drop darkens the scene (festival trick: dark, then hit). */
     private var dip by mutableFloatStateOf(0f)
-    /** 0..1: the single big hit on the drop's first beat, fading out. */
+    /** 0..1: the single big hit on the drop's first beat, fading out (before Espen's «Hvite blink» is multiplied in). */
     private var dropHit by mutableFloatStateOf(0f)
+    /** Party-innstillinger (lysbølger, risting, strobe, hvite blink): felles tall i rave-core, 1 = som før.
+     *  Lagres i SharedPreferences «rave» som «party_<nøkkel>». Leses av frame-løkken og tegningen hvert bilde. */
+    private val partyFx = PartySettings()
+    /** Økes ved hver endring, så panelet tegnes på nytt (selve tallene ligger i [partyFx]). */
+    private var partyFxVersion by mutableIntStateOf(0)
+    /** Panelet «Party-innstillinger» er åpent. */
+    private var showPartyFx by mutableStateOf(false)
     // Premium layer (Party): music "breath" for the cover, colour grade per song part,
     // Written by the frame loop, read only while drawing.
     private var breath by mutableFloatStateOf(0f)
@@ -289,6 +297,15 @@ class RaveActivity : ComponentActivity() {
     private var tapMode by mutableStateOf(false)
     private var tapCount by mutableIntStateOf(0)
     private fun stopTapTest() { tapMode = false; syncTapper.reset(); tapCount = 0 }
+    /** Endrer én Party-innstilling (virker fra neste bilde); [save] = lagre nå (når fingeren slipper). */
+    private fun setPartyFx(fx: PartyFx, value: Float, save: Boolean) {
+        partyFx[fx] = value; partyFxVersion++
+        if (save) try { getSharedPreferences("rave", MODE_PRIVATE).edit().putFloat("party_${fx.key}", partyFx[fx]).apply() } catch (_: Exception) { }
+    }
+    private fun resetPartyFx() {
+        partyFx.reset(); partyFxVersion++
+        try { getSharedPreferences("rave", MODE_PRIVATE).edit().apply { PartyFx.entries.forEach { remove("party_${it.key}") } }.apply() } catch (_: Exception) { }
+    }
     private fun saveSync() { try { getSharedPreferences("rave", MODE_PRIVATE).edit().putInt("syncMs", syncMs).apply() } catch (_: Exception) { } }
     private var genreAnnouncedAt by mutableLongStateOf(0L)
     // Vibe meter (vertical slider): 0 = calm … 1 = full hardstyle/rock. In auto mode the app moves
@@ -542,6 +559,10 @@ class RaveActivity : ComponentActivity() {
         showKoko = try { getSharedPreferences("rave", MODE_PRIVATE).getBoolean("koko", false) } catch (_: Exception) { false }
         syncMs = try { getSharedPreferences("rave", MODE_PRIVATE).getInt("syncMs", 0) } catch (_: Exception) { 0 }
             .coerceIn(-SYNC_LIMIT_MS, SYNC_LIMIT_MS)
+        try {
+            val prefs = getSharedPreferences("rave", MODE_PRIVATE)
+            PartyFx.entries.forEach { partyFx[it] = prefs.getFloat("party_${it.key}", 1f) }
+        } catch (_: Exception) { partyFx.reset() }
         try {
             val prefs = getSharedPreferences("rave", MODE_PRIVATE)
             lyricsStyle = LyricsStyle.entries.firstOrNull { it.name == prefs.getString("lyricsStyle", null) } ?: LyricsStyle.SCROLL
@@ -1200,7 +1221,8 @@ class RaveActivity : ComponentActivity() {
                     // The drop lands: ONE big hit on beat one (strobe only after the drop is confirmed).
                     // Full strength when it came out of a breath-in (a real build-up); softer otherwise,
                     // since an unprepared drop may still turn out to be a fake.
-                    if (part == SongPart.DROP && lastPart != SongPart.DROP && showW > .3f && flashBudget.tryFlash(nowMs))
+                    // «Hvite blink» av (0×): treffet tennes ikke og bruker ikke av blinkbudsjettet.
+                    if (part == SongPart.DROP && lastPart != SongPart.DROP && showW > .3f && partyFx.flashes > 0f && flashBudget.tryFlash(nowMs))
                         dropHit = if (hadDip) 1f else DROP_HIT_UNSURE
                     else if (dropHit > 0f) dropHit = (dropHit * kotlin.math.exp(-dt / DROP_HIT_DECAY_S)).let { if (it < .01f) 0f else it }
                     lastPart = part
@@ -1280,8 +1302,8 @@ class RaveActivity : ComponentActivity() {
                         val punch = if (dropOn) partyProfile.shake * f.kick * volumeGain(volume) *
                             f.heavy * (SHAKE_PUNCH_DP.dp.toPx() + loudness(volume) * SHAKE_PUNCH_LOUD_DP.dp.toPx()) * (1f + ramp * .8f) else 0f
                         val screechPush = if (dropOn) screechShake * f.screech * SHAKE_SCREECH_DP.dp.toPx() * volumeGain(volume) * f.kick else 0f
-                        val push = punch + screechPush
-                        logFrame.shakePx = push / density.density   // in dp, comparable between phones
+                        logFrame.shakePx = (punch + screechPush) / density.density   // in dp, comparable between phones (before Espen's «Risting»)
+                        val push = (punch + screechPush) * partyFx.shake
                         if (f.kick < .3f) shakeDirection[1] = 1f
                         if (f.kick > .55f && shakeDirection[1] == 1f) {
                             shakeDirection[1] = 0f
@@ -1290,7 +1312,7 @@ class RaveActivity : ComponentActivity() {
                         val big = push > .5f
                         shakeX = if (big) cos(shakeDirection[0]) * push else 0f
                         shakeY = if (big) sin(shakeDirection[0]) * push else 0f
-                        shakeRotation = if (big) (f.heavy * f.kick * SHAKE_ROTATION_DEG * if (shakeDirection[0] > PI) -1f else 1f) else 0f
+                        shakeRotation = if (big) (f.heavy * f.kick * SHAKE_ROTATION_DEG * partyFx.shake * if (shakeDirection[0] > PI) -1f else 1f) else 0f
                         // Genre motion: reggaeton bounces (scaled by the bar), rounded to whole px. No side-to-side sway (Espen 2026-11-18).
                         bounceY = kotlin.math.round(-look.bounceY * GENRE_BOUNCE_DP.dp.toPx() * strengthMul)
                         if (warmth != look.warmth) warmth = look.warmth
@@ -1500,8 +1522,9 @@ class RaveActivity : ComponentActivity() {
                 // sensitive to flashing light) — matters at uptempo, where kicks come 3+ times/s.
                 val strobeNow = SystemClock.uptimeMillis()
                 // All flash types share one budget: at most 3 full-screen flashes in any second.
-                if (strobeRaw > .3f && strobeNow - lastStrobeAt >= 400L && flashBudget.tryFlash(strobeNow)) { lastStrobeAt = strobeNow; strobeColorIndex++ }
-                val strobe = if (strobeNow - lastStrobeAt < 120L) strobeRaw else 0f
+                // Espens «Strobe» ganger bare styrken (når den tennes er som før); 0× = tennes ikke, bruker ikke budsjettet.
+                if (partyFx.strobe > 0f && strobeRaw > .3f && strobeNow - lastStrobeAt >= 400L && flashBudget.tryFlash(strobeNow)) { lastStrobeAt = strobeNow; strobeColorIndex++ }
+                val strobe = if (strobeNow - lastStrobeAt < 120L) strobeRaw * partyFx.strobe else 0f
                 if (strobe > 0.03f) {
                     // Each flash takes the next cover colour.
                     // Mixed with white: no saturated (red) colour flashes.
@@ -1509,19 +1532,20 @@ class RaveActivity : ComponentActivity() {
                     drawRect(strobeColor.copy(alpha = (0.45f * strobe).coerceAtMost(.45f)))
                     drawRect(
                         Brush.radialGradient(
-                            listOf(Color.White.copy(alpha = 0.35f * strobe), Color.Transparent),
+                            listOf(Color.White.copy(alpha = (0.35f * strobe).coerceAtMost(1f)), Color.Transparent),
                             center = center, radius = max(w, h) * 0.6f
                         )
                     )
                 }
                 // The white heavy-flash obeys the same 2.5-flashes-per-second cap as the strobe.
                 val flashNow = SystemClock.uptimeMillis()
-                if (heavyFlash > .3f && flashNow - lastHeavyFlashAt >= 400L && flashNow - lastStrobeAt >= 120L &&
+                val flashes = partyFx.flashes
+                if (flashes > 0f && heavyFlash > .3f && flashNow - lastHeavyFlashAt >= 400L && flashNow - lastStrobeAt >= 120L &&
                     flashBudget.tryFlash(flashNow)) lastHeavyFlashAt = flashNow
                 if (heavyFlash > 0.02f && flashNow - lastHeavyFlashAt < 120L) {
                     drawRect(
                         Brush.radialGradient(
-                            listOf(Color.White.copy(alpha = 0.25f * heavyFlash), Color.Transparent),
+                            listOf(Color.White.copy(alpha = (0.25f * heavyFlash * flashes).coerceAtMost(1f)), Color.Transparent),
                             center = center, radius = max(w, h) * 0.9f
                         )
                     )
@@ -1529,10 +1553,10 @@ class RaveActivity : ComponentActivity() {
                 // Drop: a faint cover-coloured glow lifts the whole scene (eased over 1.5 s, not a flash).
                 if (g > .05f) drawRect(hardPalette[0].copy(alpha = .07f * g), blendMode = androidx.compose.ui.graphics.BlendMode.Screen)
                 // The drop's single big hit (fades out over ~0.6 s).
-                val hit = dropHit
+                val hit = dropHit * flashes
                 if (hit > .02f) drawRect(
                     Brush.radialGradient(
-                        listOf(Color.White.copy(alpha = .6f * hit), hardPalette.first().copy(alpha = .3f * hit), Color.Transparent),
+                        listOf(Color.White.copy(alpha = (.6f * hit).coerceAtMost(1f)), hardPalette.first().copy(alpha = (.3f * hit).coerceAtMost(1f)), Color.Transparent),
                         center = center, radius = max(w, h) * .9f
                     )
                 )
@@ -1577,7 +1601,7 @@ class RaveActivity : ComponentActivity() {
                 coverCenter?.let { center ->
                     HardstyleBackdrop(Modifier.fillMaxSize().graphicsLayer { alpha = 1f - PRE_DROP_DIP_DEPTH * dip }.sceneShake(),
                         { displayedFrame }, partyLight, showPalette, showVideo,
-                        center, { orbSidePx }, { orbRadiusPx }, volume, profile = { partyProfile })
+                        center, { orbSidePx }, { orbRadiusPx }, volume, profile = { partyProfile }, fx = partyFx)
                 }
                 // Koko the ghost drops by now and then and does his St. James Infirmary glide.
                 if (showKoko) RaveDancer(Modifier.fillMaxSize(), { displayedFrame }, volume, playing)
@@ -1719,6 +1743,10 @@ class RaveActivity : ComponentActivity() {
             // Vises sammen med pause/skip etter ett trykk, øverst i venstre hjørne.
             if (transportVisible) Box(Modifier.align(Alignment.TopStart).padding(16.u)) {
                 Control(Icons.Rounded.Apps, 44.u, ::buttonInteraction) { exitToApps() }
+            }
+            // Party-innstillinger: over alt annet, til høyre, så coveret og lyset til venstre synes mens man justerer.
+            if (hardstyleOn && showPartyFx) BoxWithConstraints(Modifier.align(Alignment.CenterEnd).padding(16.u)) {
+                PartyFxPanel(Modifier.width(if (maxWidth > maxHeight) 380.u else 440.u))
             }
         }
     }
@@ -1923,6 +1951,17 @@ class RaveActivity : ComponentActivity() {
             Text("Sanger", maxLines = 1, softWrap = false, fontSize = 15.us, fontWeight = FontWeight.SemiBold,
                 color = if (showSongList) Color(0xFF0A0A0A) else Color(0xFFF5F2EC))
         }
+        // Party-innstillinger: lysbølger, risting, strobe og hvite blink (eget panel som lukkes med «Ferdig»).
+        Box(
+            Modifier.height(42.u).clip(RoundedCornerShape(50))
+                .background(if (showPartyFx) Color(0xFFF5F2EC) else Color(0x22FFFFFF))
+                .clickable { buttonInteraction(); showPartyFx = !showPartyFx }
+                .padding(horizontal = 18.u),
+            contentAlignment = Alignment.Center
+        ) {
+            Text("Innstillinger", maxLines = 1, softWrap = false, fontSize = 15.us, fontWeight = FontWeight.SemiBold,
+                color = if (showPartyFx) Color(0xFF0A0A0A) else Color(0xFFF5F2EC))
+        }
         // Car sync (shown with the analysis): nudge the visuals earlier/later, or tap along to measure.
         if (showAnalysis) {
             @Composable
@@ -1975,6 +2014,119 @@ class RaveActivity : ComponentActivity() {
                 }, maxLines = 1, softWrap = false, fontSize = 15.us, fontWeight = FontWeight.SemiBold,
                     color = if (tapMode) Color(0xFF0A0A0A) else Color(0xFFF5F2EC))
             }
+        }
+    }
+
+    /**
+     * «Party-innstillinger»: seks glidebrytere (midten = 1× = som før, venstre = av/mindre, høyre = mer).
+     * Virker med en gang (frame-løkken leser [partyFx] hvert bilde) og lagres når fingeren slipper.
+     * Store trykkflater for bilen; ingenting her beveger seg utenom tommelen man drar i.
+     */
+    @Composable
+    private fun PartyFxPanel(modifier: Modifier) {
+        val cream = Color(0xFFF5F2EC)
+        val muted = Color(0xB3F5F2EC)
+        @Composable
+        fun groupTitle(text: String) = Text(text, fontSize = 13.us, fontWeight = FontWeight.SemiBold, color = muted,
+            modifier = Modifier.padding(start = 4.u, bottom = 8.u))
+        @Composable
+        fun divider() = Box(Modifier.padding(start = 16.u).fillMaxWidth().height(1.dp).background(Color(0x0FFFFFFF)))
+        Column(
+            // Trykk på panelet stopper her, så de ikke skjuler Party-kontrollene bak.
+            modifier.pointerInput(Unit) { detectTapGestures { } }
+                .clip(RoundedCornerShape(20.u)).background(Color(0xF2171717))
+                .verticalScroll(rememberScrollState()).padding(20.u)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Party-innstillinger", fontSize = 20.us, fontWeight = FontWeight.SemiBold, color = cream,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Box(
+                    Modifier.height(44.u).clip(RoundedCornerShape(50)).clickable { showPartyFx = false }.padding(horizontal = 14.u),
+                    contentAlignment = Alignment.Center
+                ) { Text("Ferdig", maxLines = 1, softWrap = false, fontSize = 15.us, fontWeight = FontWeight.SemiBold, color = cream) }
+            }
+            Spacer(Modifier.height(14.u))
+            groupTitle("Lysbølger")
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.u)).background(Color(0x0DFFFFFF))) {
+                PartyFxRow(PartyFx.WAVE_STRENGTH, "Styrke"); divider()
+                PartyFxRow(PartyFx.WAVE_WIDTH, "Bredde"); divider()
+                PartyFxRow(PartyFx.WAVE_OFTEN, "Hvor ofte")
+            }
+            Spacer(Modifier.height(18.u))
+            groupTitle("Risting og blink")
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.u)).background(Color(0x0DFFFFFF))) {
+                PartyFxRow(PartyFx.SHAKE, "Risting"); divider()
+                PartyFxRow(PartyFx.STROBE, "Strobe"); divider()
+                PartyFxRow(PartyFx.FLASHES, "Hvite blink")
+            }
+            Spacer(Modifier.height(10.u))
+            Box(
+                Modifier.height(48.u).clip(RoundedCornerShape(12.u)).clickable { resetPartyFx() }.padding(horizontal = 4.u),
+                contentAlignment = Alignment.CenterStart
+            ) { Text("Tilbakestill", fontSize = 15.us, fontWeight = FontWeight.SemiBold, color = Color(0xFFE45858)) }
+        }
+    }
+
+    /** Én rad: navn | glidebryter (strek på midten = 1×) | verdi («Av», «0,5×», «1×» …). */
+    @Composable
+    private fun PartyFxRow(fx: PartyFx, label: String) {
+        val cream = Color(0xFFF5F2EC)
+        // Leser versjonen, så raden (og streken) tegnes på nytt når verdien endres.
+        val value = partyFxVersion.let { partyFx[fx] }
+        val trackWidth = 6.u
+        Row(Modifier.fillMaxWidth().height(56.u).padding(start = 16.u, end = 12.u), verticalAlignment = Alignment.CenterVertically) {
+            Text(label, fontSize = 16.us, color = cream, maxLines = 1, softWrap = false, modifier = Modifier.width(96.u))
+            val thumb = 28.u
+            Box(
+                Modifier.weight(1f).fillMaxHeight().pointerInput(fx) {
+                    val thumbPx = thumb.toPx()
+                    fun positionAt(x: Float) = ((x - thumbPx / 2f) / (size.width - thumbPx).coerceAtLeast(1f)).coerceIn(0f, 1f)
+                    // Sidelengs drag eller trykk = glidebryter; drag opp/ned slipper gjennom, så panelet kan rulles
+                    // (viktig på den lave bilskjermen der radene dekker nesten hele panelet).
+                    awaitEachGesture {
+                        val down = awaitFirstDown()
+                        val slop = viewConfiguration.touchSlop
+                        var dragging = false
+                        var changed = false
+                        try {
+                            while (true) {
+                                val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                                if (change.isConsumed) break // panelet ruller
+                                if (!change.pressed) {
+                                    if (!dragging) { setPartyFx(fx, fx.fromSlider(positionAt(change.position.x)), save = false); changed = true }
+                                    break
+                                }
+                                val dx = kotlin.math.abs(change.position.x - down.position.x)
+                                val dy = kotlin.math.abs(change.position.y - down.position.y)
+                                if (!dragging) {
+                                    if (dx > slop && dx > dy) dragging = true
+                                    else if (dy > slop) break // loddrett: la rullingen ta den
+                                }
+                                if (dragging) {
+                                    change.consume()
+                                    setPartyFx(fx, fx.fromSlider(positionAt(change.position.x)), save = false); changed = true
+                                }
+                            }
+                        } finally { if (changed) setPartyFx(fx, partyFx[fx], save = true) }
+                    }
+                }
+            ) {
+                Canvas(Modifier.fillMaxSize()) {
+                    val tp = thumb.toPx(); val tw = trackWidth.toPx()
+                    val left = tp / 2f; val right = size.width - tp / 2f; val cy = size.height / 2f
+                    val x = left + fx.toSlider(value) * (right - left)
+                    val corner = androidx.compose.ui.geometry.CornerRadius(tw / 2f)
+                    drawRoundRect(Color(0x22FFFFFF), Offset(left - tw / 2f, cy - tw / 2f), Size(right - left + tw, tw), corner)
+                    // Midten (1× = som før): en rolig strek.
+                    val mid = (left + right) / 2f
+                    drawRoundRect(Color(0x66FFFFFF), Offset(mid - 1.dp.toPx(), cy - tw * 1.4f), Size(2.dp.toPx(), tw * 2.8f))
+                    drawRoundRect(cream, Offset(left - tw / 2f, cy - tw / 2f), Size(x - left + tw / 2f, tw), corner)
+                    drawCircle(Color.Black.copy(alpha = .3f), tp / 2f + 2.dp.toPx(), Offset(x, cy))
+                    drawCircle(cream, tp / 2f, Offset(x, cy))
+                }
+            }
+            Text(partyFxText(value), fontSize = 15.us, color = Color(0xB3F5F2EC), maxLines = 1, softWrap = false,
+                textAlign = TextAlign.End, modifier = Modifier.width(52.u))
         }
     }
 

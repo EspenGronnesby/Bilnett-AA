@@ -45,6 +45,8 @@ export interface Settings {
   partyStrength: Record<string, number>
   /** Koko the dancing ghost in Party (off by default, as in the app). */
   koko: boolean
+  /** Party-innstillinger (lysbølger, risting, strobe, hvite blink) per nøkkel i rave-core; mangler = 1× (som før). */
+  partyFx: Record<string, number>
   /** Calm Party: no strobe or white flashes (ring, particles and shake stay). */
   noFlash: boolean
   /** «AI-trener» åpnes av seg selv når Analyse slås på. */
@@ -78,7 +80,7 @@ const KEY = 'rave.settings'
 export const DEFAULTS: Settings = {
   portraitLayoutVersion: 1, portraitLayout: 'poster', landscapeLayout: 'standard', orientation: 'auto', keepAwake: true, autoHide: true, autoFullscreen: false, volume: 80, player: true,
   showLyrics: true, lyricsStyle: 'scroll', lyricsGlass: true, lyricsOffsets: {}, videoOn: true,
-  party: false, partySource: 'system', partyStrength: {}, koko: false, noFlash: false, trainerAuto: true, trainerReaction: 1, lyricsScale: 100, dim: 50, hideAfter: 3, clean: false, clock: false, lyricsStyleByLayout: {},
+  party: false, partySource: 'system', partyStrength: {}, partyFx: {}, koko: false, noFlash: false, trainerAuto: true, trainerReaction: 1, lyricsScale: 100, dim: 50, hideAfter: 3, clean: false, clock: false, lyricsStyleByLayout: {},
 }
 
 function read(): Settings {
@@ -88,6 +90,11 @@ function read(): Settings {
     const saved = JSON.parse(raw) as Partial<Settings>
     const next = { ...DEFAULTS, ...saved }
     next.clean = false
+    // Party-innstillinger: bare endelige tall; noe ødelagt lagret gir standard (1×) i stedet for krasj.
+    const fx: unknown = saved.partyFx
+    next.partyFx = fx && typeof fx === 'object' && !Array.isArray(fx)
+      ? Object.fromEntries(Object.entries(fx).filter(([, v]) => typeof v === 'number' && Number.isFinite(v)))
+      : {}
     if (saved.portraitLayoutVersion !== 1) {
       if (!saved.portraitLayout || saved.portraitLayout === 'original') next.portraitLayout = 'poster'
       next.portraitLayoutVersion = 1

@@ -69,6 +69,10 @@ class WebPartyEngine(fftSize: Int = 2048) {
     private var lastStrobeAt = -10_000L
     private var lastHeavyFlashAt = -10_000L
     private var strobeColorIndex = 0
+    /** Espens Party-innstillinger (lysbølger, risting, strobe, hvite blink); 1 = som før. */
+    private val fx = PartySettings()
+    /** Drop-treffet før [PartyFx.FLASHES] ganges inn (det som synes er [dropHit]). */
+    private var dropHitLevel = 0f
 
     // ---- Outputs (read every frame) ----
     var genre: String = Genre.HARDSTYLE.name; private set
@@ -118,7 +122,20 @@ class WebPartyEngine(fftSize: Int = 2048) {
     /** Partikler ved vanlig volum og største antall; minste tid mellom ripples (ms). */
     val particleBase: Int get() = PARTICLES_BASE
     val particleMax: Int get() = PARTICLES_MAX
-    val rippleGapMs: Int get() = RIPPLE_MIN_GAP_MS.toInt()
+    val rippleGapMs: Int get() = fx.rippleGapMs.toInt()
+
+    // ---- Party-innstillinger (PartySettings.kt): siden lagrer dem selv og gir dem hit ----
+    /** Nøklene, i den rekkefølgen de vises: bolger_styrke, bolger_bredde, bolger_ofte, risting, strobe, blink. */
+    val partyFxKeys: Array<String> get() = PartyFx.entries.map { it.key }.toTypedArray()
+    /** Setter én innstilling (klemmes til lovlig område; ukjent nøkkel ignoreres). Virker fra neste bilde. */
+    fun setPartyFx(key: String, value: Float) { PartyFx.of(key)?.let { fx[it] = value } }
+    fun partyFx(key: String): Float = PartyFx.of(key)?.let { fx[it] } ?: 1f
+    fun resetPartyFx() = fx.reset()
+    /** Glidebryterens plass 0..1 → verdi (midten = 1), og motsatt. */
+    fun partyFxFromSlider(key: String, position: Float): Float = PartyFx.of(key)?.fromSlider(position) ?: 1f
+    fun partyFxToSlider(key: String, value: Float): Float = PartyFx.of(key)?.toSlider(value) ?: .5f
+    /** «Av», «0,5×», «1×» … */
+    fun partyFxText(value: Float): String = com.kododake.aabrowser.rave.partyFxText(value)
 
     // ---- Samme lys som auraen: tallene står i FestivalShow.kt (deles med appen senere) ----
     /** Snare-gløden rett utenfor coverkanten (0..[EDGE_GLOW_MAX]), jevnet. */
@@ -147,9 +164,9 @@ class WebPartyEngine(fftSize: Int = 2048) {
     val dustSway: Float get() = DUST_SWAY
     val waveLifeMs: Int get() = WAVE_LIFE_MS
     val waveReach: Float get() = WAVE_REACH
-    val waveWidthFrom: Float get() = WAVE_WIDTH_FROM
-    val waveWidthTo: Float get() = WAVE_WIDTH_TO
-    val waveAlpha: Float get() = WAVE_ALPHA
+    val waveWidthFrom: Float get() = fx.waveWidthFrom
+    val waveWidthTo: Float get() = fx.waveWidthTo
+    val waveAlpha: Float get() = fx.waveAlpha
     val haloSquash: Float get() = HALO_SQUASH
     val haloGainCalm: Float get() = HALO_GAIN_CALM
     val videoLightDim: Float get() = VIDEO_LIGHT_DIM
@@ -304,7 +321,7 @@ class WebPartyEngine(fftSize: Int = 2048) {
         hardSubDetector.newTrack()
         loudNoDropS = 0f
         beatClock.reset(); halfClock.reset()
-        dip = 0f; dropHit = 0f; lastPart = SongPart.INTRO; dropLook = 0
+        dip = 0f; dropHit = 0f; dropHitLevel = 0f; lastPart = SongPart.INTRO; dropLook = 0
         dipStartedAt = 0L; dipSpent = false
     }
 
@@ -422,9 +439,11 @@ class WebPartyEngine(fftSize: Int = 2048) {
         val dipGoal = if (dipSpent) 0f else dipWanted
         val dipNext = if (part == SongPart.DROP) 0f else dip + (dipGoal - dip) * (1f - exp(-dt / if (dipGoal > dip) .3f else .5f))
         dip = round(dipNext * 100f) / 100f
-        if (part == SongPart.DROP && lastPart != SongPart.DROP && showW > .3f && flashBudget.tryFlash(now))
-            dropHit = if (hadDip) 1f else DROP_HIT_UNSURE
-        else if (dropHit > 0f) dropHit = (dropHit * exp(-dt / DROP_HIT_DECAY_S)).let { if (it < .01f) 0f else it }
+        // Hvite blink av (0×): drop-treffet tennes ikke og bruker ikke av blinkbudsjettet.
+        if (part == SongPart.DROP && lastPart != SongPart.DROP && showW > .3f && fx.flashes > 0f && flashBudget.tryFlash(now))
+            dropHitLevel = if (hadDip) 1f else DROP_HIT_UNSURE
+        else if (dropHitLevel > 0f) dropHitLevel = (dropHitLevel * exp(-dt / DROP_HIT_DECAY_S)).let { if (it < .01f) 0f else it }
+        dropHit = dropHitLevel * fx.flashes
         lastPart = part
         val inShowDrop = part == SongPart.DROP && showW > 0f
         dropLook = if (inShowDrop) (hud.phrase + songPhase.drops) % 3 else 0
@@ -483,12 +502,13 @@ class WebPartyEngine(fftSize: Int = 2048) {
         val tremble = if (dropOn) screechShake * f.screech * SHAKE_SCREECH_DP * volumeGain(volume) * f.kick else 0f
         if (f.kick < .3f) shakeArmed = 1f
         if (f.kick > .55f && shakeArmed == 1f) { shakeArmed = 0f; shakeAngle = (random.nextDouble() * 2 * PI).toFloat() }
-        val push = punch + tremble
+        // Risting-innstillingen ganger dyttet (0 = ingen risting).
+        val push = (punch + tremble) * fx.shake
         // The app compares with 0.5 px; ~0.2 dp is the same on a typical screen.
         val big = push > .2f
         shakeX = if (big) cos(shakeAngle) * push else 0f
         shakeY = if (big) sin(shakeAngle) * push else 0f
-        shakeRotation = if (big) (f.heavy * f.kick * SHAKE_ROTATION_DEG * if (shakeAngle > PI) -1f else 1f) else 0f
+        shakeRotation = if (big) (f.heavy * f.kick * SHAKE_ROTATION_DEG * fx.shake * if (shakeAngle > PI) -1f else 1f) else 0f
         val split = f.heavy * f.kick * shakeAmount
         aberration = if (effectsOn && split > .25f) ((split - .25f) / .75f).coerceAtMost(1f) * 5f else 0f
         bounceY = -look.bounceY * GENRE_BOUNCE_DP * strengthMul
@@ -526,11 +546,12 @@ class WebPartyEngine(fftSize: Int = 2048) {
         val strobeSource = max(f.kick * f.heavy, f.crash * hardWeight(v))
         val strobeFrom = .85f - .15f * hardWeight(v)
         val strobeRaw = strobeAmount * strobeSource * ((volume - strobeFrom) / .15f).coerceIn(0f, 1f)
-        if (strobeRaw > .3f && now - lastStrobeAt >= 400L && flashBudget.tryFlash(now)) { lastStrobeAt = now; strobeColorIndex++ }
-        strobe = if (now - lastStrobeAt < 120L) strobeRaw else 0f
+        // Innstillingene ganger bare styrken; når de tennes er som før. Av (0×) = tennes ikke, bruker ikke budsjettet.
+        if (fx.strobe > 0f && strobeRaw > .3f && now - lastStrobeAt >= 400L && flashBudget.tryFlash(now)) { lastStrobeAt = now; strobeColorIndex++ }
+        strobe = if (now - lastStrobeAt < 120L) strobeRaw * fx.strobe else 0f
         strobeColor = strobeColorIndex
-        if (heavyRaw > .3f && now - lastHeavyFlashAt >= 400L && now - lastStrobeAt >= 120L && flashBudget.tryFlash(now)) lastHeavyFlashAt = now
-        heavyFlash = if (heavyRaw > .02f && now - lastHeavyFlashAt < 120L) heavyRaw else 0f
+        if (fx.flashes > 0f && heavyRaw > .3f && now - lastHeavyFlashAt >= 400L && now - lastStrobeAt >= 120L && flashBudget.tryFlash(now)) lastHeavyFlashAt = now
+        heavyFlash = if (heavyRaw > .02f && now - lastHeavyFlashAt < 120L) heavyRaw * fx.flashes else 0f
 
         // ---- The aura: same cover pulse as the page draws, so the aura always lies outside the cover ----
         coverKick = easeCoverKick(coverKick, f.kick, dtS.toFloat())

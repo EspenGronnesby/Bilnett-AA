@@ -255,6 +255,12 @@ kbd {
   font: 600 calc(13 * var(--u)) / 1.3 system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 .shortcuts-sheet { max-width: calc(420 * var(--u)); }
+/* Party-innstillinger: ingen mørk bakgrunn og panelet til høyre, så scenen synes mens man justerer. */
+.scrim.see-through { background: none; place-items: center end; }
+.party-sheet { width: min(100%, calc(440 * var(--u))); }
+.fx-row { gap: calc(14 * var(--u)); }
+.fx-label { width: calc(96 * var(--u)); flex: none; }
+.row.slider.fx-row input { flex: 1; min-width: 0; width: auto; height: calc(32 * var(--u)); cursor: pointer; }
 .row.disabled { opacity: .45; }
 .row.slider input { width: calc(150 * var(--u)); accent-color: var(--fg); }
 .slider-value { min-width: calc(48 * var(--u)); text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }

@@ -140,11 +140,11 @@ const val DUST_TWINKLE_GAIN = .45f
 const val WAVE_LIFE_MS = 1900
 /** Hvor langt bølgen går ut fra coveret, som andel av coverets side (var: hele skjermen). */
 const val WAVE_REACH = .75f
-/** Bølgens bredde ved start og slutt, som andel av coverets side. */
-const val WAVE_WIDTH_FROM = .1f
-const val WAVE_WIDTH_TO = .42f
-/** Sterkeste lys midt i bølgen (0..1). */
-const val WAVE_ALPHA = .34f
+/** Bølgens bredde ved start og slutt, som andel av coverets side (Espen 2026-11-20: «veldig bred»; var .10 → .42). */
+const val WAVE_WIDTH_FROM = .04f
+const val WAVE_WIDTH_TO = .15f
+/** Sterkeste lys midt i bølgen (0..1; opp fra .34 så den smalere bølgen ikke blir blekere). */
+const val WAVE_ALPHA = .50f
 /** Høyst så mange bølger samtidig. */
 const val WAVE_COUNT = 8
 /** Ny bølge bare i dropet når bassen er over BASS og forvrengningen (grit) over GRIT; bassen må under REARM imellom. */

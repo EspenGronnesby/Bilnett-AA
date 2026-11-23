@@ -136,7 +136,8 @@ private fun ease(state: DustState, i: Int, target: Float, rise: Float, fall: Flo
  */
 @Composable
 internal fun HardstyleBackdrop(modifier: Modifier, frameOf: () -> HardstyleFrame, light: PartyLight, colors: List<Color>, video: Boolean,
-    coverCenter: Offset, coverSideOf: () -> Float, cornerOf: () -> Float, volume: Float = 1f, profile: () -> PartyProfile) {
+    coverCenter: Offset, coverSideOf: () -> Float, cornerOf: () -> Float, volume: Float = 1f, profile: () -> PartyProfile,
+    fx: PartySettings = PartySettings()) {
     val s = remember { DustState() }
     Canvas(modifier) {
         // Lyd leses her, under tegning, så skjermen ikke komponeres på nytt hver gang.
@@ -193,7 +194,7 @@ internal fun HardstyleBackdrop(modifier: Modifier, frameOf: () -> HardstyleFrame
 
             // Lysbølger: bare i dropet, på mye bass OG forvrengning, og ikke for ofte.
             if (e.bass < WAVE_REARM_BASS) s.waveArmed = true
-            if (s.waveArmed && dropOn && e.bass > WAVE_BASS_FROM && e.grit > WAVE_GRIT_FROM && now - s.lastSpawn > RIPPLE_MIN_GAP_MS) {
+            if (s.waveArmed && dropOn && e.bass > WAVE_BASS_FROM && e.grit > WAVE_GRIT_FROM && now - s.lastSpawn > fx.rippleGapMs) {
                 s.waveArmed = false; s.lastSpawn = now
                 s.born[s.nextWave] = now
                 s.strength[s.nextWave] = min((.4f + e.grit * .6f) * e.bass * gain * (1f + ramp * .4f), 1.4f)
@@ -201,6 +202,8 @@ internal fun HardstyleBackdrop(modifier: Modifier, frameOf: () -> HardstyleFrame
             }
             // En bred, myk lysring i coverets form (rundere jo større), ~9 strøk oppå hverandre, smal til bred.
             val paint = s.wavePaint
+            // Espens innstillinger (styrke og bredde; 1× = tallene i FestivalShow.kt), lest hvert bilde.
+            val waveAlpha = fx.waveAlpha; val widthFrom = fx.waveWidthFrom; val widthTo = fx.waveWidthTo
             for (r in 0 until WAVE_COUNT) {
                 val age = now - s.born[r]
                 val st = s.strength[r]
@@ -208,8 +211,8 @@ internal fun HardstyleBackdrop(modifier: Modifier, frameOf: () -> HardstyleFrame
                 val q = age.toFloat() / WAVE_LIFE_MS
                 val eased = 1f - (1f - q).pow(WAVE_SLOWDOWN)
                 val out = side * (WAVE_START + WAVE_REACH * eased)
-                val width = side * (WAVE_WIDTH_FROM + (WAVE_WIDTH_TO - WAVE_WIDTH_FROM) * eased)
-                val fade = min(q * WAVE_FADE_IN, 1f) * (1f - q).pow(WAVE_FADE_OUT_CURVE) * (.5f + .5f * min(st, 1f)) * WAVE_ALPHA * dim
+                val width = side * (widthFrom + (widthTo - widthFrom) * eased)
+                val fade = min(q * WAVE_FADE_IN, 1f) * (1f - q).pow(WAVE_FADE_OUT_CURVE) * (.5f + .5f * min(st, 1f)) * waveAlpha * dim
                 if (fade < .004f) continue
                 val rgb = mixRgb(colors[r % colors.size], CORE_COLOR, WAVE_WHITE_MIX)
                 val l = cx - half - out; val t = cy - half - out; val rr = cx + half + out; val b = cy + half + out

@@ -1,5 +1,5 @@
 import { analysis } from './analysis'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { Rgb } from '../ui/colors'
 import { SOURCE_LABEL, type PartySource } from './audio'
 import type { Party } from './useParty'
@@ -240,10 +240,13 @@ export function PartyBanner({ party }: { party: Party }) {
 }
 
 /** Where Party listens, and the vibe slider (Auto or a fixed strength per genre, as in the app). */
-export function PartyControls({ party, strength, setStrength }: {
+export function PartyControls({ party, strength, setStrength, settingsOpen, onToggleSettings }: {
   party: Party
   strength: number | undefined
   setStrength: (value: number | undefined) => void
+  /** «Party-innstillinger» (lysbølger, risting, strobe, hvite blink) er åpne. */
+  settingsOpen: boolean
+  onToggleSettings: () => void
 }) {
   const [, redraw] = useState(0)
   // The genre label and live level change with the music: refresh the row a few times a second.
@@ -272,13 +275,15 @@ export function PartyControls({ party, strength, setStrength }: {
         {connection && <span className="chip info" title={party.listening?.label}>{connection}</span>}
       </div>
       {party.error && <p className="notice">{party.error}</p>}
-      <AnalysisPanel />
+      <AnalysisPanel>
+        <button className={settingsOpen ? 'chip small on' : 'chip small'} aria-pressed={settingsOpen} onClick={onToggleSettings}>Innstillinger</button>
+      </AnalysisPanel>
     </div>
   )
 }
 
 /** Analyse (steg 5): ta opp og merk hvor i sangen vi er; merkene brukes til å trene lytteren (eksporteres til Mac-en). */
-function AnalysisPanel() {
+function AnalysisPanel({ children }: { children?: ReactNode }) {
   const [, redraw] = useState(0)
   useEffect(() => {
     void analysis.refreshCount()
@@ -290,6 +295,7 @@ function AnalysisPanel() {
       <button className={on ? 'chip small on' : 'chip small'} onClick={() => analysis.setEnabled(!on)}
         title="Tar opp lyden og lar deg merke sangdelene. Lagres i nettleseren til du eksporterer.">Analyse {on ? 'på' : 'av'}</button>
       {on && <button className={analysis.trainerOpen ? 'chip small on' : 'chip small'} onClick={() => analysis.trainerOpen ? analysis.closeTrainer() : analysis.openTrainer()}>AI-trener</button>}
+      {children}
       {on && analysis.note && <span className="chip info">{analysis.note}</span>}
     </div>
   )
