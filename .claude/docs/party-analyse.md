@@ -180,3 +180,14 @@ Plan: `~/.claude/plans/jeg-har-lagt-mere-happy-sunset.md` (steg 0–6).
 Fra `feat/party-ring-frekvenslag` er `shakePx` i loggene bare over 0 i drop (og ca. halvert), og
 partikkelantallet er maks 120 (før 224). Snitt av risting/partikler fra eldre logger er derfor ikke
 sammenlignbare med nye. Analysen selv (sjanger, sangdeler, `PartyReplayTest`) er uendret.
+
+## Grit for effektene (2026-11-23)
+
+- `grit` / `heavy` var stilt inn etter mikrofonen 6.11 (kuttet bass, mid/bass .4–.8). Visualizer og dagens
+  UNPROCESSED-mikrofon beholder bassen (mid/bass .05–.32), så grit var nesten alltid 0 → få lysbølger og lite risting.
+- Nå: `gritFx` / `heavyFx` (`GRIT_FX_FROM` .14 / `GRIT_FX_RANGE` .16) brukes av effektene via `HardstyleFrame.forEffects()`
+  rett før `vibeShape`. **Sjangerreglene, delanalysen og fasit-kolonnene i loggen bruker fortsatt `grit` / `heavy`.**
+- Bilens mikrofon og MIC-reserven regnes som «kutter bass» (`MicFftSource.bassCut`) og bruker de gamle tallene også
+  for effektene. Det er et anslag: se etter «kutter bass» i loggen (`Party lytter via: …`) første tur i bilen.
+- Loggkolonnene `out_grit` / `out_heavy` (det effektene fikk) bruker de nye tallene fra 23.11 og kan ikke sammenlignes direkte med eldre logger.
+- Mål effekt-grit på opptakene: `--tests '*PartyReplayTest.gritForEffects'` → `grit-effekter.txt`.

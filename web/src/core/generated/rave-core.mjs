@@ -138,10 +138,10 @@ initMetadataForClass(ListIteratorImpl, 'ListIteratorImpl', VOID, IteratorImpl);
 initMetadataForClass(AbstractMutableList, 'AbstractMutableList', VOID, AbstractMutableCollection, [KtList, Collection]);
 initMetadataForInterface(RandomAccess, 'RandomAccess');
 initMetadataForClass(SubList, 'SubList', VOID, AbstractMutableList, [RandomAccess]);
-initMetadataForClass(AbstractMutableSet, 'AbstractMutableSet', VOID, AbstractMutableCollection, [KtSet, Collection]);
+initMetadataForClass(AbstractMutableSet, 'AbstractMutableSet', VOID, AbstractMutableCollection, [Collection, KtSet]);
 initMetadataForCompanion(Companion_1);
 initMetadataForClass(ArrayList, 'ArrayList', ArrayList_init_$Create$, AbstractMutableList, [KtList, Collection, RandomAccess]);
-initMetadataForClass(HashSet, 'HashSet', HashSet_init_$Create$, AbstractMutableSet, [KtSet, Collection]);
+initMetadataForClass(HashSet, 'HashSet', HashSet_init_$Create$, AbstractMutableSet, [Collection, KtSet]);
 initMetadataForCompanion(Companion_2);
 initMetadataForClass(Itr, 'Itr');
 initMetadataForClass(KeysItr, 'KeysItr', VOID, Itr);
@@ -184,7 +184,7 @@ function containsAllEntries(m) {
 }
 initMetadataForInterface(InternalMap, 'InternalMap');
 initMetadataForClass(InternalHashMap, 'InternalHashMap', InternalHashMap_init_$Create$, VOID, [InternalMap]);
-initMetadataForClass(LinkedHashSet, 'LinkedHashSet', LinkedHashSet_init_$Create$, HashSet, [KtSet, Collection]);
+initMetadataForClass(LinkedHashSet, 'LinkedHashSet', LinkedHashSet_init_$Create$, HashSet, [Collection, KtSet]);
 initMetadataForClass(Exception, 'Exception', Exception_init_$Create$, Error);
 initMetadataForClass(RuntimeException, 'RuntimeException', RuntimeException_init_$Create$, Exception);
 initMetadataForClass(UnsupportedOperationException, 'UnsupportedOperationException', UnsupportedOperationException_init_$Create$, RuntimeException);
@@ -7881,7 +7881,7 @@ function listen($this, bands, dt) {
     }
      while (!(j_0 === last_1));
   $this.hk_1 = bassPoints > 0 ? coerceIn(bass / bassPoints, 0.0, 1.0) : 0.0;
-  var bottomFrom = numberToInt($this.ij_1 * (1.0 - 0.3));
+  var bottomFrom = numberToInt($this.ij_1 * (1.0 - 0.4));
   var inductionVariable_2 = bottomFrom + 1 | 0;
   var last_2 = $this.ij_1;
   if (inductionVariable_2 <= last_2)

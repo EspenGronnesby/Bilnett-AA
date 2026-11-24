@@ -80,12 +80,12 @@ const val ORB_LEVEL_CURVE = .5f
 const val ORB_TOP_WEIGHT = .55f
 const val ORB_TOP_WEIGHT_SPAN = .35f
 /**
- * Bunnen buler også på bassen (Espen 2026-11-23: «lite skjer nede, veldig mye oppe»): de nederste
+ * Bunnen buler også på bass og kick (Espen 2026-11-23: «lite skjer nede, veldig mye oppe»): de nederste
  * [ORB_BOTTOM_SPAN] av veien fra kl. 12 til kl. 6 får en speilet kopi av toppens bassbuler, opp til
  * [ORB_BOTTOM_BASS] av toppens størrelse helt nederst, og mindre oppover sidene. Diskanten vinner der den er større.
  */
 const val ORB_BOTTOM_BASS = .8f
-const val ORB_BOTTOM_SPAN = .3f
+const val ORB_BOTTOM_SPAN = .4f
 /** Høye topper vokser så mye ekstra når bassen er tung (heavy = 1). */
 const val ORB_HEAVY_PEAK = .2f
 /**
