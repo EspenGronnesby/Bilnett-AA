@@ -51,15 +51,15 @@ class OrbLayerSpec(val slow: Float, val smoothPasses: Int, val size: Float, val 
 val ORB_LAYERS: List<OrbLayerSpec> = listOf(
     //           treghet jevning størrelse alfa lukket
     OrbLayerSpec(1.0f,      0,  1.00f, .55f),   // 0 hovedformen
-    OrbLayerSpec(1.7f,      2,  1.22f, .30f),   // 1 bak: litt tregere og større (jevning 3 → 2, 2026-11-24)
-    OrbLayerSpec(2.8f,      5,  1.42f, .15f),   // 2 bakerst: tregest, rundest, størst (jevning 7 → 5)
+    OrbLayerSpec(1.7f,      1,  1.22f, .30f),   // 1 bak: litt tregere og større (jevning 3 → 1, 2026-11-24)
+    OrbLayerSpec(2.8f,      3,  1.42f, .15f),   // 2 bakerst: tregest, rundest, størst (jevning 7 → 3)
 )
 
 // ---- Form og avstander (andel av coverets side, der ikke annet står) ----
 /** Avstand fra coveret til auraens kant når den hviler. Omrisset er coverets eget (samme hjørneradius). */
 const val ORB_GAP = .02f
 /** Kurvens spenning (Catmull-Rom): 1/6 = vanlig, lavere = strammere. */
-const val ORB_CURVE_TENSION = .12f   // Espen 2026-11-24: skarpere aura (var .16: strammere topper)
+const val ORB_CURVE_TENSION = .09f   // Espen 2026-11-24: «enda skarpere» (.16 → .12 → .09)
 /** Jevning rundt ringen av hele spekteret (alle lag): runde, myke buler, og ingen søm mellom områdene. */
 const val ORB_SMOOTH_PASSES = 1   // Espen 2026-11-24: «skarpere» (var 2: for runde klumper)
 
@@ -75,7 +75,7 @@ const val ORB_KNEE = .75f
 /** Kontrast innen hvert område: 1 = rett fram, høyere = bulene skiller seg mer fra resten. */
 const val ORB_CONTRAST = 2.0f      // Espen 2026-11-24: toppene skal stikke tydeligere ut (var 1.6)
 /** Størrelsen følger områdets nivå med denne kurven: under 1 = også svakere partier viser formen sin. */
-const val ORB_LEVEL_CURVE = .7f   // Espen 2026-11-24: skarpere aura (var .5: svake partier mindre, toppene stikker ut)
+const val ORB_LEVEL_CURVE = .85f   // Espen 2026-11-24: «enda skarpere» (.5 → .7 → .85)
 /** De aller laveste frekvensene (ved kl. 12) vektes ned til dette, og opp til 1 over områdets første del: to buler, ikke én topp. */
 const val ORB_TOP_WEIGHT = .55f
 const val ORB_TOP_WEIGHT_SPAN = .35f
@@ -173,9 +173,9 @@ const val ORB_DRIFT_S = 50f
 // Lagene fylles med coverfargene som flyter rundt ringen, halvt gjennomsiktige og lagt oppå hverandre
 // som lys (additivt). Bakerste lag tegnes først, hovedformen sist.
 /** Hovedformens fyll (0..1), ganges med lagets [OrbGeometry.alpha]. */
-const val AURA_MAIN_ALPHA = .65f   // Espen 2026-11-24: skarpere aura (var .5: hovedformen druknet)
+const val AURA_MAIN_ALPHA = .75f   // Espen 2026-11-24: «enda skarpere» (.5 → .65 → .75)
 /** Hvert lag bak er så mye svakere enn laget foran (.6 = 60 %). */
-const val AURA_BACK_FALL = .4f   // Espen 2026-11-24: skarpere aura (var .6: ekkolagene dekket toppene)
+const val AURA_BACK_FALL = .3f   // Espen 2026-11-24: «enda skarpere» (.6 → .4 → .3)
 /** Coverfargene går så mange ganger rundt ringen. */
 const val AURA_COLOR_ROUNDS = 2
 /** Hvert lag bak starter så mange farger lenger ut i fargehjulet, så lagene får ulik farge på samme sted. */
@@ -205,7 +205,7 @@ const val CORE_DENSITY = 1.3f
 
 // Gløden (bloom): hele auraen som ett mykt lys bak coveret, uskarpt.
 /** Uskarpheten (dp). */
-const val BLOOM_BLUR_DP = 5f   // Espen 2026-11-24: skarpere aura (var 9: tåke rundt alt)
+const val BLOOM_BLUR_DP = 3f   // Espen 2026-11-24: «enda skarpere» (9 → 5 → 3)
 /** Lerretet trenger så mange ganger uskarpheten i ekstra marg, så gløden aldri kuttes. */
 const val BLOOM_ROOM_BLURS = 2.5f
 /** Bakerste lag i gløden: hvilken coverfarge, styrke lukket, og tillegg når auraen er helt åpen (ganges med glow). */
