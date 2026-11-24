@@ -7865,7 +7865,7 @@ function listen($this, bands, dt) {
       if (peak_0 > 0.0) {
         // Inline function 'kotlin.math.pow' call
         var this_0 = $this.qj_1[j_0] / peak_0;
-        var tmp_5 = Math.pow(this_0, 1.6);
+        var tmp_5 = Math.pow(this_0, 2.0);
         // Inline function 'kotlin.math.pow' call
         var this_1 = coerceIn(peak_0 / $this.ck_1[r_0], 0.0, 1.0);
         tmp_4 = tmp_5 * Math.pow(this_1, 0.5);
@@ -7898,13 +7898,13 @@ function listen($this, bands, dt) {
      while (!(j_1 === last_2));
   // Inline function 'kotlin.repeat' call
   var inductionVariable_3 = 0;
-  if (inductionVariable_3 < 2)
+  if (inductionVariable_3 < 1)
     do {
       var index_0 = inductionVariable_3;
       inductionVariable_3 = inductionVariable_3 + 1 | 0;
       blur($this, main);
     }
-     while (inductionVariable_3 < 2);
+     while (inductionVariable_3 < 1);
   var inductionVariable_4 = 1;
   var last_3 = $this.cj_1;
   if (inductionVariable_4 < last_3)
@@ -8462,7 +8462,7 @@ function _init_properties_OrbGeometry_kt__mo1801() {
   if (!properties_initialized_OrbGeometry_kt_y663nl) {
     properties_initialized_OrbGeometry_kt_y663nl = true;
     ORB_BANDS = listOf_0([new OrbBandSpec(45.0, 120.0, 0.24, 0.065, 0.25, 1.0), new OrbBandSpec(120.0, 500.0, 0.28, 0.055, 0.22, 0.8), new OrbBandSpec(500.0, 2500.0, 0.27, 0.045, 0.19, 0.6), new OrbBandSpec(2500.0, 10000.0, 0.21, 0.04, 0.16, 0.45)]);
-    ORB_LAYERS = listOf_0([new OrbLayerSpec(1.0, 0, 1.0, 0.55), new OrbLayerSpec(1.7, 3, 1.22, 0.3), new OrbLayerSpec(2.8, 7, 1.42, 0.15)]);
+    ORB_LAYERS = listOf_0([new OrbLayerSpec(1.0, 0, 1.0, 0.55), new OrbLayerSpec(1.7, 2, 1.22, 0.3), new OrbLayerSpec(2.8, 5, 1.42, 0.15)]);
   }
 }
 var static_init_called_4;

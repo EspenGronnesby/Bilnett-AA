@@ -51,8 +51,8 @@ class OrbLayerSpec(val slow: Float, val smoothPasses: Int, val size: Float, val 
 val ORB_LAYERS: List<OrbLayerSpec> = listOf(
     //           treghet jevning størrelse alfa lukket
     OrbLayerSpec(1.0f,      0,  1.00f, .55f),   // 0 hovedformen
-    OrbLayerSpec(1.7f,      3,  1.22f, .30f),   // 1 bak: litt tregere og større
-    OrbLayerSpec(2.8f,      7,  1.42f, .15f),   // 2 bakerst: tregest, rundest, størst
+    OrbLayerSpec(1.7f,      2,  1.22f, .30f),   // 1 bak: litt tregere og større (jevning 3 → 2, 2026-11-24)
+    OrbLayerSpec(2.8f,      5,  1.42f, .15f),   // 2 bakerst: tregest, rundest, størst (jevning 7 → 5)
 )
 
 // ---- Form og avstander (andel av coverets side, der ikke annet står) ----
@@ -61,7 +61,7 @@ const val ORB_GAP = .02f
 /** Kurvens spenning (Catmull-Rom): 1/6 = vanlig, lavere = strammere. */
 const val ORB_CURVE_TENSION = .16f
 /** Jevning rundt ringen av hele spekteret (alle lag): runde, myke buler, og ingen søm mellom områdene. */
-const val ORB_SMOOTH_PASSES = 2
+const val ORB_SMOOTH_PASSES = 1   // Espen 2026-11-24: «skarpere» (var 2: for runde klumper)
 
 // ---- Utslag ----
 /** Hovedformens største utslag når auraen er helt åpen (ganges med områdets andel og maks-volum-boost). */
@@ -73,7 +73,7 @@ const val ORB_REST_AMP = .06f
 /** De øverste 25 % mot taket er en myk knekk (tanh), så toppene rundes av i stedet for å kuttes. */
 const val ORB_KNEE = .75f
 /** Kontrast innen hvert område: 1 = rett fram, høyere = bulene skiller seg mer fra resten. */
-const val ORB_CONTRAST = 1.6f
+const val ORB_CONTRAST = 2.0f      // Espen 2026-11-24: toppene skal stikke tydeligere ut (var 1.6)
 /** Størrelsen følger områdets nivå med denne kurven: under 1 = også svakere partier viser formen sin. */
 const val ORB_LEVEL_CURVE = .5f
 /** De aller laveste frekvensene (ved kl. 12) vektes ned til dette, og opp til 1 over områdets første del: to buler, ikke én topp. */

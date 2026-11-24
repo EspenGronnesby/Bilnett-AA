@@ -247,7 +247,8 @@ class OrbGeometryTest {
         assertTrue(lowSize > SIDE * .06f, "…clearly: $lowSize px")
         // Since 2026-11-23 the bottom also bulges on the bass (mirrored), but smaller than the top.
         val lowBottom = low.geo.offsetAt(0, half) - SIDE * ORB_GAP
-        assertTrue(lowBottom > SIDE * .02f, "70 Hz also moves the bottom: $lowBottom px")
+        // (A single pure tone is narrow, more so with ORB_CONTRAST 2.0; real bass is broader.)
+        assertTrue(lowBottom > SIDE * .012f, "70 Hz also moves the bottom: $lowBottom px")
         assertTrue(lowBottom <= lowSize * ORB_BOTTOM_BASS + 1f, "…but less than the top ($lowBottom against $lowSize px)")
         val high = Rig(60, fftHz = 43); val highTone = Tone(5000.0)
         high.run(4f, { highTone.next() })
