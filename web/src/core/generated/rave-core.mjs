@@ -138,10 +138,10 @@ initMetadataForClass(ListIteratorImpl, 'ListIteratorImpl', VOID, IteratorImpl);
 initMetadataForClass(AbstractMutableList, 'AbstractMutableList', VOID, AbstractMutableCollection, [KtList, Collection]);
 initMetadataForInterface(RandomAccess, 'RandomAccess');
 initMetadataForClass(SubList, 'SubList', VOID, AbstractMutableList, [RandomAccess]);
-initMetadataForClass(AbstractMutableSet, 'AbstractMutableSet', VOID, AbstractMutableCollection, [KtSet, Collection]);
+initMetadataForClass(AbstractMutableSet, 'AbstractMutableSet', VOID, AbstractMutableCollection, [Collection, KtSet]);
 initMetadataForCompanion(Companion_1);
 initMetadataForClass(ArrayList, 'ArrayList', ArrayList_init_$Create$, AbstractMutableList, [KtList, Collection, RandomAccess]);
-initMetadataForClass(HashSet, 'HashSet', HashSet_init_$Create$, AbstractMutableSet, [KtSet, Collection]);
+initMetadataForClass(HashSet, 'HashSet', HashSet_init_$Create$, AbstractMutableSet, [Collection, KtSet]);
 initMetadataForCompanion(Companion_2);
 initMetadataForClass(Itr, 'Itr');
 initMetadataForClass(KeysItr, 'KeysItr', VOID, Itr);
@@ -184,7 +184,7 @@ function containsAllEntries(m) {
 }
 initMetadataForInterface(InternalMap, 'InternalMap');
 initMetadataForClass(InternalHashMap, 'InternalHashMap', InternalHashMap_init_$Create$, VOID, [InternalMap]);
-initMetadataForClass(LinkedHashSet, 'LinkedHashSet', LinkedHashSet_init_$Create$, HashSet, [KtSet, Collection]);
+initMetadataForClass(LinkedHashSet, 'LinkedHashSet', LinkedHashSet_init_$Create$, HashSet, [Collection, KtSet]);
 initMetadataForClass(Exception, 'Exception', Exception_init_$Create$, Error);
 initMetadataForClass(RuntimeException, 'RuntimeException', RuntimeException_init_$Create$, Exception);
 initMetadataForClass(UnsupportedOperationException, 'UnsupportedOperationException', UnsupportedOperationException_init_$Create$, RuntimeException);
@@ -7744,7 +7744,7 @@ function OrbSource(name, ordinal, noiseFloor, refFloor, openMinLevel) {
 function auraLayerAlpha(layer) {
   _init_properties_OrbGeometry_kt__mo1801();
   // Inline function 'kotlin.math.pow' call
-  return 0.5 * Math.pow(0.6, layer);
+  return 0.65 * Math.pow(0.4, layer);
 }
 function auraLayerColorShift(layer) {
   _init_properties_OrbGeometry_kt__mo1801();
@@ -7868,7 +7868,7 @@ function listen($this, bands, dt) {
         var tmp_5 = Math.pow(this_0, 2.0);
         // Inline function 'kotlin.math.pow' call
         var this_1 = coerceIn(peak_0 / $this.ck_1[r_0], 0.0, 1.0);
-        tmp_4 = tmp_5 * Math.pow(this_1, 0.5);
+        tmp_4 = tmp_5 * Math.pow(this_1, 0.7);
       } else {
         tmp_4 = 0.0;
       }
@@ -8160,10 +8160,10 @@ function shape_0($this, coverSide, cornerRadius, coverScale, spike, volume, heav
           var i2 = imul_0((i_0 + 1 | 0) % 128 | 0, 2);
           var i3 = imul_0((i_0 + 2 | 0) % 128 | 0, 2);
           var o_0 = imul_0(i_0, 6);
-          c[o_0] = p[i1] + (p[i2] - p[i0]) * 0.16;
-          c[o_0 + 1 | 0] = p[i1 + 1 | 0] + (p[i2 + 1 | 0] - p[i0 + 1 | 0]) * 0.16;
-          c[o_0 + 2 | 0] = p[i2] - (p[i3] - p[i1]) * 0.16;
-          c[o_0 + 3 | 0] = p[i2 + 1 | 0] - (p[i3 + 1 | 0] - p[i1 + 1 | 0]) * 0.16;
+          c[o_0] = p[i1] + (p[i2] - p[i0]) * 0.12;
+          c[o_0 + 1 | 0] = p[i1 + 1 | 0] + (p[i2 + 1 | 0] - p[i0 + 1 | 0]) * 0.12;
+          c[o_0 + 2 | 0] = p[i2] - (p[i3] - p[i1]) * 0.12;
+          c[o_0 + 3 | 0] = p[i2 + 1 | 0] - (p[i3 + 1 | 0] - p[i1 + 1 | 0]) * 0.12;
           c[o_0 + 4 | 0] = p[i2];
           c[o_0 + 5 | 0] = p[i2 + 1 | 0];
         }
@@ -10011,7 +10011,7 @@ protoOf(WebPartyEngine).vt = function () {
   return 1.3;
 };
 protoOf(WebPartyEngine).wt = function () {
-  return 9.0;
+  return 5.0;
 };
 protoOf(WebPartyEngine).xt = function () {
   return 2.5;
@@ -10020,10 +10020,10 @@ protoOf(WebPartyEngine).yt = function () {
   return 1;
 };
 protoOf(WebPartyEngine).zt = function () {
-  return 0.2;
+  return 0.1;
 };
 protoOf(WebPartyEngine).au = function () {
-  return 0.25;
+  return 0.12;
 };
 protoOf(WebPartyEngine).bu = function () {
   return 0;

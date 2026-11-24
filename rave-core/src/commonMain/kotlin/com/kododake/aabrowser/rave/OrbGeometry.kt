@@ -59,7 +59,7 @@ val ORB_LAYERS: List<OrbLayerSpec> = listOf(
 /** Avstand fra coveret til auraens kant når den hviler. Omrisset er coverets eget (samme hjørneradius). */
 const val ORB_GAP = .02f
 /** Kurvens spenning (Catmull-Rom): 1/6 = vanlig, lavere = strammere. */
-const val ORB_CURVE_TENSION = .16f
+const val ORB_CURVE_TENSION = .12f   // Espen 2026-11-24: skarpere aura (var .16: strammere topper)
 /** Jevning rundt ringen av hele spekteret (alle lag): runde, myke buler, og ingen søm mellom områdene. */
 const val ORB_SMOOTH_PASSES = 1   // Espen 2026-11-24: «skarpere» (var 2: for runde klumper)
 
@@ -75,7 +75,7 @@ const val ORB_KNEE = .75f
 /** Kontrast innen hvert område: 1 = rett fram, høyere = bulene skiller seg mer fra resten. */
 const val ORB_CONTRAST = 2.0f      // Espen 2026-11-24: toppene skal stikke tydeligere ut (var 1.6)
 /** Størrelsen følger områdets nivå med denne kurven: under 1 = også svakere partier viser formen sin. */
-const val ORB_LEVEL_CURVE = .5f
+const val ORB_LEVEL_CURVE = .7f   // Espen 2026-11-24: skarpere aura (var .5: svake partier mindre, toppene stikker ut)
 /** De aller laveste frekvensene (ved kl. 12) vektes ned til dette, og opp til 1 over områdets første del: to buler, ikke én topp. */
 const val ORB_TOP_WEIGHT = .55f
 const val ORB_TOP_WEIGHT_SPAN = .35f
@@ -173,9 +173,9 @@ const val ORB_DRIFT_S = 50f
 // Lagene fylles med coverfargene som flyter rundt ringen, halvt gjennomsiktige og lagt oppå hverandre
 // som lys (additivt). Bakerste lag tegnes først, hovedformen sist.
 /** Hovedformens fyll (0..1), ganges med lagets [OrbGeometry.alpha]. */
-const val AURA_MAIN_ALPHA = .5f
+const val AURA_MAIN_ALPHA = .65f   // Espen 2026-11-24: skarpere aura (var .5: hovedformen druknet)
 /** Hvert lag bak er så mye svakere enn laget foran (.6 = 60 %). */
-const val AURA_BACK_FALL = .6f
+const val AURA_BACK_FALL = .4f   // Espen 2026-11-24: skarpere aura (var .6: ekkolagene dekket toppene)
 /** Coverfargene går så mange ganger rundt ringen. */
 const val AURA_COLOR_ROUNDS = 2
 /** Hvert lag bak starter så mange farger lenger ut i fargehjulet, så lagene får ulik farge på samme sted. */
@@ -205,13 +205,13 @@ const val CORE_DENSITY = 1.3f
 
 // Gløden (bloom): hele auraen som ett mykt lys bak coveret, uskarpt.
 /** Uskarpheten (dp). */
-const val BLOOM_BLUR_DP = 9f
+const val BLOOM_BLUR_DP = 5f   // Espen 2026-11-24: skarpere aura (var 9: tåke rundt alt)
 /** Lerretet trenger så mange ganger uskarpheten i ekstra marg, så gløden aldri kuttes. */
 const val BLOOM_ROOM_BLURS = 2.5f
 /** Bakerste lag i gløden: hvilken coverfarge, styrke lukket, og tillegg når auraen er helt åpen (ganges med glow). */
 const val BLOOM_BACK_COLOR = 1
-const val BLOOM_BACK_ALPHA = .2f
-const val BLOOM_BACK_OPEN = .25f
+const val BLOOM_BACK_ALPHA = .1f   // Espen 2026-11-24: skarpere aura (var .2)
+const val BLOOM_BACK_OPEN = .12f   // Espen 2026-11-24: skarpere aura (var .25)
 /** Hovedformen i gløden: sterkere, i første coverfarge. */
 const val BLOOM_MAIN_COLOR = 0
 const val BLOOM_MAIN_ALPHA = .45f
