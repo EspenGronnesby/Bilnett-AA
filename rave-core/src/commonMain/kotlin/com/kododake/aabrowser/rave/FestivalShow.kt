@@ -135,7 +135,7 @@ const val DUST_TWINKLE_DECAY_S = .35f
 const val DUST_BAND_GAIN = .3f
 const val DUST_TWINKLE_GAIN = .45f
 
-// Lysbølger (ripples): en bred, myk lysring i coverets form som brer seg rolig ut og toner bort.
+// Lysbølger (ripples): en bred, myk, rund lysring som brer seg rolig ut fra coveret og toner bort.
 /** Levetid (ms; var ~1000). */
 const val WAVE_LIFE_MS = 1900
 /** Hvor langt bølgen går ut fra coveret, som andel av coverets side (var: hele skjermen). */

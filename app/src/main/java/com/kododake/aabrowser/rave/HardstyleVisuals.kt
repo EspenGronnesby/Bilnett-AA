@@ -150,7 +150,7 @@ internal fun HardstyleBackdrop(modifier: Modifier, frameOf: () -> HardstyleFrame
         val amount = p.particles.coerceIn(.4f, 1.3f)
         val gain = volumeGain(volume); val ramp = loudRamp(volume)
         val span = max(size.width, size.height)
-        val half = side / 2f; val corner = cornerOf()
+        val half = side / 2f
         val dim = if (video) VIDEO_LIGHT_DIM else 1f
         val now = SystemClock.uptimeMillis()
         val dt = if (s.lastAt == 0L) 0f else ((now - s.lastAt) / 1000f).coerceIn(0f, .1f)
@@ -200,7 +200,8 @@ internal fun HardstyleBackdrop(modifier: Modifier, frameOf: () -> HardstyleFrame
                 s.strength[s.nextWave] = min((.4f + e.grit * .6f) * e.bass * gain * (1f + ramp * .4f), 1.4f)
                 s.nextWave = (s.nextWave + 1) % WAVE_COUNT
             }
-            // En bred, myk lysring i coverets form (rundere jo større), ~9 strøk oppå hverandre, smal til bred.
+            // En bred, myk, RUND lysring (Espen 2026-11-24: runde, ikke firkantede), ~9 strøk oppå hverandre, smal til
+            // bred. Tegnes bak coveret, så coveret skjuler den delen av sirkelen som ligger innenfor hjørnene.
             val paint = s.wavePaint
             // Espens innstillinger (styrke og bredde; 1× = tallene i FestivalShow.kt), lest hvert bilde.
             val waveAlpha = fx.waveAlpha; val widthFrom = fx.waveWidthFrom; val widthTo = fx.waveWidthTo
@@ -215,12 +216,11 @@ internal fun HardstyleBackdrop(modifier: Modifier, frameOf: () -> HardstyleFrame
                 val fade = min(q * WAVE_FADE_IN, 1f) * (1f - q).pow(WAVE_FADE_OUT_CURVE) * (.5f + .5f * min(st, 1f)) * waveAlpha * dim
                 if (fade < .004f) continue
                 val rgb = mixRgb(colors[r % colors.size], CORE_COLOR, WAVE_WHITE_MIX)
-                val l = cx - half - out; val t = cy - half - out; val rr = cx + half + out; val b = cy + half + out
-                val rad = corner + out
+                val radius = half + out
                 for (k in 0 until WAVE_STROKES) {
                     paint.color = ((fade * s.strokes[k] * 255f).roundToInt().coerceIn(0, 255) shl 24) or rgb
                     paint.strokeWidth = width * (k + 1) / WAVE_STROKES
-                    canvas.drawRoundRect(l, t, rr, b, rad, rad, paint)
+                    canvas.drawCircle(cx, cy, radius, paint)
                 }
             }
 

@@ -104,9 +104,9 @@ export class ParticleLayer {
   private rippleArmed = true
   private lastSpawn = 0
 
-  /** [cx], [cy]: the cover's centre; [half]: half its side; [corner]: its corner radius (all CSS px). */
+  /** [cx], [cy]: the cover's centre; [half]: half its side (CSS px). The corner radius is unused since the waves are round. */
   draw(ctx: CanvasRenderingContext2D, w: number, h: number, e: WebPartyEngine, colors: Rgb[], cx: number, cy: number,
-    half: number, corner: number, volume: number, video: boolean, dp: number, now: number, calm = false) {
+    half: number, _corner: number, volume: number, video: boolean, dp: number, now: number, calm = false) {
     const spectrum = e.spectrum
     const softness = e.softness
     const amount = clamp(e.particles, 0.4, 1.3)
@@ -179,7 +179,8 @@ export class ParticleLayer {
       const fade = Math.min(q * e.waveFadeIn, 1) * (1 - q) ** e.waveFadeOutCurve * (0.5 + 0.5 * Math.min(s, 1)) * e.waveAlpha * dim
       if (fade < 0.004) continue
       ctx.strokeStyle = css(lerpRgb(colors[r % colors.length], white, e.waveWhiteMix))
-      ctx.beginPath(); ctx.roundRect(cx - half - out, cy - half - out, (half + out) * 2, (half + out) * 2, corner + out)
+      // Round (Espen 2026-11-24), drawn behind the cover like in the app.
+      ctx.beginPath(); ctx.arc(cx, cy, half + out, 0, Math.PI * 2)
       for (let k = 0; k < strokes.length; k++) {
         ctx.globalAlpha = fade * strokes[k]
         ctx.lineWidth = (width * (k + 1)) / strokes.length
