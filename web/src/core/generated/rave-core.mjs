@@ -138,10 +138,10 @@ initMetadataForClass(ListIteratorImpl, 'ListIteratorImpl', VOID, IteratorImpl);
 initMetadataForClass(AbstractMutableList, 'AbstractMutableList', VOID, AbstractMutableCollection, [KtList, Collection]);
 initMetadataForInterface(RandomAccess, 'RandomAccess');
 initMetadataForClass(SubList, 'SubList', VOID, AbstractMutableList, [RandomAccess]);
-initMetadataForClass(AbstractMutableSet, 'AbstractMutableSet', VOID, AbstractMutableCollection, [Collection, KtSet]);
+initMetadataForClass(AbstractMutableSet, 'AbstractMutableSet', VOID, AbstractMutableCollection, [KtSet, Collection]);
 initMetadataForCompanion(Companion_1);
 initMetadataForClass(ArrayList, 'ArrayList', ArrayList_init_$Create$, AbstractMutableList, [KtList, Collection, RandomAccess]);
-initMetadataForClass(HashSet, 'HashSet', HashSet_init_$Create$, AbstractMutableSet, [Collection, KtSet]);
+initMetadataForClass(HashSet, 'HashSet', HashSet_init_$Create$, AbstractMutableSet, [KtSet, Collection]);
 initMetadataForCompanion(Companion_2);
 initMetadataForClass(Itr, 'Itr');
 initMetadataForClass(KeysItr, 'KeysItr', VOID, Itr);
@@ -184,7 +184,7 @@ function containsAllEntries(m) {
 }
 initMetadataForInterface(InternalMap, 'InternalMap');
 initMetadataForClass(InternalHashMap, 'InternalHashMap', InternalHashMap_init_$Create$, VOID, [InternalMap]);
-initMetadataForClass(LinkedHashSet, 'LinkedHashSet', LinkedHashSet_init_$Create$, HashSet, [Collection, KtSet]);
+initMetadataForClass(LinkedHashSet, 'LinkedHashSet', LinkedHashSet_init_$Create$, HashSet, [KtSet, Collection]);
 initMetadataForClass(Exception, 'Exception', Exception_init_$Create$, Error);
 initMetadataForClass(RuntimeException, 'RuntimeException', RuntimeException_init_$Create$, Exception);
 initMetadataForClass(UnsupportedOperationException, 'UnsupportedOperationException', UnsupportedOperationException_init_$Create$, RuntimeException);
@@ -7881,21 +7881,36 @@ function listen($this, bands, dt) {
     }
      while (!(j_0 === last_1));
   $this.hk_1 = bassPoints > 0 ? coerceIn(bass / bassPoints, 0.0, 1.0) : 0.0;
-  // Inline function 'kotlin.repeat' call
-  var inductionVariable_2 = 0;
-  if (inductionVariable_2 < 2)
+  var bottomFrom = numberToInt($this.ij_1 * (1.0 - 0.3));
+  var inductionVariable_2 = bottomFrom + 1 | 0;
+  var last_2 = $this.ij_1;
+  if (inductionVariable_2 <= last_2)
     do {
-      var index_0 = inductionVariable_2;
+      var j_1 = inductionVariable_2;
       inductionVariable_2 = inductionVariable_2 + 1 | 0;
+      var t = (j_1 - bottomFrom | 0) / ($this.ij_1 - bottomFrom | 0);
+      var ramp = t * t * (3.0 - 2.0 * t);
+      var tmp0_2 = main[j_1];
+      // Inline function 'kotlin.math.max' call
+      var b_3 = main[$this.ij_1 - j_1 | 0] * 0.8 * ramp;
+      main[j_1] = Math.max(tmp0_2, b_3);
+    }
+     while (!(j_1 === last_2));
+  // Inline function 'kotlin.repeat' call
+  var inductionVariable_3 = 0;
+  if (inductionVariable_3 < 2)
+    do {
+      var index_0 = inductionVariable_3;
+      inductionVariable_3 = inductionVariable_3 + 1 | 0;
       blur($this, main);
     }
-     while (inductionVariable_2 < 2);
-  var inductionVariable_3 = 1;
-  var last_2 = $this.cj_1;
-  if (inductionVariable_3 < last_2)
+     while (inductionVariable_3 < 2);
+  var inductionVariable_4 = 1;
+  var last_3 = $this.cj_1;
+  if (inductionVariable_4 < last_3)
     do {
-      var l = inductionVariable_3;
-      inductionVariable_3 = inductionVariable_3 + 1 | 0;
+      var l = inductionVariable_4;
+      inductionVariable_4 = inductionVariable_4 + 1 | 0;
       // Inline function 'kotlin.collections.copyInto' call
       var destination = $this.rj_1[l];
       var endIndex = main.length;
@@ -7907,16 +7922,16 @@ function listen($this, bands, dt) {
       arrayCopy(tmp_6, destination, 0, 0, endIndex);
       // Inline function 'kotlin.repeat' call
       var times = $this.aj_1.n(l).si_1;
-      var inductionVariable_4 = 0;
-      if (inductionVariable_4 < times)
+      var inductionVariable_5 = 0;
+      if (inductionVariable_5 < times)
         do {
-          var index_1 = inductionVariable_4;
-          inductionVariable_4 = inductionVariable_4 + 1 | 0;
+          var index_1 = inductionVariable_5;
+          inductionVariable_5 = inductionVariable_5 + 1 | 0;
           blur($this, $this.rj_1[l]);
         }
-         while (inductionVariable_4 < times);
+         while (inductionVariable_5 < times);
     }
-     while (inductionVariable_3 < last_2);
+     while (inductionVariable_4 < last_3);
 }
 function follow($this, reference, value, dt) {
   var tmp;

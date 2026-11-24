@@ -245,7 +245,10 @@ class OrbGeometryTest {
         assertTrue(lowAt < half / 4, "70 Hz bulges at the top (point $lowAt)")
         assertTrue(lowAt > 0, "…beside 12 o'clock, not one peak in the middle (point $lowAt)")
         assertTrue(lowSize > SIDE * .06f, "…clearly: $lowSize px")
-        assertTrue(low.geo.offsetAt(0, half) - SIDE * ORB_GAP < 1f, "70 Hz leaves the bottom alone")
+        // Since 2026-11-23 the bottom also bulges on the bass (mirrored), but smaller than the top.
+        val lowBottom = low.geo.offsetAt(0, half) - SIDE * ORB_GAP
+        assertTrue(lowBottom > SIDE * .02f, "70 Hz also moves the bottom: $lowBottom px")
+        assertTrue(lowBottom <= lowSize * ORB_BOTTOM_BASS + 1f, "…but less than the top ($lowBottom against $lowSize px)")
         val high = Rig(60, fftHz = 43); val highTone = Tone(5000.0)
         high.run(4f, { highTone.next() })
         val (highAt, highSize) = peakOf(high.geo)
@@ -422,7 +425,9 @@ class OrbGeometryTest {
                 val at = peakAt(geo)
                 assertTrue(at < half / 2, "$name: $hz Hz bulges in the top half (point $at)")
                 assertTrue(geo.offsetAt(0, at) - rest > SIDE * .06f, "$name: $hz Hz is clearly visible (${geo.offsetAt(0, at) - rest} px)")
-                for (p in half * 3 / 4..half) assertTrue(geo.offsetAt(0, p) - rest < 1f, "$name: $hz Hz leaves the bottom alone (point $p)")
+                val topSize = geo.offsetAt(0, at) - rest
+                for (p in half * 3 / 4..half) assertTrue(geo.offsetAt(0, p) - rest <= topSize * ORB_BOTTOM_BASS + 1f,
+                    "$name: $hz Hz bulges less at the bottom than at the top (point $p)")
             }
             val low = peakAt(toneShape(60.0, size, rate)); val higher = peakAt(toneShape(150.0, size, rate))
             assertTrue(low < higher, "$name: 60 Hz (point $low) sits above 150 Hz (point $higher)")
@@ -445,7 +450,8 @@ class OrbGeometryTest {
             val phone = profile(PHONE_FFT, PHONE_RATE, hz); val web = profile(2048, RATE, hz)
             val top = phone.max()
             var biggestStep = 0f; var flatRun = 0; var longestFlat = 0; var turns = 0; var direction = 0
-            for (p in 1..half) {
+            // The top and sides (the bottom holds the mirrored copy of the same bulge, ORB_BOTTOM_BASS).
+            for (p in 1..(half * (1f - ORB_BOTTOM_SPAN)).toInt()) {
                 val d = phone[p] - phone[p - 1]
                 biggestStep = max(biggestStep, abs(d))
                 // A «block»: several neighbouring points at exactly the same height, high up on the bulge.
@@ -477,7 +483,8 @@ class OrbGeometryTest {
             var at = 0
             for (p in 0..half) if (geo.offsetAt(0, p) > geo.offsetAt(0, at)) at = p
             assertTrue(at < half / 4, "$size bytes at $rate Hz: 60 Hz still bulges at the top (point $at)")
-            assertTrue(geo.offsetAt(0, half) - SIDE * ORB_GAP < 1f, "…and the bottom is at rest")
+            assertTrue(geo.offsetAt(0, half) - SIDE * ORB_GAP <= (geo.offsetAt(0, at) - SIDE * ORB_GAP) * ORB_BOTTOM_BASS + 1f,
+                "…and the bottom (mirrored bass) stays smaller than the top")
         }
         // Tiny and odd frames, and a silly rate.
         val spectrum = DisplaySpectrum()

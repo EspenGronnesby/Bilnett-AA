@@ -79,6 +79,13 @@ const val ORB_LEVEL_CURVE = .5f
 /** De aller laveste frekvensene (ved kl. 12) vektes ned til dette, og opp til 1 over områdets første del: to buler, ikke én topp. */
 const val ORB_TOP_WEIGHT = .55f
 const val ORB_TOP_WEIGHT_SPAN = .35f
+/**
+ * Bunnen buler også på bassen (Espen 2026-11-23: «lite skjer nede, veldig mye oppe»): de nederste
+ * [ORB_BOTTOM_SPAN] av veien fra kl. 12 til kl. 6 får en speilet kopi av toppens bassbuler, opp til
+ * [ORB_BOTTOM_BASS] av toppens størrelse helt nederst, og mindre oppover sidene. Diskanten vinner der den er større.
+ */
+const val ORB_BOTTOM_BASS = .8f
+const val ORB_BOTTOM_SPAN = .3f
 /** Høye topper vokser så mye ekstra når bassen er tung (heavy = 1). */
 const val ORB_HEAVY_PEAK = .2f
 /**
@@ -490,6 +497,13 @@ class OrbGeometry(private val layers: List<OrbLayerSpec> = ORB_LAYERS, private v
             main[j] = v.coerceIn(0f, 1f) * weight[j]
         }
         bassLevel = if (bassPoints > 0) (bass / bassPoints).coerceIn(0f, 1f) else 0f
+        // Bottom: a mirrored copy of the top's bass bulges (soft ramp up the sides, strongest at 6 o'clock).
+        val bottomFrom = (half * (1f - ORB_BOTTOM_SPAN)).toInt()
+        for (j in bottomFrom + 1..half) {
+            val t = (j - bottomFrom).toFloat() / (half - bottomFrom)
+            val ramp = t * t * (3f - 2f * t)
+            main[j] = max(main[j], main[half - j] * ORB_BOTTOM_BASS * ramp)
+        }
         repeat(ORB_SMOOTH_PASSES) { blur(main) }
         for (l in 1 until layerCount) {
             main.copyInto(target[l])
