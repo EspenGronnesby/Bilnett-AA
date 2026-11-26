@@ -1841,7 +1841,8 @@ class RaveActivity : ComponentActivity() {
                     top = if (transportVisible) 96.u else 12.u))
             // Feedback buttons (with the analysis): Espen's answer key for training the genre rules.
             // Left side.
-            if (hardstyleOn && showAnalysis)
+            // Not while the song list is open: both sit on the left and covered each other (test 2026-11-26).
+            if (hardstyleOn && showAnalysis && !showSongList)
                 FeedbackPanel(Modifier.align(Alignment.BottomStart).padding(start = 16.u, bottom = 16.u),
                     compact = transportVisible)
             // Vibe slider: shown with the other buttons (one tap) while Party is on.
@@ -2482,7 +2483,10 @@ class RaveActivity : ComponentActivity() {
             Row(Modifier.padding(start = 12.u).height(34.u).clip(RoundedCornerShape(50)).border(1.dp, ST_LINE, RoundedCornerShape(50)).padding(3.u)) {
                 for ((text, isOn) in listOf("Av" to false, "På" to true)) {
                     val picked = on == isOn
+                    // «Av» always means off and «På» always on: tapping the side that is already chosen does nothing
+                    // (it used to flip the switch whatever side was tapped). Tapping the name still flips it.
                     Box(Modifier.fillMaxHeight().clip(RoundedCornerShape(50)).background(if (picked) ST_PILL_ON else Color.Transparent)
+                        .clickable { if (settingsReady() && !picked) onClick() }
                         .padding(horizontal = 14.u), contentAlignment = Alignment.Center) {
                         Text(text, fontSize = 14.us, fontWeight = FontWeight.SemiBold, color = if (picked) ST_ON else ST_MUTED)
                     }
