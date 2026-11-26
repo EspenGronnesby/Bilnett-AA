@@ -91,7 +91,7 @@ export declare class WebPartyEngine {
     resetPartyFx(): void;
     partyFxFromSlider(key: string, position: number): number;
     partyFxToSlider(key: string, value: number): number;
-    partyFxText(value: number): string;
+    partyFxText(value: number, key?: string): string;
     get edgeGlow(): number;
     set edgeGlow(value: number);
     get backlightHitTravel(): number;
@@ -160,6 +160,7 @@ export declare class WebPartyEngine {
     get coreStrokes(): number;
     get coreDensity(): number;
     get bloomBlurDp(): number;
+    get bloomRoomDp(): number;
     get bloomRoomBlurs(): number;
     get bloomBackColor(): number;
     get bloomBackAlpha(): number;

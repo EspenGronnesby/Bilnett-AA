@@ -16,6 +16,11 @@ const GROUPS: { title: string; rows: { key: string; label: string }[] }[] = [
     { key: 'strobe', label: 'Strobe' },
     { key: 'blink', label: 'Hvite blink' },
   ] },
+  // Auraen (2026-11-26): Utslag tar også bunnen; Skarphet tar jevning, kontrast og glød (mer skarphet = mindre tåke).
+  { title: 'Auraen', rows: [
+    { key: 'aura_utslag', label: 'Utslag' },
+    { key: 'aura_skarphet', label: 'Skarphet' },
+  ] },
 ]
 /** Glidebryterens steg (0..STEPS); midten er STEPS / 2. */
 const STEPS = 1000
@@ -66,7 +71,7 @@ export function PartySettingsSheet({ engine, values, onChange, onClose }: {
                       <input type="range" min={0} max={STEPS} step={1} list="party-fx-middle" aria-label={`${group.title}: ${row.label}`}
                         value={Math.round(engine.partyFxToSlider(row.key, value) * STEPS)}
                         onChange={e => set(row.key, engine.partyFxFromSlider(row.key, Number(e.currentTarget.value) / STEPS))} />
-                      <span className="slider-value">{engine.partyFxText(value)}</span>
+                      <span className="slider-value">{engine.partyFxText(value, row.key)}</span>
                     </label>
                   </div>
                 )

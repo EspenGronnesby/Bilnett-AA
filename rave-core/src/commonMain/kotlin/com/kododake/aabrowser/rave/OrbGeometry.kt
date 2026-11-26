@@ -184,7 +184,47 @@ const val AURA_LAYER_COLOR_STEP = 1
 const val AURA_COUNTER_DRIFT = true
 
 /** Fyll-alfa for lag [layer] (0 = hovedformen) før lagets egen [OrbGeometry.alpha]. */
-fun auraLayerAlpha(layer: Int): Float = AURA_MAIN_ALPHA * AURA_BACK_FALL.pow(layer)
+fun auraLayerAlpha(layer: Int, sharp: Float = 1f): Float =
+    auraSharp(AURA_MAIN_ALPHA_SOFT, AURA_MAIN_ALPHA, AURA_MAIN_ALPHA_CRISP, sharp) *
+        auraSharp(AURA_BACK_FALL_SOFT, AURA_BACK_FALL, AURA_BACK_FALL_CRISP, sharp).pow(layer)
+
+// ---- Espens aura-glidebrytere (Party-innstillinger → Auraen, 2026-11-26) ----
+// Skarphet: én bryter flytter alle tallene som gjør auraen myk/tåkete eller klar/spiss sammen (mer skarphet =
+// mindre tåke-glød). 0 = slik auraen var før 24.11, 1× = konstantene over (dagens), 2× = enda skarpere.
+// Kontrasten stopper på 2.0: mer gir hakkete trinn på telefonens lave FFT-oppløsning (OrbGeometryTest).
+const val ORB_CONTRAST_SOFT = 1.6f
+const val ORB_CONTRAST_CRISP = 2.0f
+const val ORB_LEVEL_CURVE_SOFT = .5f
+const val ORB_LEVEL_CURVE_CRISP = 1f
+const val ORB_CURVE_TENSION_SOFT = .16f
+const val ORB_CURVE_TENSION_CRISP = .06f
+const val ORB_SMOOTH_PASSES_SOFT = 2
+const val AURA_MAIN_ALPHA_SOFT = .5f
+const val AURA_MAIN_ALPHA_CRISP = .85f
+const val AURA_BACK_FALL_SOFT = .6f
+const val AURA_BACK_FALL_CRISP = .2f
+const val BLOOM_BLUR_DP_SOFT = 9f
+const val BLOOM_BLUR_DP_CRISP = 1.5f
+const val BLOOM_BACK_ALPHA_SOFT = .2f
+const val BLOOM_BACK_ALPHA_CRISP = .05f
+const val BLOOM_BACK_OPEN_SOFT = .25f
+const val BLOOM_BACK_OPEN_CRISP = .06f
+/** Ekstra jevning per lag (0 = hovedformen) ved skarphet 0 og 2; 1× = [ORB_LAYERS] sine tall. */
+val AURA_LAYER_SMOOTH_SOFT = intArrayOf(0, 2, 4)
+val AURA_LAYER_SMOOTH_CRISP = intArrayOf(0, 0, -1)
+/** Utslag: bryterens største verdi; taket ([ORB_REACH_MAX]) følger utslaget helt hit, og lerretet ([ORB_EXTENT]) har plass. */
+const val AURA_SIZE_REACH_MAX = 1.5f
+
+/** Verdien for skarphet [sharp] (0..2): [soft] ved 0, [now] ved 1×, [crisp] ved 2, rett linje imellom. */
+fun auraSharp(soft: Float, now: Float, crisp: Float, sharp: Float): Float {
+    val s = if (sharp.isFinite()) sharp.coerceIn(0f, 2f) else 1f
+    if (s == 1f) return now   // the middle is exactly today's numbers
+    return if (s < 1f) soft + (now - soft) * s else now + (crisp - now) * (s - 1f)
+}
+/** Glødens uskarphet (dp) for skarphet [sharp]. Lerretets marg bruker [BLOOM_BLUR_DP_SOFT] (den største). */
+fun auraBloomBlurDp(sharp: Float = 1f): Float = auraSharp(BLOOM_BLUR_DP_SOFT, BLOOM_BLUR_DP, BLOOM_BLUR_DP_CRISP, sharp)
+fun auraBloomBackAlpha(sharp: Float = 1f): Float = auraSharp(BLOOM_BACK_ALPHA_SOFT, BLOOM_BACK_ALPHA, BLOOM_BACK_ALPHA_CRISP, sharp)
+fun auraBloomBackOpen(sharp: Float = 1f): Float = auraSharp(BLOOM_BACK_OPEN_SOFT, BLOOM_BACK_OPEN, BLOOM_BACK_OPEN_CRISP, sharp)
 /** Hvor mange farger lag [layer] er forskjøvet i fargehjulet. */
 fun auraLayerColorShift(layer: Int): Int = layer * AURA_LAYER_COLOR_STEP
 /** Retningen fargene driver for lag [layer]: 1 eller −1 (ganges med [OrbGeometry.drift]). */
@@ -239,7 +279,7 @@ const val COVER_PULSE_MAX = 1f + COVER_BREATH_PULSE + COVER_KICK_PULSE + COVER_K
  * uansett puls og utslag = halve coveret ved største puls + lengste rekkevidde. Legg til plass for
  * glødens uskarphet ([BLOOM_ROOM_BLURS] × [BLOOM_BLUR_DP]) når lerretet lages.
  */
-const val ORB_EXTENT = .5f * COVER_PULSE_MAX + ORB_REACH_MAX
+const val ORB_EXTENT = .5f * COVER_PULSE_MAX + ORB_REACH_MAX * AURA_SIZE_REACH_MAX
 /** Kicket jevnes før det når coveret: opp på ca. 30 ms, ned på ca. 140 ms. */
 const val COVER_KICK_ATTACK_S = .03f
 const val COVER_KICK_RELEASE_S = .14f
@@ -301,6 +341,12 @@ class OrbGeometry(private val layers: List<OrbLayerSpec> = ORB_LAYERS, private v
      * between the Visualizer and the microphone (the website is always [OrbSource.PCM]).
      */
     var source: OrbSource = OrbSource.PCM
+
+    /** Espens «Utslag» (Party-innstillinger): ganges med bulenes størrelse, også bunnen. 1 = som konstantene. */
+    var auraSize = 1f
+    /** Espens «Skarphet» (0..2): se [auraSharp]. 1 = som konstantene. */
+    var auraSharpness = 1f
+    private fun sharpOf(soft: Float, now: Float, crisp: Float) = auraSharp(soft, now, crisp, auraSharpness)
 
     /** 0..1: 0 = resting tight against the cover, 1 = fully open. */
     var open = 0f
@@ -489,10 +535,12 @@ class OrbGeometry(private val layers: List<OrbLayerSpec> = ORB_LAYERS, private v
         // The SHAPE within a range is measured against its loudest frequency right now (so it always shows
         // which frequencies stand out); the SIZE against the range's own reference.
         val main = target[0]
+        val contrast = sharpOf(ORB_CONTRAST_SOFT, ORB_CONTRAST, ORB_CONTRAST_CRISP)
+        val levelCurve = sharpOf(ORB_LEVEL_CURVE_SOFT, ORB_LEVEL_CURVE, ORB_LEVEL_CURVE_CRISP)
         var bass = 0f; var bassPoints = 0
         for (j in 0..half) {
             val r = rangeOf[j]; val peak = peaks[r]
-            val v = if (peak > 0f) (raw[j] / peak).pow(ORB_CONTRAST) * (peak / reference[r]).coerceIn(0f, 1f).pow(ORB_LEVEL_CURVE) else 0f
+            val v = if (peak > 0f) (raw[j] / peak).pow(contrast) * (peak / reference[r]).coerceIn(0f, 1f).pow(levelCurve) else 0f
             if (r == 0) { bass += v; bassPoints++ }
             main[j] = v.coerceIn(0f, 1f) * weight[j]
         }
@@ -504,10 +552,12 @@ class OrbGeometry(private val layers: List<OrbLayerSpec> = ORB_LAYERS, private v
             val ramp = t * t * (3f - 2f * t)
             main[j] = max(main[j], main[half - j] * ORB_BOTTOM_BASS * ramp)
         }
-        repeat(ORB_SMOOTH_PASSES) { blur(main) }
+        // Fractional passes (Skarphet glides, no steps while the slider is dragged).
+        blurBy(main, sharpOf(ORB_SMOOTH_PASSES_SOFT.toFloat(), ORB_SMOOTH_PASSES.toFloat(), ORB_SMOOTH_PASSES.toFloat()))
         for (l in 1 until layerCount) {
             main.copyInto(target[l])
-            repeat(layers[l].smoothPasses) { blur(target[l]) }
+            val extra = sharpOf(AURA_LAYER_SMOOTH_SOFT.getOrElse(l) { 0 }.toFloat(), 0f, AURA_LAYER_SMOOTH_CRISP.getOrElse(l) { 0 }.toFloat())
+            blurBy(target[l], layers[l].smoothPasses + extra)
         }
     }
 
@@ -515,6 +565,20 @@ class OrbGeometry(private val layers: List<OrbLayerSpec> = ORB_LAYERS, private v
     private fun follow(reference: Float, value: Float, dt: Float): Float =
         if (value > reference) reference + (value - reference) * (1f - exp(-dt / ORB_SONG_UP_S))
         else reference * exp(-dt / ORB_SONG_DOWN_S)
+
+    private val partial = FloatArray(unique)
+    /** [passes] soft passes around the ring; a fraction blends the last pass in (2.4 = 2 passes + 40 % of a third). */
+    private fun blurBy(values: FloatArray, passes: Float) {
+        val p = if (passes.isFinite()) passes.coerceIn(0f, 20f) else 0f
+        val whole = p.toInt()
+        repeat(whole) { blur(values) }
+        val frac = p - whole
+        if (frac > .001f) {
+            values.copyInto(partial)
+            blur(partial)
+            for (j in 0..half) values[j] += (partial[j] - values[j]) * frac
+        }
+    }
 
     /** One soft pass around the ring (both ends mirror, like the ring itself). */
     private fun blur(values: FloatArray) {
@@ -603,11 +667,12 @@ class OrbGeometry(private val layers: List<OrbLayerSpec> = ORB_LAYERS, private v
         outline(side * .5f * scale, cornerRadius * scale)
         val openAmp = ORB_REST_AMP + (1f - ORB_REST_AMP) * open
         val drive = spike.coerceIn(0f, ORB_SPIKE_MAX) * volumeGain(volume)
-        val full = side * ORB_AMP * maxVolumeBoost(volume) * openAmp
+        val sizeMul = if (auraSize.isFinite()) auraSize.coerceIn(.1f, 3f) else 1f
+        val full = side * ORB_AMP * maxVolumeBoost(volume) * openAmp * sizeMul
         val gap = side * ORB_GAP
         val pumpPx = side * ORB_PUMP * pump * open * (ORB_PUMP_CALM + (1f - ORB_PUMP_CALM) * heavy)
         // Nothing reaches further than this beyond the resting gap.
-        val ceiling = max(side * ORB_REACH_MAX - gap, 0f)
+        val ceiling = max(side * ORB_REACH_MAX * min(sizeMul, AURA_SIZE_REACH_MAX) - gap, 0f)   // follows Utslag all the way
         reachPx = gap + ceiling
         // The speed limit; a new cover size is taken at once (nothing to glide from).
         val resized = side != shapedSide
@@ -632,16 +697,17 @@ class OrbGeometry(private val layers: List<OrbLayerSpec> = ORB_LAYERS, private v
             }
             // Closed Catmull-Rom through the points, as cubic Bezier control points.
             val c = curves[l]
+            val tension = sharpOf(ORB_CURVE_TENSION_SOFT, ORB_CURVE_TENSION, ORB_CURVE_TENSION_CRISP)
             for (i in 0 until ORB_SEGMENTS) {
                 val i0 = ((i + ORB_SEGMENTS - 1) % ORB_SEGMENTS) * 2
                 val i1 = i * 2
                 val i2 = ((i + 1) % ORB_SEGMENTS) * 2
                 val i3 = ((i + 2) % ORB_SEGMENTS) * 2
                 val o = i * 6
-                c[o] = p[i1] + (p[i2] - p[i0]) * ORB_CURVE_TENSION
-                c[o + 1] = p[i1 + 1] + (p[i2 + 1] - p[i0 + 1]) * ORB_CURVE_TENSION
-                c[o + 2] = p[i2] - (p[i3] - p[i1]) * ORB_CURVE_TENSION
-                c[o + 3] = p[i2 + 1] - (p[i3 + 1] - p[i1 + 1]) * ORB_CURVE_TENSION
+                c[o] = p[i1] + (p[i2] - p[i0]) * tension
+                c[o + 1] = p[i1 + 1] + (p[i2 + 1] - p[i0 + 1]) * tension
+                c[o + 2] = p[i2] - (p[i3] - p[i1]) * tension
+                c[o + 3] = p[i2 + 1] - (p[i3 + 1] - p[i1 + 1]) * tension
                 c[o + 4] = p[i2]; c[o + 5] = p[i2 + 1]
             }
         }

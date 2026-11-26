@@ -1383,6 +1383,8 @@ class RaveActivity : ComponentActivity() {
                     // pulse scale the aura is shaped around, so the aura always lies outside the cover.
                     if (orbTrack != trackIdentity) { orbTrack = trackIdentity; orb.reset() }
                     orb.source = if (micMode) OrbSource.PCM else OrbSource.VISUALIZER
+                    // Espen's aura sliders (Party-innstillinger → Auraen), read every frame.
+                    orb.auraSize = partyFx.auraSize; orb.auraSharpness = partyFx.auraSharp
                     orbCoverKick = easeCoverKick(orbCoverKick, displayedFrame.kick, dt)
                     orbCoverScale = coverPulseScale(breath, orbCoverKick, displayedFrame.heavy, volume, phaseLevel)
                     orb.update(dt, playing, orbBands, hardstyleAudio.readDisplay(orbBands), orbSidePx, orbRadiusPx, orbCoverScale,
@@ -1895,7 +1897,8 @@ class RaveActivity : ComponentActivity() {
             )
         }.sceneShake(), contentAlignment = Alignment.Center) {
             androidx.compose.runtime.key(trackIdentity, foreground) {
-                PartyAura(orb, coverSide, cornerRadius, palette, { orbCoverScale }, { orbTick; frame }) // read in draw: redraw every frame
+                PartyAura(orb, coverSide, cornerRadius, palette, { orbCoverScale }, { orbTick; frame }, // read in draw: redraw every frame
+                    sharp = partyFxVersion.let { partyFx.auraSharp })   // recomposes when Espen moves «Skarphet»
             }
             Cover(coverSide, scale = orbCoverScale)
             // Snare → a soft, warm-white glow just outside the cover's edge (the website's party-edge); never over the cover.
@@ -2201,6 +2204,14 @@ class RaveActivity : ComponentActivity() {
                 PartyFxRow(PartyFx.STROBE, "Strobe"); divider()
                 PartyFxRow(PartyFx.FLASHES, "Hvite blink")
             }
+            Spacer(Modifier.height(18.u))
+            // Auraen (2026-11-26): to brytere som drar det som hører sammen (Utslag tar også bunnen; Skarphet
+            // tar jevning, kontrast og glød: mer skarphet = mindre tåke).
+            groupTitle("Auraen")
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.u)).background(Color(0x0DFFFFFF))) {
+                PartyFxRow(PartyFx.AURA_SIZE, "Utslag"); divider()
+                PartyFxRow(PartyFx.AURA_SHARP, "Skarphet")
+            }
             Spacer(Modifier.height(10.u))
             Box(
                 Modifier.height(48.u).clip(RoundedCornerShape(12.u)).clickable { resetPartyFx() }.padding(horizontal = 4.u),
@@ -2267,7 +2278,7 @@ class RaveActivity : ComponentActivity() {
                     drawCircle(cream, tp / 2f, Offset(x, cy))
                 }
             }
-            Text(partyFxText(value), fontSize = 15.us, color = Color(0xB3F5F2EC), maxLines = 1, softWrap = false,
+            Text(partyFxText(value, fx), fontSize = 15.us, color = Color(0xB3F5F2EC), maxLines = 1, softWrap = false,
                 textAlign = TextAlign.End, modifier = Modifier.width(52.u))
         }
     }

@@ -7,6 +7,7 @@ import kotlin.math.hypot
 import kotlin.math.ln
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.random.Random
 import kotlin.test.Test
@@ -403,9 +404,10 @@ class OrbGeometryTest {
     }
 
     /** The shape of the main layer after [seconds] of one steady tone. */
-    private fun toneShape(hz: Double, size: Int, rate: Int, seconds: Float = 4f): OrbGeometry {
+    private fun toneShape(hz: Double, size: Int, rate: Int, seconds: Float = 4f, auraSize: Float = 1f, sharp: Float = 1f): OrbGeometry {
         val tone = Tone(hz, size, rate)
         val rig = Rig(60, fftHz = tone.perSecond, rate = rate)
+        rig.geo.auraSize = auraSize; rig.geo.auraSharpness = sharp
         rig.run(seconds, { tone.next() }, each = { assertFinite(rig.geo, "$hz Hz, $size bytes at $rate Hz") })
         return rig.geo
     }
@@ -579,6 +581,7 @@ class OrbGeometryTest {
         // Everything at max, a very round cover and the biggest pulse: every point is inside the drawing margin.
         val rig = Rig(60, fftHz = 43)
         rig.volume = 1f; rig.heavy = 1f; rig.spike = 5f; rig.phase = 1f; rig.kick = 1f; rig.pulse = 1f; rig.coverScale = COVER_PULSE_MAX
+        rig.geo.auraSize = 2f   // Espen's «Utslag» at its top (the margin is made for it)
         var far = 0f
         rig.run(10f, { LOUD }, each = {
             for (l in 0 until rig.geo.layerCount) for (v in rig.geo.points(l)) far = max(far, abs(v))
@@ -590,5 +593,42 @@ class OrbGeometryTest {
             assertTrue(abs(auraLayerDrift(l)) == 1f && auraLayerColorShift(l) >= 0)
         }
         assertEquals(AURA_MAIN_ALPHA, auraLayerAlpha(0))
+    }
+
+    /** Espen's aura sliders (2026-11-26): the middle is exactly today's numbers. */
+    @Test fun auraSlidersAtTheMiddleAreTodaysNumbers() {
+        assertEquals(ORB_CONTRAST, auraSharp(ORB_CONTRAST_SOFT, ORB_CONTRAST, ORB_CONTRAST_CRISP, 1f))
+        assertEquals(BLOOM_BLUR_DP, auraBloomBlurDp(1f))
+        assertEquals(BLOOM_BACK_ALPHA, auraBloomBackAlpha(1f))
+        assertEquals(BLOOM_BACK_OPEN, auraBloomBackOpen(1f))
+        for (l in 0 until ORB_LAYERS.size) assertEquals(AURA_MAIN_ALPHA * AURA_BACK_FALL.pow(l), auraLayerAlpha(l, 1f), "layer $l")
+        assertEquals(1f, PartyFx.AURA_SIZE.fromSlider(.5f)); assertEquals(1f, PartyFx.AURA_SHARP.fromSlider(.5f))
+        assertEquals(.5f, PartyFx.AURA_SIZE.toSlider(1f)); assertEquals(.5f, PartyFx.AURA_SHARP.toSlider(1f))
+        // The same tone gives the same shape with the sliders at 1× as without them.
+        val plain = toneShape(85.0, PHONE_FFT, PHONE_RATE)
+        val middle = toneShape(85.0, PHONE_FFT, PHONE_RATE, auraSize = 1f, sharp = 1f)
+        for (p in 0..ORB_SEGMENTS / 2) assertEquals(plain.offsetAt(0, p), middle.offsetAt(0, p), "point $p")
+    }
+
+    /** Utslag makes every bulge bigger or smaller (also the mirrored bottom); Skarphet keeps the outline smooth at both ends. */
+    @Test fun auraSlidersChangeTheShapeWithoutBlocks() {
+        val half = ORB_SEGMENTS / 2
+        fun profile(geo: OrbGeometry) = FloatArray(half + 1) { geo.offsetAt(0, it) - SIDE * ORB_GAP }
+        val small = profile(toneShape(70.0, PHONE_FFT, PHONE_RATE, auraSize = .5f))
+        val normal = profile(toneShape(70.0, PHONE_FFT, PHONE_RATE))
+        val big = profile(toneShape(70.0, PHONE_FFT, PHONE_RATE, auraSize = AURA_SIZE_REACH_MAX))
+        assertTrue(small.max() < normal.max() && normal.max() < big.max(), "top: ${small.max()} < ${normal.max()} < ${big.max()}")
+        assertTrue(small[half] < big[half], "the bottom follows: ${small[half]} < ${big[half]}")
+        assertTrue(big.max() <= SIDE * ORB_REACH_MAX * AURA_SIZE_REACH_MAX + 1f, "never past the ceiling: ${big.max()}")
+        for ((auraSize, sharp) in listOf(1f to 0f, 1f to 2f, AURA_SIZE_REACH_MAX to 1f, AURA_SIZE_REACH_MAX to 2f)) for (hz in listOf(60.0, 150.0)) {
+            val shape = profile(toneShape(hz, PHONE_FFT, PHONE_RATE, auraSize = auraSize, sharp = sharp))
+            var biggestStep = 0f
+            for (p in 1..(half * (1f - ORB_BOTTOM_SPAN)).toInt()) biggestStep = max(biggestStep, abs(shape[p] - shape[p - 1]))
+            // The step limit grows with Utslag (a bigger bulge has steeper sides at the same smoothness).
+            assertTrue(biggestStep < SIDE * .045f * max(1f, auraSize), "Utslag $auraSize, Skarphet $sharp, $hz Hz: a step of $biggestStep px")
+        }
+        // Softer = rounder: the soft shape has gentler steps than the crisp one.
+        fun steepest(sharp: Float): Float { val sh = profile(toneShape(85.0, PHONE_FFT, PHONE_RATE, sharp = sharp)); var m = 0f; for (p in 1..half) m = max(m, abs(sh[p] - sh[p - 1])); return m }
+        assertTrue(steepest(0f) < steepest(2f), "Skarphet 0 is rounder than 2: ${steepest(0f)} against ${steepest(2f)}")
     }
 }

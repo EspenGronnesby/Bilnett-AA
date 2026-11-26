@@ -66,6 +66,8 @@ class PartySettingsTest {
     @Test
     fun textIsShortAndPlain() {
         assertEquals("Av", partyFxText(0f))
+        assertEquals("Myk", partyFxText(0f, PartyFx.AURA_SHARP))
+        assertEquals("Av", partyFxText(0f, PartyFx.SHAKE))
         assertEquals("1×", partyFxText(1f))
         assertEquals("0,5×", partyFxText(.5f))
         assertEquals("1,3×", partyFxText(1.26f))

@@ -6,7 +6,7 @@ import kotlin.math.pow
 import kotlin.math.round
 import kotlin.math.roundToLong
 
-// Party-innstillinger (Espen 2026-11-20): seks gangetall som appen og nettsiden bruker likt.
+// Party-innstillinger (Espen 2026-11-20, auraen 2026-11-26): åtte gangetall som appen og nettsiden bruker likt.
 // 1 = slik Party er uten innstillinger (samme tall som før), 0 = av, 2 = mer.
 // Analysen (sjanger, sangdeler, drop) bruker dem aldri: de endrer bare hvor sterkt effektene vises.
 
@@ -26,7 +26,11 @@ enum class PartyFx(val key: String, val min: Float, val max: Float, val log: Boo
     /** Strobe: ganger styrken. 0 = av (og bruker da ikke av blinkbudsjettet). */
     STROBE("strobe", 0f, 2f, false),
     /** Hvite blink (heavy-blink og drop-treffet): ganger styrken. 0 = av (bruker da ikke av blinkbudsjettet). */
-    FLASHES("blink", 0f, 2f, false);
+    FLASHES("blink", 0f, 2f, false),
+    /** Auraens utslag (2026-11-26): ganges med bulenes størrelse, også bunnen ([OrbGeometry.auraSize]). */
+    AURA_SIZE("aura_utslag", .5f, AURA_SIZE_REACH_MAX, false),
+    /** Auraens skarphet: 0 = myk og tåkete med mye glød, 2 = klar og spiss med lite tåke ([auraSharp]). */
+    AURA_SHARP("aura_skarphet", 0f, 2f, false);
 
     /** Klemt til lovlig område; ugyldig tall blir 1. */
     fun clamp(value: Float): Float = if (value.isNaN()) 1f else value.coerceIn(min, max)
@@ -53,13 +57,14 @@ enum class PartyFx(val key: String, val min: Float, val max: Float, val log: Boo
 const val PARTY_FX_SNAP = .03f
 
 /** Verdien som tekst: «Av», «0,5×», «1×», «1,3×». */
-fun partyFxText(value: Float): String {
-    if (value <= 0f) return "Av"
+fun partyFxText(value: Float, fx: PartyFx? = null): String {
+    // Skarphet 0 is not «off»: the aura is there, just soft (as it was before 24 Nov).
+    if (value <= 0f) return if (fx == PartyFx.AURA_SHARP) "Myk" else "Av"
     val tenths = round(value * 10f).toInt()
     return if (tenths % 10 == 0) "${tenths / 10}×" else "${tenths / 10},${tenths % 10}×"
 }
 
-/** De seks gangetallene, standard 1. Les tallene effektene trenger herfra. */
+/** De åtte gangetallene, standard 1. Les tallene effektene trenger herfra. */
 class PartySettings {
     private val values = FloatArray(PartyFx.entries.size) { 1f }
 
@@ -82,4 +87,7 @@ class PartySettings {
     val strobe: Float get() = this[PartyFx.STROBE]
     /** Ganges med heavy-blink og drop-treffet; 0 = ingen hvite blink. */
     val flashes: Float get() = this[PartyFx.FLASHES]
+    /** Auraens utslag og skarphet ([OrbGeometry.auraSize] / [OrbGeometry.auraSharpness]). */
+    val auraSize: Float get() = this[PartyFx.AURA_SIZE]
+    val auraSharp: Float get() = this[PartyFx.AURA_SHARP]
 }

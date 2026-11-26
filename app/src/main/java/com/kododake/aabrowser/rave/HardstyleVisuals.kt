@@ -411,17 +411,20 @@ private fun coreSprite(side: Float, radius: Float, density: Float): ImageBitmap 
  */
 @Composable
 internal fun PartyAura(orb: OrbGeometry, coverSide: Dp, cornerRadius: Dp, colors: List<Color>,
-    coverScaleOf: () -> Float, frameOf: () -> HardstyleFrame) {
+    coverScaleOf: () -> Float, frameOf: () -> HardstyleFrame, sharp: Float = 1f) {
     val density = LocalDensity.current
     val cache = remember { AuraCache() }
     val sidePx = with(density) { coverSide.toPx() }
     val radiusPx = with(density) { cornerRadius.toPx() }
-    val blurPx = with(density) { BLOOM_BLUR_DP.dp.toPx() }
+    // Espens «Skarphet» styrer gløden (mindre uskarphet og bakre glød når den er skarp). Boksen lages for den
+    // MYKESTE gløden, så ingenting flytter seg mens bryteren dras.
+    val blurPx = with(density) { auraBloomBlurDp(sharp).dp.toPx() }
+    val roomPx = with(density) { BLOOM_BLUR_DP_SOFT.dp.toPx() }
     // Akkurat plassen auraen kan trenge: coveret ved største puls pluss lengste rekkevidde, pluss glødens uskarphet.
-    val boxPx = ceil(sidePx * ORB_EXTENT + BLOOM_ROOM_BLURS * blurPx) * 2f
+    val boxPx = ceil(sidePx * ORB_EXTENT + BLOOM_ROOM_BLURS * roomPx) * 2f
     val boxDp = with(density) { boxPx.toDp() }
     val core = remember(sidePx, radiusPx, density.density) { coreSprite(sidePx, radiusPx, density.density) }
-    val blur = remember(density) {
+    val blur = remember(density, blurPx) {
         val r = blurPx * GLOW_SCALE
         android.graphics.RenderEffect.createBlurEffect(r, r, android.graphics.Shader.TileMode.DECAL).asComposeRenderEffect()
     }
@@ -437,7 +440,7 @@ internal fun PartyAura(orb: OrbGeometry, coverSide: Dp, cornerRadius: Dp, colors
         val back = colors[BLOOM_BACK_COLOR % colors.size]; val main = colors[BLOOM_MAIN_COLOR % colors.size]
         translate(size.width / 2f, size.height / 2f) {
             buildAuraPath(cache.glowPath, orb.points(outer), orb.curves(outer), GLOW_SCALE, 1f, 0f)
-            drawPath(cache.glowPath, back.copy(alpha = min(glow * (BLOOM_BACK_ALPHA + BLOOM_BACK_OPEN * open), 1f)), blendMode = BlendMode.Plus)
+            drawPath(cache.glowPath, back.copy(alpha = min(glow * (auraBloomBackAlpha(sharp) + auraBloomBackOpen(sharp) * open), 1f)), blendMode = BlendMode.Plus)
             buildAuraPath(cache.glowPath, orb.points(0), orb.curves(0), GLOW_SCALE, 1f, 0f)
             drawPath(cache.glowPath, main.copy(alpha = min(glow * (BLOOM_MAIN_ALPHA + BLOOM_MAIN_OPEN * open), 1f)), blendMode = BlendMode.Plus)
             drawPath(cache.glowPath, main.copy(alpha = min(glow * BLOOM_RIM_ALPHA, 1f)), style = rimStroke, blendMode = BlendMode.Plus)
@@ -449,7 +452,7 @@ internal fun PartyAura(orb: OrbGeometry, coverSide: Dp, cornerRadius: Dp, colors
         if (sidePx <= 0f) return@Canvas
         translate(size.width / 2f, size.height / 2f) {
             for (l in layers - 1 downTo 0) {
-                val alpha = auraLayerAlpha(l) * orb.alpha(l)
+                val alpha = auraLayerAlpha(l, sharp) * orb.alpha(l)
                 if (alpha < .005f) continue
                 val turn = auraLayerDrift(l) * orb.drift * 360f
                 val radians = turn * (PI.toFloat() / 180f)

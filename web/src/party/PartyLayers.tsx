@@ -124,7 +124,8 @@ export function PartyCoverFx({ party, palette, hasCover, dp }: {
     // pixel is cleared and blended each picture. Fixed size and never scaled by CSS, so the shapes stay
     // crisp; the engine has already put the cover's pulse into the points.
     const blurPx = e.bloomBlurDp * l.dp
-    const box = Math.ceil(side * e.orbExtent + e.bloomRoomBlurs * blurPx) * 2
+    // Room for the softest glow («Skarphet» 0), so the canvas never changes size while the slider is dragged.
+    const box = Math.ceil(side * e.orbExtent + e.bloomRoomBlurs * e.bloomRoomDp * l.dp) * 2
     const c = orbRef.current
     if (c) {
       const px = Math.round(box * ratio)

@@ -135,7 +135,7 @@ class WebPartyEngine(fftSize: Int = 2048) {
     fun partyFxFromSlider(key: String, position: Float): Float = PartyFx.of(key)?.fromSlider(position) ?: 1f
     fun partyFxToSlider(key: String, value: Float): Float = PartyFx.of(key)?.toSlider(value) ?: .5f
     /** «Av», «0,5×», «1×» … */
-    fun partyFxText(value: Float): String = com.kododake.aabrowser.rave.partyFxText(value)
+    fun partyFxText(value: Float, key: String = ""): String = com.kododake.aabrowser.rave.partyFxText(value, PartyFx.of(key))
 
     // ---- Samme lys som auraen: tallene står i FestivalShow.kt (deles med appen senere) ----
     /** Snare-gløden rett utenfor coverkanten (0..[EDGE_GLOW_MAX]), jevnet. */
@@ -199,7 +199,7 @@ class WebPartyEngine(fftSize: Int = 2048) {
 
     // ---- Auraens tegning: tallene står i OrbGeometry.kt (appen tegner med de samme i Compose) ----
     /** Fyll-alfa for et lag før [orbAlpha], fargeforskyvning i fargehjulet og driftretning (1 / −1). */
-    fun auraLayerAlpha(layer: Int): Float = com.kododake.aabrowser.rave.auraLayerAlpha(layer)
+    fun auraLayerAlpha(layer: Int): Float = com.kododake.aabrowser.rave.auraLayerAlpha(layer, fx.auraSharp)
     fun auraLayerColorShift(layer: Int): Int = com.kododake.aabrowser.rave.auraLayerColorShift(layer)
     fun auraLayerDrift(layer: Int): Float = com.kododake.aabrowser.rave.auraLayerDrift(layer)
     val auraColorRounds: Int get() = AURA_COLOR_ROUNDS
@@ -210,11 +210,13 @@ class WebPartyEngine(fftSize: Int = 2048) {
     val coreGain: Float get() = CORE_GAIN
     val coreStrokes: Int get() = CORE_STROKES
     val coreDensity: Float get() = CORE_DENSITY
-    val bloomBlurDp: Float get() = BLOOM_BLUR_DP
+    /** The glow's blur now (follows «Skarphet»); the canvas margin uses [bloomRoomDp] so nothing moves while dragging. */
+    val bloomBlurDp: Float get() = auraBloomBlurDp(fx.auraSharp)
+    val bloomRoomDp: Float get() = BLOOM_BLUR_DP_SOFT
     val bloomRoomBlurs: Float get() = BLOOM_ROOM_BLURS
     val bloomBackColor: Int get() = BLOOM_BACK_COLOR
-    val bloomBackAlpha: Float get() = BLOOM_BACK_ALPHA
-    val bloomBackOpen: Float get() = BLOOM_BACK_OPEN
+    val bloomBackAlpha: Float get() = auraBloomBackAlpha(fx.auraSharp)
+    val bloomBackOpen: Float get() = auraBloomBackOpen(fx.auraSharp)
     val bloomMainColor: Int get() = BLOOM_MAIN_COLOR
     val bloomMainAlpha: Float get() = BLOOM_MAIN_ALPHA
     val bloomMainOpen: Float get() = BLOOM_MAIN_OPEN
@@ -557,6 +559,8 @@ class WebPartyEngine(fftSize: Int = 2048) {
         // ---- The aura: same cover pulse as the page draws, so the aura always lies outside the cover ----
         coverKick = easeCoverKick(coverKick, f.kick, dtS.toFloat())
         coverScale = coverPulseScale(breath, coverKick, f.heavy, volume, phaseLevel)
+        // Espen's aura sliders (Party-innstillinger → Auraen), like the app.
+        orb.auraSize = fx.auraSize; orb.auraSharpness = fx.auraSharp
         orb.update(dtS.toFloat(), playing, orbBands, audio.readDisplay(orbBands), orbSide, orbRadius, coverScale,
             phaseLevel, spike, volume, f.heavy, f.kick, clockKick)
     }
