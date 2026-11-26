@@ -55,6 +55,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Apps
+import androidx.compose.material.icons.rounded.BlurOn
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Dashboard
+import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Visibility
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -267,7 +276,14 @@ class RaveActivity : ComponentActivity() {
     /** Økes ved hver endring, så panelet tegnes på nytt (selve tallene ligger i [partyFx]). */
     private var partyFxVersion by mutableIntStateOf(0)
     /** Panelet «Party-innstillinger» er åpent. */
-    private var showPartyFx by mutableStateOf(false)
+    /** The settings sheet (gear, top left, Timetracker style); null = closed. */
+    private var settingsPageState by mutableStateOf<SettingsPage?>(null)
+    /** When the sheet last opened or changed page: one tap must never also hit what appears under the finger. */
+    private var settingsPageAt = 0L
+    private var settingsPage: SettingsPage?
+        get() = settingsPageState
+        set(v) { if (v != settingsPageState) settingsPageAt = SystemClock.uptimeMillis(); settingsPageState = v }
+    private fun settingsReady() = SystemClock.uptimeMillis() - settingsPageAt > 350L
     // Premium layer (Party): music "breath" for the cover, colour grade per song part,
     // Written by the frame loop, read only while drawing.
     private var breath by mutableFloatStateOf(0f)
@@ -1826,13 +1842,13 @@ class RaveActivity : ComponentActivity() {
             if (!hasAccess) Notice("Rave trenger tilgang til hva som spilles.\nInnstillinger → Varsler → Enhetstilgang til varsler → Bilnett Rave.")
             // Tilbake til app-oversikten i bilen (Rave skjuler ellers systemlinjene).
             // Vises sammen med pause/skip etter ett trykk, øverst i venstre hjørne.
-            if (transportVisible) Box(Modifier.align(Alignment.TopStart).padding(16.u)) {
+            // …and the gear beside it: everything you can choose, in one sheet (Espen 2026-11-26, as in Timetracker).
+            if (transportVisible) Row(Modifier.align(Alignment.TopStart).padding(16.u), horizontalArrangement = Arrangement.spacedBy(12.u)) {
                 Control(Icons.Rounded.Apps, 44.u, ::buttonInteraction) { exitToApps() }
+                Control(Icons.Rounded.Settings, 44.u, ::buttonInteraction) { settingsPage = SettingsPage.MAIN }
             }
-            // Party-innstillinger: over alt annet, til høyre, så coveret og lyset til venstre synes mens man justerer.
-            if (hardstyleOn && showPartyFx) BoxWithConstraints(Modifier.align(Alignment.CenterEnd).padding(16.u)) {
-                PartyFxPanel(Modifier.width(if (maxWidth > maxHeight) 380.u else 440.u))
-            }
+            // Innstillinger: over alt annet (dark scrim; a tap outside closes it).
+            settingsPage?.let { page -> SettingsSheet(page) }
         }
     }
 
@@ -2056,17 +2072,7 @@ class RaveActivity : ComponentActivity() {
     @Composable
     private fun GenreChips() {
         // Analyse, Koko og Sangliste ligger i Party-innstillinger → Visning (2026-11-26), så skjermen er ren.
-        // Party-innstillinger: styrke, lysbølger, risting, strobe, blink, auraen og visning (eget panel, lukkes med «Ferdig»).
-        Box(
-            Modifier.height(42.u).clip(RoundedCornerShape(50))
-                .background(if (showPartyFx) Color(0xFFF5F2EC) else Color(0x22FFFFFF))
-                .clickable { buttonInteraction(); showPartyFx = !showPartyFx }
-                .padding(horizontal = 18.u),
-            contentAlignment = Alignment.Center
-        ) {
-            Text("Innstillinger", maxLines = 1, softWrap = false, fontSize = 15.us, fontWeight = FontWeight.SemiBold,
-                color = if (showPartyFx) Color(0xFF0A0A0A) else Color(0xFFF5F2EC))
-        }
+        // (Party-innstillinger live in the settings sheet: the gear top left.)
         // Car sync (shown with the analysis): nudge the visuals earlier/later, or tap along to measure.
         if (showAnalysis) {
             @Composable
@@ -2123,86 +2129,180 @@ class RaveActivity : ComponentActivity() {
     }
 
     /**
-     * «Party-innstillinger»: styrke, åtte glidebrytere og visning (midten = 1× = som før, venstre = av/mindre, høyre = mer).
-     * Virker med en gang (frame-løkken leser [partyFx] hvert bilde) og lagres når fingeren slipper.
-     * Store trykkflater for bilen; ingenting her beveger seg utenom tommelen man drar i.
+     * Innstillinger (Espen 2026-11-26: «som i Timetracker»): en kort oversikt med grupper av rader (ikon, tittel,
+     * beskrivelse, nåverdi, ›). En rad bytter innholdet i SAMME ark til en underside med ‹ tilbake, aldri ark oppå
+     * ark. Mørke Timetracker-farger ([ST_BG] osv.). Virker med en gang og lagres som før.
      */
     @Composable
-    private fun PartyFxPanel(modifier: Modifier) {
-        val cream = Color(0xFFF5F2EC)
-        val muted = Color(0xB3F5F2EC)
-        @Composable
-        fun groupTitle(text: String) = Text(text, fontSize = 13.us, fontWeight = FontWeight.SemiBold, color = muted,
-            modifier = Modifier.padding(start = 4.u, bottom = 8.u))
-        @Composable
-        fun divider() = Box(Modifier.padding(start = 16.u).fillMaxWidth().height(1.dp).background(Color(0x0FFFFFFF)))
-        Column(
-            // Trykk på panelet stopper her, så de ikke skjuler Party-kontrollene bak.
-            modifier.pointerInput(Unit) { detectTapGestures { } }
-                .clip(RoundedCornerShape(20.u)).background(Color(0xFF171717)) // solid: the buttons behind must not show through
-                .verticalScroll(rememberScrollState()).padding(20.u)
+    private fun SettingsSheet(page: SettingsPage) {
+        androidx.activity.compose.BackHandler { settingsPage = if (page == SettingsPage.MAIN) null else SettingsPage.MAIN }
+        Box(
+            Modifier.fillMaxSize().background(Color.Black.copy(alpha = .6f))
+                .pointerInput(Unit) { detectTapGestures { settingsPage = null } },
+            contentAlignment = Alignment.Center
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Party-innstillinger", fontSize = 20.us, fontWeight = FontWeight.SemiBold, color = cream,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                Box(
-                    Modifier.height(44.u).clip(RoundedCornerShape(50)).clickable { showPartyFx = false }.padding(horizontal = 14.u),
-                    contentAlignment = Alignment.Center
-                ) { Text("Ferdig", maxLines = 1, softWrap = false, fontSize = 15.us, fontWeight = FontWeight.SemiBold, color = cream) }
-            }
-            Spacer(Modifier.height(14.u))
-            // Styrke (2026-11-26: flyttet hit fra den loddrette bryteren på skjermen): styrken i sjangeren som spiller.
-            groupTitle("Styrke")
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.u)).background(Color(0x0DFFFFFF))) {
-                SliderRow("Nivå", { if (vibeAuto) vibeLive else vibeManual },
-                    if (vibeAuto) "Auto" else "${kotlin.math.round(vibeManual * 100f).toInt()} %", midMark = false, key = "vibe",
-                    onDrag = { dragVibe(it) }, onRelease = { setVibe(vibeManual); draggingBar = false })
-                divider()
-                ToggleRow("Auto (appen velger)", vibeAuto) { if (vibeAuto) setVibe(vibeLive) else setVibe(null) }
-            }
-            Spacer(Modifier.height(18.u))
-            groupTitle("Lysbølger")
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.u)).background(Color(0x0DFFFFFF))) {
-                PartyFxRow(PartyFx.WAVE_STRENGTH, "Styrke"); divider()
-                PartyFxRow(PartyFx.WAVE_WIDTH, "Bredde"); divider()
-                PartyFxRow(PartyFx.WAVE_OFTEN, "Hvor ofte")
-            }
-            Spacer(Modifier.height(18.u))
-            groupTitle("Risting og blink")
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.u)).background(Color(0x0DFFFFFF))) {
-                PartyFxRow(PartyFx.SHAKE, "Risting"); divider()
-                PartyFxRow(PartyFx.STROBE, "Strobe"); divider()
-                PartyFxRow(PartyFx.FLASHES, "Hvite blink")
-            }
-            Spacer(Modifier.height(18.u))
-            // Auraen (2026-11-26): to brytere som drar det som hører sammen (Utslag tar også bunnen; Skarphet
-            // tar jevning, kontrast og glød: mer skarphet = mindre tåke).
-            groupTitle("Auraen")
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.u)).background(Color(0x0DFFFFFF))) {
-                PartyFxRow(PartyFx.AURA_SIZE, "Utslag"); divider()
-                PartyFxRow(PartyFx.AURA_SHARP, "Skarphet")
-            }
-            Spacer(Modifier.height(18.u))
-            // Visning (2026-11-26: flyttet hit fra knappene på skjermen, så skjermen er så ren som mulig).
-            groupTitle("Visning")
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.u)).background(Color(0x0DFFFFFF))) {
-                ToggleRow("Analyse", showAnalysis) {
-                    showAnalysis = !showAnalysis; if (!showAnalysis) stopTapTest()
-                    try { getSharedPreferences("rave", MODE_PRIVATE).edit().putBoolean("analysis", showAnalysis).apply() } catch (_: Exception) { }
+            Column(
+                Modifier.fillMaxWidth(.92f).widthIn(max = 640.u).fillMaxHeight(.94f)
+                    .pointerInput(Unit) { detectTapGestures { } }   // taps inside don't close it
+                    .clip(RoundedCornerShape(16.u)).background(ST_BG)
+            ) {
+                // Header: ‹ back (subpages) | title | Ferdig
+                Row(Modifier.fillMaxWidth().height(60.u).padding(horizontal = 8.u), verticalAlignment = Alignment.CenterVertically) {
+                    if (page != SettingsPage.MAIN) Box(
+                        Modifier.size(44.u).clip(RoundedCornerShape(50)).clickable { settingsPage = SettingsPage.MAIN },
+                        contentAlignment = Alignment.Center
+                    ) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Tilbake", tint = ST_TEXT, modifier = Modifier.size(24.u)) }
+                    else Spacer(Modifier.width(12.u))
+                    Text(page.title, fontSize = 20.us, fontWeight = FontWeight.SemiBold, color = ST_TEXT, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 4.u))
+                    Box(
+                        Modifier.height(44.u).clip(RoundedCornerShape(50)).clickable { settingsPage = null }.padding(horizontal = 16.u),
+                        contentAlignment = Alignment.Center
+                    ) { Text("Ferdig", fontSize = 16.us, fontWeight = FontWeight.SemiBold, color = ST_ACCENT) }
                 }
-                divider()
-                ToggleRow("Koko", showKoko) {
-                    showKoko = !showKoko
-                    try { getSharedPreferences("rave", MODE_PRIVATE).edit().putBoolean("koko", showKoko).apply() } catch (_: Exception) { }
+                Box(Modifier.fillMaxWidth().height(1.dp).background(ST_LINE))
+                // Each page starts at the top (its own scroll position).
+                val scroll = androidx.compose.runtime.key(page) { rememberScrollState() }
+                Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(scroll).padding(horizontal = 16.u, vertical = 14.u)) {
+                    when (page) {
+                        SettingsPage.MAIN -> SettingsMain()
+                        SettingsPage.MODE -> SettingsMode()
+                        SettingsPage.EFFECTS -> SettingsEffects()
+                        SettingsPage.AURA -> SettingsAura()
+                        SettingsPage.PARTY_VIEW -> SettingsPartyView()
+                    }
                 }
-                divider()
-                ToggleRow("Sangliste", showSongList) { showSongList = !showSongList }
             }
-            Spacer(Modifier.height(10.u))
-            Box(
-                Modifier.height(48.u).clip(RoundedCornerShape(12.u)).clickable { resetPartyFx() }.padding(horizontal = 4.u),
-                contentAlignment = Alignment.CenterStart
-            ) { Text("Tilbakestill", fontSize = 15.us, fontWeight = FontWeight.SemiBold, color = Color(0xFFE45858)) }
+        }
+    }
+
+    @Composable
+    private fun SettingsMain() {
+        val fx = partyFxVersion.let { partyFx }
+        SettingsSection("Visning", "Hvordan skjermen ser ut") {
+            NavRow(Icons.Rounded.Dashboard, "Modus", "Oppsettet på skjermen", raveMode.label) { settingsPage = SettingsPage.MODE }
+            SettingsDivider()
+            ToggleRow("Tekst", showLyrics, "Sangteksten") { showLyrics = !showLyrics; if (showLyrics) pos = positionMs() }
+            SettingsDivider()
+            ToggleRow("Video", videoOn, "Musikkvideo bak, når den finnes") { videoOn = !videoOn; videoPlaying = false }
+        }
+        SettingsSection("Party", "Lyset og effektene i takt med musikken") {
+            ToggleRow("Party", hardstyleOn, "Aura, partikler, risting og strobe") {
+                setHardstyle()
+                // Party off in Party-scene: back to Standard (as with 5 taps), so the next start doesn't switch it on.
+                if (!hardstyleOn && raveMode == RaveMode.PARTY) selectMode(RaveMode.STANDARD)
+            }
+            SettingsDivider()
+            NavRow(Icons.Rounded.GraphicEq, "Styrke og effekter", "Nivå, lysbølger, risting, strobe og blink",
+                if (vibeAuto) "Auto" else "${kotlin.math.round(vibeManual * 100f).toInt()} %") { settingsPage = SettingsPage.EFFECTS }
+            SettingsDivider()
+            NavRow(Icons.Rounded.BlurOn, "Auraen", "Utslag og skarphet",
+                "${partyFxText(fx.auraSize, PartyFx.AURA_SIZE)} · ${partyFxText(fx.auraSharp, PartyFx.AURA_SHARP)}") { settingsPage = SettingsPage.AURA }
+            SettingsDivider()
+            NavRow(Icons.Rounded.Visibility, "Party-visning", "Analyse, Koko og sangliste",
+                listOfNotNull("Analyse".takeIf { showAnalysis }, "Koko".takeIf { showKoko }).joinToString(" · ").ifEmpty { "Av" }) {
+                settingsPage = SettingsPage.PARTY_VIEW
+            }
+        }
+        SettingsSection("Bilen", null) {
+            NavRow(Icons.Rounded.Apps, "Tilbake til bilens apper", "Lukker Rave", null) { settingsPage = null; exitToApps() }
+        }
+    }
+
+    @Composable
+    private fun SettingsMode() {
+        SettingsSection(null, "Velg hvordan skjermen er lagt opp (som på nettsiden)") {
+            RaveMode.entries.forEachIndexed { i, mode ->
+                if (i > 0) SettingsDivider()
+                val on = mode == raveMode
+                Row(Modifier.fillMaxWidth().heightIn(min = 56.u).clickable { if (settingsReady()) selectMode(mode) }.padding(horizontal = 16.u),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Text(mode.label, fontSize = 16.us, color = ST_TEXT, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
+                        modifier = Modifier.weight(1f))
+                    if (on) Icon(Icons.Rounded.Check, null, tint = ST_ACCENT, modifier = Modifier.size(22.u))
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun SettingsEffects() {
+        SettingsSection("Styrke", "Hvor mye Party gir i sjangeren som spiller") {
+            SliderRow("Nivå", { if (vibeAuto) vibeLive else vibeManual },
+                if (vibeAuto) "Auto" else "${kotlin.math.round(vibeManual * 100f).toInt()} %", midMark = false, key = "vibe",
+                onDrag = { dragVibe(it) }, onRelease = { setVibe(vibeManual); draggingBar = false })
+            SettingsDivider()
+            ToggleRow("Auto", vibeAuto, "Appen velger etter musikken") { if (vibeAuto) setVibe(vibeLive) else setVibe(null) }
+        }
+        SettingsSection("Lysbølger", "Runde lysringer på tunge drop") {
+            PartyFxRow(PartyFx.WAVE_STRENGTH, "Styrke"); SettingsDivider()
+            PartyFxRow(PartyFx.WAVE_WIDTH, "Bredde"); SettingsDivider()
+            PartyFxRow(PartyFx.WAVE_OFTEN, "Hvor ofte")
+        }
+        SettingsSection("Risting og blink", null) {
+            PartyFxRow(PartyFx.SHAKE, "Risting"); SettingsDivider()
+            PartyFxRow(PartyFx.STROBE, "Strobe"); SettingsDivider()
+            PartyFxRow(PartyFx.FLASHES, "Hvite blink")
+        }
+        SettingsSection(null, null) {
+            NavRow(Icons.Rounded.Refresh, "Tilbakestill effektene", "Alt tilbake til standard (lysbølger av)", null, destructive = true) { resetPartyFx() }
+        }
+    }
+
+    @Composable
+    private fun SettingsAura() {
+        SettingsSection(null, "Midten (1×) er slik auraen er laget. Utslag tar også bunnen; Skarphet går fra myk glød til klare topper.") {
+            PartyFxRow(PartyFx.AURA_SIZE, "Utslag"); SettingsDivider()
+            PartyFxRow(PartyFx.AURA_SHARP, "Skarphet")
+        }
+    }
+
+    @Composable
+    private fun SettingsPartyView() {
+        SettingsSection(null, "Det som vises over Party") {
+            ToggleRow("Analyse", showAnalysis, "Panel og knapper for å merke sangdeler") {
+                showAnalysis = !showAnalysis; if (!showAnalysis) stopTapTest()
+                try { getSharedPreferences("rave", MODE_PRIVATE).edit().putBoolean("analysis", showAnalysis).apply() } catch (_: Exception) { }
+            }
+            SettingsDivider()
+            ToggleRow("Koko", showKoko, "Spøkelset som danser innimellom") {
+                showKoko = !showKoko
+                try { getSharedPreferences("rave", MODE_PRIVATE).edit().putBoolean("koko", showKoko).apply() } catch (_: Exception) { }
+            }
+            SettingsDivider()
+            ToggleRow("Sangliste", showSongList, "Sangene som er spilt, med sjanger") { showSongList = !showSongList }
+        }
+    }
+
+    /** A section as in Timetracker: title + grey description above a card of rows. */
+    @Composable
+    private fun SettingsSection(title: String?, description: String?, rows: @Composable () -> Unit) {
+        if (title != null) Text(title, fontSize = 17.us, fontWeight = FontWeight.SemiBold, color = ST_TEXT, modifier = Modifier.padding(start = 4.u))
+        if (description != null) Text(description, fontSize = 13.us, color = ST_MUTED, modifier = Modifier.padding(start = 4.u, top = 2.u))
+        Spacer(Modifier.height(8.u))
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.u)).background(ST_CARD).border(1.dp, ST_LINE, RoundedCornerShape(12.u))) { rows() }
+        Spacer(Modifier.height(22.u))
+    }
+
+    @Composable
+    private fun SettingsDivider() = Box(Modifier.padding(start = 16.u).fillMaxWidth().height(1.dp).background(ST_LINE.copy(alpha = .72f)))
+
+    /** A row that opens a subpage (or does something): icon in a box | title + description | value | ›. */
+    @Composable
+    private fun NavRow(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, description: String?, value: String?,
+                       destructive: Boolean = false, onClick: () -> Unit) {
+        Row(Modifier.fillMaxWidth().heightIn(min = 64.u).clickable { if (settingsReady()) onClick() }.padding(horizontal = 12.u, vertical = 10.u),
+            verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(40.u).clip(RoundedCornerShape(8.u)).background(ST_ICON_BG), contentAlignment = Alignment.Center) {
+                Icon(icon, null, tint = if (destructive) ST_DANGER else ST_TEXT, modifier = Modifier.size(22.u))
+            }
+            Column(Modifier.weight(1f).padding(start = 12.u)) {
+                Text(title, fontSize = 16.us, fontWeight = FontWeight.Medium, color = if (destructive) ST_DANGER else ST_TEXT,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (description != null) Text(description, fontSize = 13.us, color = ST_MUTED, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            if (value != null) Text(value, fontSize = 14.us, color = ST_MUTED, maxLines = 1, softWrap = false, modifier = Modifier.padding(start = 8.u))
+            if (!destructive) Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = ST_MUTED, modifier = Modifier.padding(start = 4.u).size(22.u))
         }
     }
 
@@ -2236,6 +2336,7 @@ class RaveActivity : ComponentActivity() {
                     // (viktig på den lave bilskjermen der radene dekker nesten hele panelet).
                     awaitEachGesture {
                         val down = awaitFirstDown()
+                        if (!settingsReady()) return@awaitEachGesture
                         val slop = viewConfiguration.touchSlop
                         var dragging = false
                         var changed = false
@@ -2272,7 +2373,7 @@ class RaveActivity : ComponentActivity() {
                     // Midten (1× = som før): en rolig strek.
                     val mid = (left + right) / 2f
                     if (midMark) drawRoundRect(Color(0x66FFFFFF), Offset(mid - 1.dp.toPx(), cy - tw * 1.4f), Size(2.dp.toPx(), tw * 2.8f))
-                    drawRoundRect(cream, Offset(left - tw / 2f, cy - tw / 2f), Size(x - left + tw / 2f, tw), corner)
+                    drawRoundRect(ST_ACCENT, Offset(left - tw / 2f, cy - tw / 2f), Size(x - left + tw / 2f, tw), corner)
                     drawCircle(Color.Black.copy(alpha = .3f), tp / 2f + 2.dp.toPx(), Offset(x, cy))
                     drawCircle(cream, tp / 2f, Offset(x, cy))
                 }
@@ -2282,15 +2383,23 @@ class RaveActivity : ComponentActivity() {
         }
     }
 
-    /** Én rad i panelet: navn | bryter (på = lys). Hele raden er trykkflaten. */
+    /** Én rad: navn (+ beskrivelse) | «Av | På»-pille som i Timetracker. Hele raden er trykkflaten. */
     @Composable
-    private fun ToggleRow(label: String, on: Boolean, onClick: () -> Unit) {
-        val cream = Color(0xFFF5F2EC)
-        Row(Modifier.fillMaxWidth().height(56.u).clickable { onClick() }.padding(start = 16.u, end = 16.u), verticalAlignment = Alignment.CenterVertically) {
-            Text(label, fontSize = 16.us, color = cream, maxLines = 1, softWrap = false, modifier = Modifier.weight(1f))
-            Box(Modifier.width(52.u).height(30.u).clip(RoundedCornerShape(50)).background(if (on) cream else Color(0x33FFFFFF)),
-                contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart) {
-                Box(Modifier.padding(3.u).size(24.u).clip(RoundedCornerShape(50)).background(if (on) Color(0xFF0A0A0A) else cream))
+    private fun ToggleRow(label: String, on: Boolean, description: String? = null, onClick: () -> Unit) {
+        Row(Modifier.fillMaxWidth().heightIn(min = 60.u).clickable { if (settingsReady()) onClick() }.padding(horizontal = 16.u, vertical = 8.u),
+            verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(label, fontSize = 16.us, fontWeight = FontWeight.Medium, color = ST_TEXT, maxLines = 1, softWrap = false)
+                if (description != null) Text(description, fontSize = 13.us, color = ST_MUTED, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Row(Modifier.padding(start = 12.u).height(34.u).clip(RoundedCornerShape(50)).border(1.dp, ST_LINE, RoundedCornerShape(50)).padding(3.u)) {
+                for ((text, isOn) in listOf("Av" to false, "På" to true)) {
+                    val picked = on == isOn
+                    Box(Modifier.fillMaxHeight().clip(RoundedCornerShape(50)).background(if (picked) ST_PILL_ON else Color.Transparent)
+                        .padding(horizontal = 14.u), contentAlignment = Alignment.Center) {
+                        Text(text, fontSize = 14.us, fontWeight = FontWeight.SemiBold, color = if (picked) ST_ACCENT else ST_MUTED)
+                    }
+                }
             }
         }
     }
@@ -2836,3 +2945,20 @@ internal val Int.us: androidx.compose.ui.unit.TextUnit @Composable get() = (this
 internal enum class RaveMode(val label: String) {
     STANDARD("Standard"), LYRICS("Tekstfokus"), CINEMA("Filmvisning"), PARTY("Party-scene")
 }
+
+/** The pages of the settings sheet (main overview and its subpages). */
+internal enum class SettingsPage(val title: String) {
+    MAIN("Innstillinger"), MODE("Modus"), EFFECTS("Styrke og effekter"), AURA("Auraen"), PARTY_VIEW("Party-visning")
+}
+
+// Timetracker's dark theme (index.css, HSL): background 0 0% 8.5%, card 11%, text 93%, muted 62.8%, border 20.5%,
+// primary 271 81% 61% (purple).
+private val ST_BG = Color(0xFF161616)
+private val ST_CARD = Color(0xFF1C1C1C)
+private val ST_TEXT = Color(0xFFEDEDED)
+private val ST_MUTED = Color(0xFFA0A0A0)
+private val ST_LINE = Color(0xFF343434)
+private val ST_ICON_BG = Color(0xFF262626)
+private val ST_PILL_ON = Color(0xFF2A2A2A)
+private val ST_ACCENT = Color(0xFF9E4BEC)
+private val ST_DANGER = Color(0xFFE45858)
