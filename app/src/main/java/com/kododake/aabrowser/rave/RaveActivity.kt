@@ -61,9 +61,19 @@ import androidx.compose.material.icons.rounded.Dashboard
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Videocam
+import androidx.compose.material.icons.rounded.Movie
+import androidx.compose.material.icons.rounded.Insights
+import androidx.compose.material.icons.rounded.Face
+import androidx.compose.material.icons.rounded.DirectionsCar
+import androidx.compose.material.icons.rounded.Celebration
+import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.AutoMode
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Subtitles
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Pause
@@ -1848,7 +1858,7 @@ class RaveActivity : ComponentActivity() {
             // Vises sammen med pause/skip etter ett trykk, øverst i venstre hjørne.
             // …and the gear beside it: everything you can choose, in one sheet (Espen 2026-11-26, as in Timetracker).
             if (transportVisible) Row(Modifier.align(Alignment.TopStart).padding(16.u), horizontalArrangement = Arrangement.spacedBy(12.u)) {
-                Control(Icons.Rounded.Apps, 44.u, ::buttonInteraction) { exitToApps() }
+                // Only the gear (Espen 2026-11-26): out to the car's apps is gear → «Bilen» (two taps).
                 Control(Icons.Rounded.Settings, 44.u, ::buttonInteraction) { settingsPage = SettingsPage.MAIN }
             }
             // Innstillinger: over alt annet (dark scrim; a tap outside closes it).
@@ -2139,7 +2149,7 @@ class RaveActivity : ComponentActivity() {
      */
     @Composable
     private fun SettingsSheet(page: SettingsPage) {
-        androidx.activity.compose.BackHandler { settingsPage = if (page == SettingsPage.MAIN) null else SettingsPage.MAIN }
+        androidx.activity.compose.BackHandler { settingsPage = page.parent }
         Box(
             Modifier.fillMaxSize().background(Color.Black.copy(alpha = .6f))
                 .pointerInput(Unit) { detectTapGestures { settingsPage = null } },
@@ -2153,7 +2163,7 @@ class RaveActivity : ComponentActivity() {
                 // Header: ‹ back (subpages) | title | Ferdig
                 Row(Modifier.fillMaxWidth().height(60.u).padding(horizontal = 8.u), verticalAlignment = Alignment.CenterVertically) {
                     if (page != SettingsPage.MAIN) Box(
-                        Modifier.size(44.u).clip(RoundedCornerShape(50)).clickable { if (settingsReady()) settingsPage = SettingsPage.MAIN },
+                        Modifier.size(44.u).clip(RoundedCornerShape(50)).clickable { if (settingsReady()) settingsPage = page.parent },
                         contentAlignment = Alignment.Center
                     ) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Tilbake", tint = ST_TEXT, modifier = Modifier.size(24.u)) }
                     else Spacer(Modifier.width(12.u))
@@ -2170,7 +2180,8 @@ class RaveActivity : ComponentActivity() {
                 Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(scroll).padding(horizontal = 16.u, vertical = 14.u)) {
                     when (page) {
                         SettingsPage.MAIN -> SettingsMain()
-                        SettingsPage.MODE -> SettingsMode()
+                        SettingsPage.VIEW -> SettingsView()
+                        SettingsPage.PARTY -> SettingsParty()
                         SettingsPage.EFFECTS -> SettingsEffects()
                         SettingsPage.AURA -> SettingsAura()
                         SettingsPage.PARTY_VIEW -> SettingsPartyView()
@@ -2181,25 +2192,41 @@ class RaveActivity : ComponentActivity() {
         }
     }
 
+    /** The overview: four big tiles, nothing else (Espen 2026-11-26: always clean, easy in the car). */
     @Composable
     private fun SettingsMain() {
-        val fx = partyFxVersion.let { partyFx }
-        SettingsSection("Visning") {
-            NavRow(Icons.Rounded.Dashboard, "Modus", raveMode.label) { settingsPage = SettingsPage.MODE }
-            SettingsDivider()
-            ToggleRow("Tekst", showLyrics) { showLyrics = !showLyrics; if (showLyrics) pos = positionMs() }
-            SettingsDivider()
-            NavRow(Icons.Rounded.Subtitles, "Tekstvisning", lyricsStyle.label) { settingsPage = SettingsPage.LYRICS }
-            SettingsDivider()
-            ToggleRow("Video", videoOn) { videoOn = !videoOn; videoPlaying = false }
+        TileGrid(listOf(
+            Tile(Icons.Rounded.Dashboard, "Visning") { settingsPage = SettingsPage.VIEW },
+            Tile(Icons.Rounded.Subtitles, "Tekst") { settingsPage = SettingsPage.LYRICS },
+            Tile(Icons.Rounded.AutoAwesome, "Party") { settingsPage = SettingsPage.PARTY },
+            Tile(Icons.Rounded.DirectionsCar, "Bilen") { settingsPage = null; exitToApps() },
+        ))
+    }
+
+    /** Visning: the four layouts as tiles, and the video. */
+    @Composable
+    private fun SettingsView() {
+        TileGrid(RaveMode.entries.map { mode ->
+            Tile(mode.icon, mode.label, selected = mode == raveMode) { selectMode(mode) }
+        })
+        Spacer(Modifier.height(16.u))
+        SettingsSection(null) {
+            ToggleRow("Video", videoOn, Icons.Rounded.Videocam) { videoOn = !videoOn; videoPlaying = false }
         }
-        SettingsSection("Party") {
-            ToggleRow("Party", hardstyleOn) {
+    }
+
+    /** Party: on/off and the three groups of Party settings. */
+    @Composable
+    private fun SettingsParty() {
+        val fx = partyFxVersion.let { partyFx }
+        SettingsSection(null) {
+            ToggleRow("Party", hardstyleOn, Icons.Rounded.AutoAwesome) {
                 setHardstyle()
                 // Party off in Party-scene: back to Standard (as with 5 taps), so the next start doesn't switch it on.
                 if (!hardstyleOn && raveMode == RaveMode.PARTY) selectMode(RaveMode.STANDARD)
             }
-            SettingsDivider()
+        }
+        SettingsSection(null) {
             NavRow(Icons.Rounded.GraphicEq, "Styrke og effekter",
                 if (vibeAuto) "Auto" else "${kotlin.math.round(vibeManual * 100f).toInt()} %") { settingsPage = SettingsPage.EFFECTS }
             SettingsDivider()
@@ -2211,22 +2238,31 @@ class RaveActivity : ComponentActivity() {
                 settingsPage = SettingsPage.PARTY_VIEW
             }
         }
-        SettingsSection("Bilen") {
-            NavRow(Icons.Rounded.Apps, "Tilbake til bilens apper", null) { settingsPage = null; exitToApps() }
-        }
     }
 
+    private class Tile(val icon: androidx.compose.ui.graphics.vector.ImageVector, val label: String,
+                       val selected: Boolean = false, val onClick: () -> Unit)
+
+    /** Big icon tiles, two per row: one glance and one tap in the car. */
     @Composable
-    private fun SettingsMode() {
-        SettingsSection(null) {
-            RaveMode.entries.forEachIndexed { i, mode ->
-                if (i > 0) SettingsDivider()
-                val on = mode == raveMode
-                Row(Modifier.fillMaxWidth().heightIn(min = 56.u).clickable { if (settingsReady()) selectMode(mode) }.padding(horizontal = 16.u),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    Text(mode.label, fontSize = 16.us, color = ST_TEXT, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
-                        modifier = Modifier.weight(1f))
-                    if (on) Icon(Icons.Rounded.Check, null, tint = ST_ACCENT, modifier = Modifier.size(22.u))
+    private fun TileGrid(tiles: List<Tile>) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.u)) {
+            tiles.chunked(2).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(12.u)) {
+                    row.forEach { t ->
+                        Column(
+                            Modifier.weight(1f).height(128.u).clip(RoundedCornerShape(20.u))
+                                .background(if (t.selected) ST_TEXT else ST_CARD)
+                                .clickable { if (settingsReady()) t.onClick() }.padding(16.u),
+                            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
+                        ) {
+                            val ink = if (t.selected) ST_ON else ST_TEXT
+                            Icon(t.icon, null, tint = ink, modifier = Modifier.size(44.u))
+                            Spacer(Modifier.height(12.u))
+                            Text(t.label, fontSize = 18.us, fontWeight = FontWeight.SemiBold, color = ink, maxLines = 1, softWrap = false)
+                        }
+                    }
+                    if (row.size == 1) Spacer(Modifier.weight(1f))
                 }
             }
         }
@@ -2239,7 +2275,7 @@ class RaveActivity : ComponentActivity() {
                 if (vibeAuto) "Auto" else "${kotlin.math.round(vibeManual * 100f).toInt()} %", midMark = false, key = "vibe",
                 onDrag = { dragVibe(it) }, onRelease = { setVibe(vibeManual); draggingBar = false })
             SettingsDivider()
-            ToggleRow("Auto", vibeAuto) { if (vibeAuto) setVibe(vibeLive) else setVibe(null) }
+            ToggleRow("Auto", vibeAuto, Icons.Rounded.AutoMode) { if (vibeAuto) setVibe(vibeLive) else setVibe(null) }
         }
         SettingsSection("Lysbølger") {
             PartyFxRow(PartyFx.WAVE_STRENGTH, "Styrke"); SettingsDivider()
@@ -2272,22 +2308,25 @@ class RaveActivity : ComponentActivity() {
     @Composable
     private fun SettingsPartyView() {
         SettingsSection(null) {
-            ToggleRow("Analyse", showAnalysis) {
+            ToggleRow("Analyse", showAnalysis, Icons.Rounded.Insights) {
                 showAnalysis = !showAnalysis; if (!showAnalysis) stopTapTest()
                 try { getSharedPreferences("rave", MODE_PRIVATE).edit().putBoolean("analysis", showAnalysis).apply() } catch (_: Exception) { }
             }
             SettingsDivider()
-            ToggleRow("Koko", showKoko) {
+            ToggleRow("Koko", showKoko, Icons.Rounded.Face) {
                 showKoko = !showKoko
                 try { getSharedPreferences("rave", MODE_PRIVATE).edit().putBoolean("koko", showKoko).apply() } catch (_: Exception) { }
             }
             SettingsDivider()
-            ToggleRow("Sangliste", showSongList) { showSongList = !showSongList }
+            ToggleRow("Sangliste", showSongList, Icons.AutoMirrored.Rounded.QueueMusic) { showSongList = !showSongList }
         }
     }
 
     @Composable
     private fun SettingsLyrics() {
+        SettingsSection(null) {
+            ToggleRow("Tekst", showLyrics, Icons.Rounded.Subtitles) { showLyrics = !showLyrics; if (showLyrics) pos = positionMs() }
+        }
         SettingsSection("Stil") {
             LyricsStyle.entries.forEachIndexed { i, style ->
                 if (i > 0) SettingsDivider()
@@ -2301,7 +2340,7 @@ class RaveActivity : ComponentActivity() {
             }
         }
         SettingsSection("Boks og synk") {
-            ToggleRow("Frostet glass", lyricsGlass) { lyricsGlass = !lyricsGlass; saveLyricsPrefs() }
+            ToggleRow("Frostet glass", lyricsGlass, Icons.Rounded.BlurOn) { lyricsGlass = !lyricsGlass; saveLyricsPrefs() }
             SettingsDivider()
             StepperRow("Tekst-synk", "${if (lyricsOffsetMs > 0) "+" else ""}$lyricsOffsetMs ms", onMinus = { stepLyricsOffset(-1) }, onPlus = { stepLyricsOffset(1) })
         }
@@ -2435,9 +2474,13 @@ class RaveActivity : ComponentActivity() {
 
     /** Én rad: navn | «Av | På»-pille som i Timetracker. Hele raden er trykkflaten. */
     @Composable
-    private fun ToggleRow(label: String, on: Boolean, onClick: () -> Unit) {
-        Row(Modifier.fillMaxWidth().heightIn(min = 56.u).clickable { if (settingsReady()) onClick() }.padding(horizontal = 16.u, vertical = 8.u),
+    private fun ToggleRow(label: String, on: Boolean, icon: androidx.compose.ui.graphics.vector.ImageVector? = null, onClick: () -> Unit) {
+        Row(Modifier.fillMaxWidth().heightIn(min = 56.u).clickable { if (settingsReady()) onClick() }
+            .padding(start = if (icon != null) 12.u else 16.u, end = 16.u, top = 8.u, bottom = 8.u),
             verticalAlignment = Alignment.CenterVertically) {
+            if (icon != null) Box(Modifier.padding(end = 12.u).size(40.u).clip(RoundedCornerShape(10.u)).background(ST_ICON_BG), contentAlignment = Alignment.Center) {
+                Icon(icon, null, tint = ST_TEXT, modifier = Modifier.size(22.u))
+            }
             Column(Modifier.weight(1f)) {
                 Text(label, fontSize = 16.us, fontWeight = FontWeight.Medium, color = ST_TEXT, maxLines = 1, softWrap = false)
             }
@@ -2446,7 +2489,7 @@ class RaveActivity : ComponentActivity() {
                     val picked = on == isOn
                     Box(Modifier.fillMaxHeight().clip(RoundedCornerShape(50)).background(if (picked) ST_PILL_ON else Color.Transparent)
                         .padding(horizontal = 14.u), contentAlignment = Alignment.Center) {
-                        Text(text, fontSize = 14.us, fontWeight = FontWeight.SemiBold, color = if (picked) ST_ACCENT else ST_MUTED)
+                        Text(text, fontSize = 14.us, fontWeight = FontWeight.SemiBold, color = if (picked) ST_ON else ST_MUTED)
                     }
                 }
             }
@@ -2995,18 +3038,30 @@ internal enum class RaveMode(val label: String) {
 }
 
 /** The pages of the settings sheet (main overview and its subpages). */
-internal enum class SettingsPage(val title: String) {
-    MAIN("Innstillinger"), MODE("Modus"), EFFECTS("Styrke og effekter"), AURA("Auraen"), PARTY_VIEW("Party-visning"), LYRICS("Tekstvisning")
+internal enum class SettingsPage(val title: String, val parentName: String?) {
+    MAIN("Innstillinger", null), VIEW("Visning", "MAIN"), LYRICS("Tekst", "MAIN"), PARTY("Party", "MAIN"),
+    EFFECTS("Styrke og effekter", "PARTY"), AURA("Auraen", "PARTY"), PARTY_VIEW("Party-visning", "PARTY");
+    /** One level up (‹ / Back); null = close the sheet. */
+    val parent: SettingsPage? get() = parentName?.let { valueOf(it) }
 }
 
-// Timetracker's dark theme (index.css, HSL): background 0 0% 8.5%, card 11%, text 93%, muted 62.8%, border 20.5%,
-// primary 271 81% 61% (purple, ST_ACCENT).
-private val ST_BG = Color(0xFF161616)
-private val ST_CARD = Color(0xFF1C1C1C)
-private val ST_TEXT = Color(0xFFEDEDED)
-private val ST_MUTED = Color(0xFFA0A0A0)
-private val ST_LINE = Color(0xFF343434)
-private val ST_ICON_BG = Color(0xFF262626)
-private val ST_PILL_ON = Color(0xFF2A2A2A)
-private val ST_ACCENT = Color(0xFF9E4BEC)
+/** Icon of each layout on the Visning tiles. */
+internal val RaveMode.icon: androidx.compose.ui.graphics.vector.ImageVector get() = when (this) {
+    RaveMode.STANDARD -> Icons.Rounded.Album
+    RaveMode.LYRICS -> Icons.Rounded.Subtitles
+    RaveMode.CINEMA -> Icons.Rounded.Movie
+    RaveMode.PARTY -> Icons.Rounded.Celebration
+}
+
+// Rave's own look (Espen 2026-11-26: «vår egen app sin vibe»): warm cream on dark glass, chosen = cream with dark
+// ink — the same as the buttons and pills elsewhere on the Rave screen.
+private val ST_BG = Color(0xFF101012)   // solid: nothing behind shows through
+private val ST_CARD = Color(0xFF1E1E21)
+private val ST_TEXT = Color(0xFFF5F2EC)
+private val ST_MUTED = Color(0xB3F5F2EC)
+private val ST_LINE = Color(0x1FFFFFFF)
+private val ST_ICON_BG = Color(0x1AFFFFFF)
+private val ST_PILL_ON = Color(0xFFF5F2EC)
+private val ST_ON = Color(0xFF0A0A0A)
+private val ST_ACCENT = Color(0xFFF5F2EC)
 private val ST_DANGER = Color(0xFFE45858)
