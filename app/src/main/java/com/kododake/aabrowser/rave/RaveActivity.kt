@@ -2184,41 +2184,41 @@ class RaveActivity : ComponentActivity() {
     @Composable
     private fun SettingsMain() {
         val fx = partyFxVersion.let { partyFx }
-        SettingsSection("Visning", "Hvordan skjermen ser ut") {
-            NavRow(Icons.Rounded.Dashboard, "Modus", "Oppsettet på skjermen", raveMode.label) { settingsPage = SettingsPage.MODE }
+        SettingsSection("Visning") {
+            NavRow(Icons.Rounded.Dashboard, "Modus", raveMode.label) { settingsPage = SettingsPage.MODE }
             SettingsDivider()
-            ToggleRow("Tekst", showLyrics, "Sangteksten") { showLyrics = !showLyrics; if (showLyrics) pos = positionMs() }
+            ToggleRow("Tekst", showLyrics) { showLyrics = !showLyrics; if (showLyrics) pos = positionMs() }
             SettingsDivider()
-            NavRow(Icons.Rounded.Subtitles, "Tekstvisning", "Stil, boks og synk", lyricsStyle.label) { settingsPage = SettingsPage.LYRICS }
+            NavRow(Icons.Rounded.Subtitles, "Tekstvisning", lyricsStyle.label) { settingsPage = SettingsPage.LYRICS }
             SettingsDivider()
-            ToggleRow("Video", videoOn, "Musikkvideo bak, når den finnes") { videoOn = !videoOn; videoPlaying = false }
+            ToggleRow("Video", videoOn) { videoOn = !videoOn; videoPlaying = false }
         }
-        SettingsSection("Party", "Lyset og effektene i takt med musikken") {
-            ToggleRow("Party", hardstyleOn, "Aura, partikler, risting og strobe") {
+        SettingsSection("Party") {
+            ToggleRow("Party", hardstyleOn) {
                 setHardstyle()
                 // Party off in Party-scene: back to Standard (as with 5 taps), so the next start doesn't switch it on.
                 if (!hardstyleOn && raveMode == RaveMode.PARTY) selectMode(RaveMode.STANDARD)
             }
             SettingsDivider()
-            NavRow(Icons.Rounded.GraphicEq, "Styrke og effekter", "Nivå, lysbølger, risting, strobe og blink",
+            NavRow(Icons.Rounded.GraphicEq, "Styrke og effekter",
                 if (vibeAuto) "Auto" else "${kotlin.math.round(vibeManual * 100f).toInt()} %") { settingsPage = SettingsPage.EFFECTS }
             SettingsDivider()
-            NavRow(Icons.Rounded.BlurOn, "Auraen", "Utslag og skarphet",
+            NavRow(Icons.Rounded.BlurOn, "Auraen",
                 "${partyFxText(fx.auraSize, PartyFx.AURA_SIZE)} · ${partyFxText(fx.auraSharp, PartyFx.AURA_SHARP)}") { settingsPage = SettingsPage.AURA }
             SettingsDivider()
-            NavRow(Icons.Rounded.Visibility, "Party-visning", "Analyse, Koko og sangliste",
+            NavRow(Icons.Rounded.Visibility, "Party-visning",
                 listOfNotNull("Analyse".takeIf { showAnalysis }, "Koko".takeIf { showKoko }).joinToString(" · ").ifEmpty { "Av" }) {
                 settingsPage = SettingsPage.PARTY_VIEW
             }
         }
-        SettingsSection("Bilen", null) {
-            NavRow(Icons.Rounded.Apps, "Tilbake til bilens apper", "Lukker Rave", null) { settingsPage = null; exitToApps() }
+        SettingsSection("Bilen") {
+            NavRow(Icons.Rounded.Apps, "Tilbake til bilens apper", null) { settingsPage = null; exitToApps() }
         }
     }
 
     @Composable
     private fun SettingsMode() {
-        SettingsSection(null, "Velg hvordan skjermen er lagt opp (som på nettsiden)") {
+        SettingsSection(null) {
             RaveMode.entries.forEachIndexed { i, mode ->
                 if (i > 0) SettingsDivider()
                 val on = mode == raveMode
@@ -2234,36 +2234,36 @@ class RaveActivity : ComponentActivity() {
 
     @Composable
     private fun SettingsEffects() {
-        SettingsSection("Styrke", "Hvor mye Party gir i sjangeren som spiller") {
+        SettingsSection("Styrke") {
             SliderRow("Nivå", { if (vibeAuto) vibeLive else vibeManual },
                 if (vibeAuto) "Auto" else "${kotlin.math.round(vibeManual * 100f).toInt()} %", midMark = false, key = "vibe",
                 onDrag = { dragVibe(it) }, onRelease = { setVibe(vibeManual); draggingBar = false })
             SettingsDivider()
-            ToggleRow("Auto", vibeAuto, "Appen velger etter musikken") { if (vibeAuto) setVibe(vibeLive) else setVibe(null) }
+            ToggleRow("Auto", vibeAuto) { if (vibeAuto) setVibe(vibeLive) else setVibe(null) }
         }
-        SettingsSection("Lysbølger", "Runde lysringer på tunge drop") {
+        SettingsSection("Lysbølger") {
             PartyFxRow(PartyFx.WAVE_STRENGTH, "Styrke"); SettingsDivider()
             PartyFxRow(PartyFx.WAVE_WIDTH, "Bredde"); SettingsDivider()
             PartyFxRow(PartyFx.WAVE_OFTEN, "Hvor ofte")
         }
-        SettingsSection("Risting og blink", null) {
+        SettingsSection("Risting og blink") {
             PartyFxRow(PartyFx.SHAKE, "Risting"); SettingsDivider()
             PartyFxRow(PartyFx.STROBE, "Strobe"); SettingsDivider()
             PartyFxRow(PartyFx.FLASHES, "Hvite blink")
         }
-        SettingsSection("Synk med bilen", "Bilens høyttalere ligger litt etter telefonen: flytt lyset senere (+) eller tidligere (−)") {
+        SettingsSection("Synk med bilen") {
             StepperRow("Lyset", "${if (syncMs > 0) "+" else ""}$syncMs ms",
                 onMinus = { syncMs = (syncMs - SYNC_STEP_MS).coerceAtLeast(-SYNC_LIMIT_MS); saveSync() },
                 onPlus = { syncMs = (syncMs + SYNC_STEP_MS).coerceAtMost(SYNC_LIMIT_MS); saveSync() })
         }
-        SettingsSection(null, null) {
-            NavRow(Icons.Rounded.Refresh, "Tilbakestill effektene", "Alt tilbake til standard (lysbølger av)", null, destructive = true) { resetPartyFx() }
+        SettingsSection(null) {
+            NavRow(Icons.Rounded.Refresh, "Tilbakestill effektene", null, destructive = true) { resetPartyFx() }
         }
     }
 
     @Composable
     private fun SettingsAura() {
-        SettingsSection(null, "Midten (1×) er slik auraen er laget. Utslag tar også bunnen; Skarphet går fra myk glød til klare topper.") {
+        SettingsSection(null) {
             PartyFxRow(PartyFx.AURA_SIZE, "Utslag"); SettingsDivider()
             PartyFxRow(PartyFx.AURA_SHARP, "Skarphet")
         }
@@ -2271,24 +2271,24 @@ class RaveActivity : ComponentActivity() {
 
     @Composable
     private fun SettingsPartyView() {
-        SettingsSection(null, "Det som vises over Party") {
-            ToggleRow("Analyse", showAnalysis, "Panel og knapper for å merke sangdeler") {
+        SettingsSection(null) {
+            ToggleRow("Analyse", showAnalysis) {
                 showAnalysis = !showAnalysis; if (!showAnalysis) stopTapTest()
                 try { getSharedPreferences("rave", MODE_PRIVATE).edit().putBoolean("analysis", showAnalysis).apply() } catch (_: Exception) { }
             }
             SettingsDivider()
-            ToggleRow("Koko", showKoko, "Spøkelset som danser innimellom") {
+            ToggleRow("Koko", showKoko) {
                 showKoko = !showKoko
                 try { getSharedPreferences("rave", MODE_PRIVATE).edit().putBoolean("koko", showKoko).apply() } catch (_: Exception) { }
             }
             SettingsDivider()
-            ToggleRow("Sangliste", showSongList, "Sangene som er spilt, med sjanger") { showSongList = !showSongList }
+            ToggleRow("Sangliste", showSongList) { showSongList = !showSongList }
         }
     }
 
     @Composable
     private fun SettingsLyrics() {
-        SettingsSection("Stil", "Hvordan sangteksten vises") {
+        SettingsSection("Stil") {
             LyricsStyle.entries.forEachIndexed { i, style ->
                 if (i > 0) SettingsDivider()
                 val on = style == lyricsStyle
@@ -2300,8 +2300,8 @@ class RaveActivity : ComponentActivity() {
                 }
             }
         }
-        SettingsSection("Boks og synk", null) {
-            ToggleRow("Frostet glass", lyricsGlass, "Teksten i en lys boks (av = åpen, uten boks)") { lyricsGlass = !lyricsGlass; saveLyricsPrefs() }
+        SettingsSection("Boks og synk") {
+            ToggleRow("Frostet glass", lyricsGlass) { lyricsGlass = !lyricsGlass; saveLyricsPrefs() }
             SettingsDivider()
             StepperRow("Tekst-synk", "${if (lyricsOffsetMs > 0) "+" else ""}$lyricsOffsetMs ms", onMinus = { stepLyricsOffset(-1) }, onPlus = { stepLyricsOffset(1) })
         }
@@ -2325,11 +2325,10 @@ class RaveActivity : ComponentActivity() {
         }
     }
 
-    /** A section as in Timetracker: title + grey description above a card of rows. */
+    /** A section as in Timetracker: a title above a card of rows (no grey text under names: Espen 2026-11-26). */
     @Composable
-    private fun SettingsSection(title: String?, description: String?, rows: @Composable () -> Unit) {
+    private fun SettingsSection(title: String?, rows: @Composable () -> Unit) {
         if (title != null) Text(title, fontSize = 17.us, fontWeight = FontWeight.SemiBold, color = ST_TEXT, modifier = Modifier.padding(start = 4.u))
-        if (description != null) Text(description, fontSize = 13.us, color = ST_MUTED, modifier = Modifier.padding(start = 4.u, top = 2.u))
         Spacer(Modifier.height(8.u))
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.u)).background(ST_CARD).border(1.dp, ST_LINE, RoundedCornerShape(12.u))) { rows() }
         Spacer(Modifier.height(22.u))
@@ -2338,11 +2337,11 @@ class RaveActivity : ComponentActivity() {
     @Composable
     private fun SettingsDivider() = Box(Modifier.padding(start = 16.u).fillMaxWidth().height(1.dp).background(ST_LINE.copy(alpha = .72f)))
 
-    /** A row that opens a subpage (or does something): icon in a box | title + description | value | ›. */
+    /** A row that opens a subpage (or does something): icon in a box | title | value | ›. */
     @Composable
-    private fun NavRow(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, description: String?, value: String?,
+    private fun NavRow(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, value: String?,
                        destructive: Boolean = false, onClick: () -> Unit) {
-        Row(Modifier.fillMaxWidth().heightIn(min = 64.u).clickable { if (settingsReady()) onClick() }.padding(horizontal = 12.u, vertical = 10.u),
+        Row(Modifier.fillMaxWidth().heightIn(min = 56.u).clickable { if (settingsReady()) onClick() }.padding(horizontal = 12.u, vertical = 8.u),
             verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(40.u).clip(RoundedCornerShape(8.u)).background(ST_ICON_BG), contentAlignment = Alignment.Center) {
                 Icon(icon, null, tint = if (destructive) ST_DANGER else ST_TEXT, modifier = Modifier.size(22.u))
@@ -2350,7 +2349,7 @@ class RaveActivity : ComponentActivity() {
             Column(Modifier.weight(1f).padding(start = 12.u)) {
                 Text(title, fontSize = 16.us, fontWeight = FontWeight.Medium, color = if (destructive) ST_DANGER else ST_TEXT,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (description != null) Text(description, fontSize = 13.us, color = ST_MUTED, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                // (No grey text under the names: Espen 2026-11-26.)
             }
             if (value != null) Text(value, fontSize = 14.us, color = ST_MUTED, maxLines = 1, softWrap = false, modifier = Modifier.padding(start = 8.u))
             if (!destructive) Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = ST_MUTED, modifier = Modifier.padding(start = 4.u).size(22.u))
@@ -2434,14 +2433,13 @@ class RaveActivity : ComponentActivity() {
         }
     }
 
-    /** Én rad: navn (+ beskrivelse) | «Av | På»-pille som i Timetracker. Hele raden er trykkflaten. */
+    /** Én rad: navn | «Av | På»-pille som i Timetracker. Hele raden er trykkflaten. */
     @Composable
-    private fun ToggleRow(label: String, on: Boolean, description: String? = null, onClick: () -> Unit) {
-        Row(Modifier.fillMaxWidth().heightIn(min = 60.u).clickable { if (settingsReady()) onClick() }.padding(horizontal = 16.u, vertical = 8.u),
+    private fun ToggleRow(label: String, on: Boolean, onClick: () -> Unit) {
+        Row(Modifier.fillMaxWidth().heightIn(min = 56.u).clickable { if (settingsReady()) onClick() }.padding(horizontal = 16.u, vertical = 8.u),
             verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(label, fontSize = 16.us, fontWeight = FontWeight.Medium, color = ST_TEXT, maxLines = 1, softWrap = false)
-                if (description != null) Text(description, fontSize = 13.us, color = ST_MUTED, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Row(Modifier.padding(start = 12.u).height(34.u).clip(RoundedCornerShape(50)).border(1.dp, ST_LINE, RoundedCornerShape(50)).padding(3.u)) {
                 for ((text, isOn) in listOf("Av" to false, "På" to true)) {
