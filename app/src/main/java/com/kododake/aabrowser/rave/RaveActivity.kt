@@ -80,8 +80,6 @@ import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -450,8 +448,6 @@ class RaveActivity : ComponentActivity() {
         if (wasMic) startMic()
     }
 
-    /** The «Modus» picker is open: the buttons stay up until a choice is made (no 3 s auto-hide). */
-    private var modeMenuOpen by mutableStateOf(false)
     /**
      * «Modus» = the website's layout picker (web/src/settings.ts LANDSCAPE_LAYOUTS). Each one lays the
      * car screen out as on the website, and choosing it switches on/off what the website's
@@ -1107,8 +1103,7 @@ class RaveActivity : ComponentActivity() {
     private fun RaveScreen() {
         val transportVisible = controls.transport
         val mediaTogglesVisible = controls.media
-        LaunchedEffect(controls.touchedAt, modeMenuOpen) {
-            if (modeMenuOpen) return@LaunchedEffect
+        LaunchedEffect(controls.touchedAt) {
             delay(3_000)
             controls = controls.expire(SystemClock.elapsedRealtime())
         }
@@ -2065,7 +2060,7 @@ class RaveActivity : ComponentActivity() {
         }
         Column(horizontalAlignment = if (stackGenres) Alignment.End else Alignment.Start) {
         FlowRow(horizontalArrangement=Arrangement.spacedBy(10.u), verticalArrangement=Arrangement.spacedBy(8.u)) {
-            ModePicker()
+            // (Modus is chosen in Innstillinger → Visning since 2026-11-26: nothing extra on the screen.)
             if (mediaVisible && !mediaLast) media()
             // No Party button: 5 quick taps switch Party on/off.
         }
@@ -2550,46 +2545,6 @@ class RaveActivity : ComponentActivity() {
         }
     }
 
-    /** «Modus» drop-down, as on the website: Standard, Tekstfokus, Filmvisning (video), Party-scene. */
-    @Composable
-    private fun ModePicker() {
-        val cream = Color(0xFFF5F2EC)
-        val current = raveMode
-        // If the buttons move (layout change) while the menu is open, don't leave auto-hide paused for good.
-        androidx.compose.runtime.DisposableEffect(Unit) { onDispose { modeMenuOpen = false } }
-        Box {
-            Box(
-                Modifier.height(64.u).clip(RoundedCornerShape(50))
-                    .background(Color(0x22FFFFFF))
-                    .clickable { buttonInteraction(); modeMenuOpen = true }
-                    .padding(horizontal = 18.u),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("${current.label} ▾", fontFamily = FontFamily.Default, maxLines = 1, softWrap = false,
-                    color = cream, fontSize = 18.us, fontWeight = FontWeight.SemiBold)
-            }
-            DropdownMenu(
-                expanded = modeMenuOpen,
-                onDismissRequest = { modeMenuOpen = false; buttonInteraction() },
-                shape = RoundedCornerShape(16.u),
-                containerColor = Color(0xF21A1A1C),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x29FFFFFF))
-            ) {
-                RaveMode.entries.forEach { mode ->
-                    val on = mode == current
-                    DropdownMenuItem(
-                        text = {
-                            Text(mode.label, color = if (on) cream else Color(0xB3F5F2EC), fontSize = 18.us,
-                                fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, softWrap = false)
-                        },
-                        trailingIcon = { if (on) Text("✓", color = cream, fontSize = 18.us) },
-                        onClick = { modeMenuOpen = false; buttonInteraction(); selectMode(mode) },
-                        modifier = Modifier.heightIn(min = 56.u)
-                    )
-                }
-            }
-        }
-    }
 
     @Composable
     private fun VideoButton() {
