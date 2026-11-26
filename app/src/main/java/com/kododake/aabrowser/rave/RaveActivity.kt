@@ -300,12 +300,15 @@ class RaveActivity : ComponentActivity() {
     private var tapCount by mutableIntStateOf(0)
     private fun stopTapTest() { tapMode = false; syncTapper.reset(); tapCount = 0 }
     /** Endrer én Party-innstilling (virker fra neste bilde); [save] = lagre nå (når fingeren slipper). */
+    /** «Skarphet» on its own, so only that slider recomposes the aura (its blur is made in composition). */
+    private var auraSharpShown by mutableFloatStateOf(1f)
     private fun setPartyFx(fx: PartyFx, value: Float, save: Boolean) {
         partyFx[fx] = value; partyFxVersion++
+        if (fx == PartyFx.AURA_SHARP) auraSharpShown = partyFx[fx]
         if (save) try { getSharedPreferences("rave", MODE_PRIVATE).edit().putFloat("party_${fx.key}", partyFx[fx]).apply() } catch (_: Exception) { }
     }
     private fun resetPartyFx() {
-        partyFx.reset(); partyFxVersion++
+        partyFx.reset(); partyFxVersion++; auraSharpShown = partyFx.auraSharp
         try { getSharedPreferences("rave", MODE_PRIVATE).edit().apply { PartyFx.entries.forEach { remove("party_${it.key}") } }.apply() } catch (_: Exception) { }
     }
     private fun saveSync() { try { getSharedPreferences("rave", MODE_PRIVATE).edit().putInt("syncMs", syncMs).apply() } catch (_: Exception) { } }
@@ -593,7 +596,8 @@ class RaveActivity : ComponentActivity() {
             .coerceIn(-SYNC_LIMIT_MS, SYNC_LIMIT_MS)
         try {
             val prefs = getSharedPreferences("rave", MODE_PRIVATE)
-            PartyFx.entries.forEach { partyFx[it] = prefs.getFloat("party_${it.key}", 1f) }
+            PartyFx.entries.forEach { partyFx[it] = prefs.getFloat("party_${it.key}", it.default) }
+            auraSharpShown = partyFx.auraSharp
         } catch (_: Exception) { partyFx.reset() }
         try {
             val prefs = getSharedPreferences("rave", MODE_PRIVATE)
@@ -1701,7 +1705,7 @@ class RaveActivity : ComponentActivity() {
                         val transportSlot = 100f * scale
                         val partyCover = minOf(layoutWidth * 0.34f, layoutHeight - transportSlot).coerceAtLeast(120f).dp
                         Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.weight(1f).padding(start = 84.u), contentAlignment = Alignment.Center) {
+                            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                                 Info(Modifier.fillMaxWidth(), Alignment.CenterHorizontally, includeLyrics = false, transportVisible = false, mediaTogglesVisible = false, modeButtonsAllowed = false, compact = false, fitTitle = true)
                             }
                             Spacer(Modifier.width(24.u))
@@ -1803,7 +1807,7 @@ class RaveActivity : ComponentActivity() {
             }
 
             if (hardstyleOn && showSongList)
-                SongList(Modifier.align(Alignment.TopStart).padding(start = if (partyControls) 100.u else 12.u, end = 12.u, bottom = 12.u,
+                SongList(Modifier.align(Alignment.TopStart).padding(start = 12.u, end = 12.u, bottom = 12.u,
                     top = if (transportVisible) 96.u else 12.u))
             // Hidden while the controls show: they sit in the same corner (Analyse/Sanger/Synk).
             else if (hardstyleOn && showAnalysis && !partyControls)
@@ -1811,18 +1815,12 @@ class RaveActivity : ComponentActivity() {
                 AnalysisHud(Modifier.align(Alignment.TopEnd).padding(start = 12.u, end = 12.u, bottom = 12.u,
                     top = if (transportVisible) 96.u else 12.u))
             // Feedback buttons (with the analysis): Espen's answer key for training the genre rules.
-            // Left side, clear of the vibe slider while the Party controls show.
+            // Left side.
             if (hardstyleOn && showAnalysis)
-                FeedbackPanel(Modifier.align(Alignment.BottomStart).padding(start = if (partyControls) 100.u else 16.u, bottom = 16.u),
+                FeedbackPanel(Modifier.align(Alignment.BottomStart).padding(start = 16.u, bottom = 16.u),
                     compact = transportVisible)
             // Vibe slider: shown with the other buttons (one tap) while Party is on.
-            if (partyControls) BoxWithConstraints(
-                Modifier.align(Alignment.CenterStart).fillMaxHeight()
-                    .padding(start = 16.u, top = 76.u, bottom = 16.u),
-                contentAlignment = Alignment.CenterStart
-            ) {
-                VibeSlider(minOf(maxHeight - 62.u, 300.u).coerceAtLeast(120.u))
-            }
+            // (The vibe slider lives in Party-innstillinger → Styrke since 2026-11-26.)
             if (announcement != null) Text(announcement!!, color=Color.White,
                 modifier=Modifier.align(Alignment.TopCenter).padding(16.u).background(Color.Black.copy(alpha=.7f)).padding(12.u))
             if (!hasAccess) Notice("Rave trenger tilgang til hva som spilles.\nInnstillinger → Varsler → Enhetstilgang til varsler → Bilnett Rave.")
@@ -1898,7 +1896,7 @@ class RaveActivity : ComponentActivity() {
         }.sceneShake(), contentAlignment = Alignment.Center) {
             androidx.compose.runtime.key(trackIdentity, foreground) {
                 PartyAura(orb, coverSide, cornerRadius, palette, { orbCoverScale }, { orbTick; frame }, // read in draw: redraw every frame
-                    sharp = partyFxVersion.let { partyFx.auraSharp })   // recomposes when Espen moves «Skarphet»
+                    sharp = auraSharpShown)   // recomposes only when Espen moves «Skarphet»
             }
             Cover(coverSide, scale = orbCoverScale)
             // Snare → a soft, warm-white glow just outside the cover's edge (the website's party-edge); never over the cover.
@@ -2041,7 +2039,7 @@ class RaveActivity : ComponentActivity() {
             if (mediaVisible && !mediaLast) media()
             // No Party button: 5 quick taps switch Party on/off.
         }
-        // With Party on: the analysis toggle (the vibe slider itself sits on the left edge).
+        // With Party on: the Innstillinger button (and the sync pills while Analyse is on).
         if (partyControls) {
             Spacer(Modifier.height(10.u))
             if (stackGenres) Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.u)) { GenreChips() }
@@ -2057,46 +2055,8 @@ class RaveActivity : ComponentActivity() {
 
     @Composable
     private fun GenreChips() {
-        // Toggle for the live analysis panel (so Espen can give feedback on what is detected).
-        Box(
-            Modifier.height(42.u).clip(RoundedCornerShape(50))
-                .background(if (showAnalysis) Color(0xFFF5F2EC) else Color(0x22FFFFFF))
-                .clickable {
-                    buttonInteraction(); showAnalysis = !showAnalysis; if (!showAnalysis) stopTapTest()
-                    try { getSharedPreferences("rave", MODE_PRIVATE).edit().putBoolean("analysis", showAnalysis).apply() } catch (_: Exception) { }
-                }
-                .padding(horizontal = 18.u),
-            contentAlignment = Alignment.Center
-        ) {
-            Text("Analyse", maxLines = 1, softWrap = false, fontSize = 15.us, fontWeight = FontWeight.SemiBold,
-                color = if (showAnalysis) Color(0xFF0A0A0A) else Color(0xFFF5F2EC))
-        }
-        // Koko the dancing ghost on/off (off by default).
-        Box(
-            Modifier.height(42.u).clip(RoundedCornerShape(50))
-                .background(if (showKoko) Color(0xFFF5F2EC) else Color(0x22FFFFFF))
-                .clickable {
-                    buttonInteraction(); showKoko = !showKoko
-                    try { getSharedPreferences("rave", MODE_PRIVATE).edit().putBoolean("koko", showKoko).apply() } catch (_: Exception) { }
-                }
-                .padding(horizontal = 18.u),
-            contentAlignment = Alignment.Center
-        ) {
-            Text("Koko", maxLines = 1, softWrap = false, fontSize = 15.us, fontWeight = FontWeight.SemiBold,
-                color = if (showKoko) Color(0xFF0A0A0A) else Color(0xFFF5F2EC))
-        }
-        // The genre list: which songs were played, what the app thinks they are and why.
-        Box(
-            Modifier.height(42.u).clip(RoundedCornerShape(50))
-                .background(if (showSongList) Color(0xFFF5F2EC) else Color(0x22FFFFFF))
-                .clickable { buttonInteraction(); showSongList = !showSongList }
-                .padding(horizontal = 18.u),
-            contentAlignment = Alignment.Center
-        ) {
-            Text("Sanger", maxLines = 1, softWrap = false, fontSize = 15.us, fontWeight = FontWeight.SemiBold,
-                color = if (showSongList) Color(0xFF0A0A0A) else Color(0xFFF5F2EC))
-        }
-        // Party-innstillinger: lysbølger, risting, strobe og hvite blink (eget panel som lukkes med «Ferdig»).
+        // Analyse, Koko og Sangliste ligger i Party-innstillinger → Visning (2026-11-26), så skjermen er ren.
+        // Party-innstillinger: styrke, lysbølger, risting, strobe, blink, auraen og visning (eget panel, lukkes med «Ferdig»).
         Box(
             Modifier.height(42.u).clip(RoundedCornerShape(50))
                 .background(if (showPartyFx) Color(0xFFF5F2EC) else Color(0x22FFFFFF))
@@ -2163,7 +2123,7 @@ class RaveActivity : ComponentActivity() {
     }
 
     /**
-     * «Party-innstillinger»: seks glidebrytere (midten = 1× = som før, venstre = av/mindre, høyre = mer).
+     * «Party-innstillinger»: styrke, åtte glidebrytere og visning (midten = 1× = som før, venstre = av/mindre, høyre = mer).
      * Virker med en gang (frame-løkken leser [partyFx] hvert bilde) og lagres når fingeren slipper.
      * Store trykkflater for bilen; ingenting her beveger seg utenom tommelen man drar i.
      */
@@ -2191,6 +2151,16 @@ class RaveActivity : ComponentActivity() {
                 ) { Text("Ferdig", maxLines = 1, softWrap = false, fontSize = 15.us, fontWeight = FontWeight.SemiBold, color = cream) }
             }
             Spacer(Modifier.height(14.u))
+            // Styrke (2026-11-26: flyttet hit fra den loddrette bryteren på skjermen): styrken i sjangeren som spiller.
+            groupTitle("Styrke")
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.u)).background(Color(0x0DFFFFFF))) {
+                SliderRow("Nivå", { if (vibeAuto) vibeLive else vibeManual },
+                    if (vibeAuto) "Auto" else "${kotlin.math.round(vibeManual * 100f).toInt()} %", midMark = false, key = "vibe",
+                    onDrag = { dragVibe(it) }, onRelease = { setVibe(vibeManual); draggingBar = false })
+                divider()
+                ToggleRow("Auto (appen velger)", vibeAuto) { if (vibeAuto) setVibe(vibeLive) else setVibe(null) }
+            }
+            Spacer(Modifier.height(18.u))
             groupTitle("Lysbølger")
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.u)).background(Color(0x0DFFFFFF))) {
                 PartyFxRow(PartyFx.WAVE_STRENGTH, "Styrke"); divider()
@@ -2212,6 +2182,22 @@ class RaveActivity : ComponentActivity() {
                 PartyFxRow(PartyFx.AURA_SIZE, "Utslag"); divider()
                 PartyFxRow(PartyFx.AURA_SHARP, "Skarphet")
             }
+            Spacer(Modifier.height(18.u))
+            // Visning (2026-11-26: flyttet hit fra knappene på skjermen, så skjermen er så ren som mulig).
+            groupTitle("Visning")
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.u)).background(Color(0x0DFFFFFF))) {
+                ToggleRow("Analyse", showAnalysis) {
+                    showAnalysis = !showAnalysis; if (!showAnalysis) stopTapTest()
+                    try { getSharedPreferences("rave", MODE_PRIVATE).edit().putBoolean("analysis", showAnalysis).apply() } catch (_: Exception) { }
+                }
+                divider()
+                ToggleRow("Koko", showKoko) {
+                    showKoko = !showKoko
+                    try { getSharedPreferences("rave", MODE_PRIVATE).edit().putBoolean("koko", showKoko).apply() } catch (_: Exception) { }
+                }
+                divider()
+                ToggleRow("Sangliste", showSongList) { showSongList = !showSongList }
+            }
             Spacer(Modifier.height(10.u))
             Box(
                 Modifier.height(48.u).clip(RoundedCornerShape(12.u)).clickable { resetPartyFx() }.padding(horizontal = 4.u),
@@ -2223,15 +2209,27 @@ class RaveActivity : ComponentActivity() {
     /** Én rad: navn | glidebryter (strek på midten = 1×) | verdi («Av», «0,5×», «1×» …). */
     @Composable
     private fun PartyFxRow(fx: PartyFx, label: String) {
-        val cream = Color(0xFFF5F2EC)
         // Leser versjonen, så raden (og streken) tegnes på nytt når verdien endres.
         val value = partyFxVersion.let { partyFx[fx] }
+        SliderRow(label, { fx.toSlider(value) }, partyFxText(value, fx), midMark = true, key = fx,
+            onDrag = { pos -> setPartyFx(fx, fx.fromSlider(pos), save = false) },
+            onRelease = { setPartyFx(fx, partyFx[fx], save = true) })
+    }
+
+    /**
+     * Én rad: navn | glidebryter (0..1) | tekst. [midMark] = strek på midten (1× = som før). Sidelengs drag eller
+     * trykk flytter den ([onDrag]); [onRelease] når fingeren slipper (lagre). Loddrett drag ruller panelet.
+     */
+    @Composable
+    private fun SliderRow(label: String, position: () -> Float, text: String, midMark: Boolean, key: Any,
+                          onDrag: (Float) -> Unit, onRelease: () -> Unit) {
+        val cream = Color(0xFFF5F2EC)
         val trackWidth = 6.u
         Row(Modifier.fillMaxWidth().height(56.u).padding(start = 16.u, end = 12.u), verticalAlignment = Alignment.CenterVertically) {
             Text(label, fontSize = 16.us, color = cream, maxLines = 1, softWrap = false, modifier = Modifier.width(96.u))
             val thumb = 28.u
             Box(
-                Modifier.weight(1f).fillMaxHeight().pointerInput(fx) {
+                Modifier.weight(1f).fillMaxHeight().pointerInput(key) {
                     val thumbPx = thumb.toPx()
                     fun positionAt(x: Float) = ((x - thumbPx / 2f) / (size.width - thumbPx).coerceAtLeast(1f)).coerceIn(0f, 1f)
                     // Sidelengs drag eller trykk = glidebryter; drag opp/ned slipper gjennom, så panelet kan rulles
@@ -2246,7 +2244,7 @@ class RaveActivity : ComponentActivity() {
                                 val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
                                 if (change.isConsumed) break // panelet ruller
                                 if (!change.pressed) {
-                                    if (!dragging) { setPartyFx(fx, fx.fromSlider(positionAt(change.position.x)), save = false); changed = true }
+                                    if (!dragging) { onDrag(positionAt(change.position.x)); changed = true }
                                     break
                                 }
                                 val dx = kotlin.math.abs(change.position.x - down.position.x)
@@ -2257,29 +2255,43 @@ class RaveActivity : ComponentActivity() {
                                 }
                                 if (dragging) {
                                     change.consume()
-                                    setPartyFx(fx, fx.fromSlider(positionAt(change.position.x)), save = false); changed = true
+                                    onDrag(positionAt(change.position.x)); changed = true
                                 }
                             }
-                        } finally { if (changed) setPartyFx(fx, partyFx[fx], save = true) }
+                        } finally { if (changed) onRelease() }
                     }
                 }
             ) {
                 Canvas(Modifier.fillMaxSize()) {
                     val tp = thumb.toPx(); val tw = trackWidth.toPx()
                     val left = tp / 2f; val right = size.width - tp / 2f; val cy = size.height / 2f
-                    val x = left + fx.toSlider(value) * (right - left)
+                    // Read while drawing: the vibe level moves with the song in Auto without recomposing the panel.
+                    val x = left + position().coerceIn(0f, 1f) * (right - left)
                     val corner = androidx.compose.ui.geometry.CornerRadius(tw / 2f)
                     drawRoundRect(Color(0x22FFFFFF), Offset(left - tw / 2f, cy - tw / 2f), Size(right - left + tw, tw), corner)
                     // Midten (1× = som før): en rolig strek.
                     val mid = (left + right) / 2f
-                    drawRoundRect(Color(0x66FFFFFF), Offset(mid - 1.dp.toPx(), cy - tw * 1.4f), Size(2.dp.toPx(), tw * 2.8f))
+                    if (midMark) drawRoundRect(Color(0x66FFFFFF), Offset(mid - 1.dp.toPx(), cy - tw * 1.4f), Size(2.dp.toPx(), tw * 2.8f))
                     drawRoundRect(cream, Offset(left - tw / 2f, cy - tw / 2f), Size(x - left + tw / 2f, tw), corner)
                     drawCircle(Color.Black.copy(alpha = .3f), tp / 2f + 2.dp.toPx(), Offset(x, cy))
                     drawCircle(cream, tp / 2f, Offset(x, cy))
                 }
             }
-            Text(partyFxText(value, fx), fontSize = 15.us, color = Color(0xB3F5F2EC), maxLines = 1, softWrap = false,
+            Text(text, fontSize = 15.us, color = Color(0xB3F5F2EC), maxLines = 1, softWrap = false,
                 textAlign = TextAlign.End, modifier = Modifier.width(52.u))
+        }
+    }
+
+    /** Én rad i panelet: navn | bryter (på = lys). Hele raden er trykkflaten. */
+    @Composable
+    private fun ToggleRow(label: String, on: Boolean, onClick: () -> Unit) {
+        val cream = Color(0xFFF5F2EC)
+        Row(Modifier.fillMaxWidth().height(56.u).clickable { onClick() }.padding(start = 16.u, end = 16.u), verticalAlignment = Alignment.CenterVertically) {
+            Text(label, fontSize = 16.us, color = cream, maxLines = 1, softWrap = false, modifier = Modifier.weight(1f))
+            Box(Modifier.width(52.u).height(30.u).clip(RoundedCornerShape(50)).background(if (on) cream else Color(0x33FFFFFF)),
+                contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart) {
+                Box(Modifier.padding(3.u).size(24.u).clip(RoundedCornerShape(50)).background(if (on) Color(0xFF0A0A0A) else cream))
+            }
         }
     }
 
@@ -2287,74 +2299,6 @@ class RaveActivity : ComponentActivity() {
     /** Dragging takes over from auto; saved when the finger lifts. */
     private var draggingBar = false
     private fun dragVibe(v: Float) { draggingBar = true; vibeAuto = false; vibeManual = v.coerceIn(0f, 1f) }
-
-    /**
-     * The vibe meter: a vertical slider, calm at the bottom and full hardstyle/rock at the top.
-     * No labels: the filled length shows the level. Drag or tap anywhere on it; "Auto" hands it back to the app.
-     */
-    @Composable
-    private fun VibeSlider(trackHeight: Dp) {
-        val thumb = 40.u
-        val trackWidth = 8.u
-        val cream = Color(0xFFF5F2EC)
-        Column {
-            Row {
-                Box(
-                    Modifier.width(64.u).height(trackHeight).pointerInput(Unit) {
-                        val thumbPx = thumb.toPx()
-                        fun valueAt(y: Float) =
-                            (1f - (y - thumbPx / 2f) / (size.height - thumbPx).coerceAtLeast(1f)).coerceIn(0f, 1f)
-                        awaitEachGesture {
-                            val down = awaitFirstDown()
-                            down.consume()
-                            buttonInteraction()
-                            dragVibe(valueAt(down.position.y))
-                            try {
-                                while (true) {
-                                    val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
-                                    if (!change.pressed) break
-                                    change.consume()
-                                    dragVibe(valueAt(change.position.y))
-                                }
-                            } finally {
-                                setVibe(vibeManual)
-                                draggingBar = false
-                                buttonInteraction()
-                            }
-                        }
-                    }
-                ) {
-                    Canvas(Modifier.fillMaxSize()) {
-                        val tp = thumb.toPx(); val tw = trackWidth.toPx()
-                        val cx = size.width / 2f
-                        val top = tp / 2f; val bottom = size.height - tp / 2f
-                        // Read while drawing: in auto the slider moves with the song without recomposing.
-                        val shown = if (vibeAuto) vibeLive else vibeManual
-                        val y = bottom - shown * (bottom - top)
-                        // Plain slider: grey track, white fill and a white thumb.
-                        val corner = androidx.compose.ui.geometry.CornerRadius(tw / 2f)
-                        drawRoundRect(Color(0x22FFFFFF), Offset(cx - tw / 2f, top - tw / 2f),
-                            androidx.compose.ui.geometry.Size(tw, bottom - top + tw), corner)
-                        drawRoundRect(cream, Offset(cx - tw / 2f, y),
-                            androidx.compose.ui.geometry.Size(tw, bottom - y + tw / 2f), corner)
-                        drawCircle(Color.Black.copy(alpha = .3f), tp / 2f + 2.dp.toPx(), Offset(cx, y))
-                        drawCircle(cream, tp / 2f, Offset(cx, y))
-                    }
-                }
-            }
-            Spacer(Modifier.height(12.u))
-            Box(
-                Modifier.height(42.u).clip(RoundedCornerShape(50))
-                    .background(if (vibeAuto) cream else Color(0x22FFFFFF))
-                    .clickable { buttonInteraction(); setVibe(null) }
-                    .padding(horizontal = 18.u),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("Auto", maxLines = 1, softWrap = false, fontSize = 15.us, fontWeight = FontWeight.SemiBold,
-                    color = if (vibeAuto) Color(0xFF0A0A0A) else cream)
-            }
-        }
-    }
 
     @Composable
     private fun LyricsButton() {

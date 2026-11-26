@@ -88,6 +88,7 @@ export declare class WebPartyEngine {
     get partyFxKeys(): Array<string>;
     setPartyFx(key: string, value: number): void;
     partyFx(key: string): number;
+    partyFxDefault(key: string): number;
     resetPartyFx(): void;
     partyFxFromSlider(key: string, position: number): number;
     partyFxToSlider(key: string, value: number): number;

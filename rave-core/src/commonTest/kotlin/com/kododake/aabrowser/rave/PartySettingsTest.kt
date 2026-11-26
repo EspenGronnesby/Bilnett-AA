@@ -10,7 +10,10 @@ class PartySettingsTest {
     fun defaultsGiveTheSameNumbersAsBefore() {
         val s = PartySettings()
         assertTrue(s.isDefault)
-        PartyFx.entries.forEach { assertEquals(1f, s[it], it.name) }
+        // Everything at 1× (as before), except the light waves: off by default since 2026-11-26.
+        PartyFx.entries.forEach { assertEquals(if (it == PartyFx.WAVE_STRENGTH) 0f else 1f, s[it], it.name) }
+        assertEquals(0f, s.waveAlpha)
+        s[PartyFx.WAVE_STRENGTH] = 1f
         assertEquals(WAVE_ALPHA, s.waveAlpha)
         assertEquals(WAVE_WIDTH_FROM, s.waveWidthFrom)
         assertEquals(WAVE_WIDTH_TO, s.waveWidthTo)

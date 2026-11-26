@@ -277,7 +277,7 @@ const val COVER_PULSE_MAX = 1f + COVER_BREATH_PULSE + COVER_KICK_PULSE + COVER_K
 /**
  * Lerretets marg: ingen del av auraen er lenger fra coverets MIDTE enn dette (andel av coverets side),
  * uansett puls og utslag = halve coveret ved største puls + lengste rekkevidde. Legg til plass for
- * glødens uskarphet ([BLOOM_ROOM_BLURS] × [BLOOM_BLUR_DP]) når lerretet lages.
+ * glødens uskarphet ([BLOOM_ROOM_BLURS] × [BLOOM_BLUR_DP_SOFT], den mykeste) når lerretet lages.
  */
 const val ORB_EXTENT = .5f * COVER_PULSE_MAX + ORB_REACH_MAX * AURA_SIZE_REACH_MAX
 /** Kicket jevnes før det når coveret: opp på ca. 30 ms, ned på ca. 140 ms. */

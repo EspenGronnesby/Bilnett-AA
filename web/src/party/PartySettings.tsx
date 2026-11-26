@@ -28,7 +28,7 @@ const STEPS = 1000
 /** Gir de lagrede verdiene til motoren (mangler = 1×). Virker fra neste bilde. */
 export function usePartyFx(engine: WebPartyEngine, values: Record<string, number>) {
   useEffect(() => {
-    for (const key of engine.partyFxKeys) engine.setPartyFx(key, values[key] ?? 1)
+    for (const key of engine.partyFxKeys) engine.setPartyFx(key, values[key] ?? engine.partyFxDefault(key))
   }, [engine, values])
 }
 
@@ -62,7 +62,7 @@ export function PartySettingsSheet({ engine, values, onChange, onClose }: {
             <h3>{group.title}</h3>
             <div className="card">
               {group.rows.map((row, i) => {
-                const value = values[row.key] ?? 1
+                const value = values[row.key] ?? engine.partyFxDefault(row.key)
                 return (
                   <div key={row.key}>
                     {i > 0 && <div className="divider" />}

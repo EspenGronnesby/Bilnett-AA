@@ -130,6 +130,8 @@ class WebPartyEngine(fftSize: Int = 2048) {
     /** Setter én innstilling (klemmes til lovlig område; ukjent nøkkel ignoreres). Virker fra neste bilde. */
     fun setPartyFx(key: String, value: Float) { PartyFx.of(key)?.let { fx[it] = value } }
     fun partyFx(key: String): Float = PartyFx.of(key)?.let { fx[it] } ?: 1f
+    /** The value without a setting (1, but the light waves are off: 0). */
+    fun partyFxDefault(key: String): Float = PartyFx.of(key)?.default ?: 1f
     fun resetPartyFx() = fx.reset()
     /** Glidebryterens plass 0..1 → verdi (midten = 1), og motsatt. */
     fun partyFxFromSlider(key: String, position: Float): Float = PartyFx.of(key)?.fromSlider(position) ?: 1f

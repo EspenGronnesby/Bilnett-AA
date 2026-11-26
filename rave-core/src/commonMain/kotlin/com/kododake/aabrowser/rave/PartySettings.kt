@@ -13,10 +13,11 @@ import kotlin.math.roundToLong
 /**
  * Én innstilling: [key] lagres (appen: SharedPreferences «rave» som «party_<key>», nettsiden: localStorage),
  * [min]..[max] er lovlig område. [log]: glidebryteren er logaritmisk (0,5–2 med 1 på midten).
+ * [default]: verdien uten innstilling (1 = som før, unntatt lysbølgene, som er av fra 2026-11-26).
  */
-enum class PartyFx(val key: String, val min: Float, val max: Float, val log: Boolean) {
-    /** Lysbølgenes styrke: ganger [WAVE_ALPHA]. 0 = ingen bølger. */
-    WAVE_STRENGTH("bolger_styrke", 0f, 2f, false),
+enum class PartyFx(val key: String, val min: Float, val max: Float, val log: Boolean, val default: Float = 1f) {
+    /** Lysbølgenes styrke: ganger [WAVE_ALPHA]. 0 = ingen bølger, og det er standard (Espen 2026-11-26: minst mulig på skjermen). */
+    WAVE_STRENGTH("bolger_styrke", 0f, 2f, false, default = 0f),
     /** Lysbølgenes bredde: ganger [WAVE_WIDTH_FROM] og [WAVE_WIDTH_TO]. */
     WAVE_WIDTH("bolger_bredde", .5f, 2f, true),
     /** Hvor ofte det kan komme en ny bølge: minste avstand er [RIPPLE_MIN_GAP_MS] delt på dette (0,5 = dobbelt så lenge). */
@@ -33,7 +34,7 @@ enum class PartyFx(val key: String, val min: Float, val max: Float, val log: Boo
     AURA_SHARP("aura_skarphet", 0f, 2f, false);
 
     /** Klemt til lovlig område; ugyldig tall blir 1. */
-    fun clamp(value: Float): Float = if (value.isNaN()) 1f else value.coerceIn(min, max)
+    fun clamp(value: Float): Float = if (value.isNaN()) default else value.coerceIn(min, max)
 
     /** Glidebryterens plass 0..1 → verdi. Midten (± [PARTY_FX_SNAP]) er nøyaktig 1. */
     fun fromSlider(position: Float): Float {
@@ -64,15 +65,15 @@ fun partyFxText(value: Float, fx: PartyFx? = null): String {
     return if (tenths % 10 == 0) "${tenths / 10}×" else "${tenths / 10},${tenths % 10}×"
 }
 
-/** De åtte gangetallene, standard 1. Les tallene effektene trenger herfra. */
+/** De åtte gangetallene, standard [PartyFx.default]. Les tallene effektene trenger herfra. */
 class PartySettings {
-    private val values = FloatArray(PartyFx.entries.size) { 1f }
+    private val values = FloatArray(PartyFx.entries.size) { PartyFx.entries[it].default }
 
     operator fun get(fx: PartyFx): Float = values[fx.ordinal]
     operator fun set(fx: PartyFx, value: Float) { values[fx.ordinal] = fx.clamp(value) }
-    fun reset() = values.fill(1f)
-    /** Alt står på 1×. */
-    val isDefault: Boolean get() = values.all { it == 1f }
+    fun reset() { PartyFx.entries.forEach { values[it.ordinal] = it.default } }
+    /** Alt står på standard. */
+    val isDefault: Boolean get() = PartyFx.entries.all { values[it.ordinal] == it.default }
 
     /** Lysbølgenes sterkeste lys (før: [WAVE_ALPHA]). */
     val waveAlpha: Float get() = WAVE_ALPHA * this[PartyFx.WAVE_STRENGTH]
