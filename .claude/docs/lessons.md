@@ -5,6 +5,37 @@
 
 ---
 
+### Innstillinger i bil-appen: fire store ikon-fliser i appens egne farger
+**Dato:** 2026-11-26
+**Kategori:** UI
+**Berørte filer:** `app/src/main/java/com/kododake/aabrowser/rave/RaveActivity.kt` (SettingsSheet, SettingsMain, TileGrid, ToggleRow, NavRow, enum SettingsPage med `parent`)
+
+**Problem:** Innstillingene var en lang liste med knapper, glidebrytere og grå undertekster, og flere valg lå direkte på skjermen under kjøring. I bil er det for mye å lese og for mange trykk å ta. Samtidig passet et fremmed fargetema (lilla fra en annen app) dårlig til Rave.
+
+**Løsning:**
+- Hovedsiden i innstillingene er fire store ikon-fliser i 2×2 (Visning, Tekst, Party, Bilen), ca. 128 dp høye. Ingen grå undertekst under navn, verken på fliser, rader eller grupper.
+- Undersider åpnes i samme ark med «‹ tilbake». Av/På vises som piller. Valgt = krem flis/pille med mørk tekst.
+- Fargene er Rave sine egne (krem #F5F2EC på mørk #101012, kort #1E1E21), ikke fra Timetracker.
+- På skjermen står bare tannhjulet. Ut av appen til bilens apper = tannhjul → «Bilen».
+- Tilbakepil går ett nivå opp (`SettingsPage.parent`), ikke alltid til start.
+- Arket er helt ugjennomsiktig. Gjennomsiktig bakgrunn gjorde at teksten bak skinte gjennom flisene.
+
+**Hvorfor:** Under kjøring skal man bruke ett blikk. Store flater og ikoner leses raskt, og undertekst er støy. Fire valg er nok til å nå alt med 2–3 trykk. Knapper og glidebrytere ble flyttet inn i innstillingene, slik at skjermen under kjøring er mest mulig fri.
+
+**Fallgruver:**
+1. **Ett trykk traff to ting:** Når en rad åpnet en ny side, kunne samme trykk treffe knappen som dukket opp på samme sted (Auto ble slått av, og 0 % ble lagret). Løsning: stemple tiden ved sidebytte og ignorer trykk i 350 ms (`settingsReady()`), også på Ferdig og tilbake.
+2. **Undersider åpnet midt i:** Én felles rulleposisjon for alle sider. Løsning: `key(page) { rememberScrollState() }`.
+3. **For høye fliser** ble kuttet på telefonen i liggende format. Mål på minste skjerm (bilens 800×480 og telefon liggende) før høyden låses.
+4. Be om skjermbilde fra telefonen tidlig ved stilendringer. Espen ser forskjeller raskere på bilde enn i beskrivelse.
+
+**Forebygging:**
+- Nye valg legges under en av de fire flisene, ikke som nye knapper på hovedskjermen.
+- Ingen forklaringstekst under navn i bil-UI.
+- Test nye sider på bilens oppløsning og liggende telefon før commit.
+
+**🟢 Enkelt forklart:** Innstillingene er delt i fire store knapper med bilde og navn, så man rekker å se og trykke med ett blikk. Alt annet ligger bak disse fire. Skjermen under kjøring er tom for knapper, og fargene er Rave sine egne.
+
+
 ### Rave web: Vercel hoppet over utrullingen når siste commit ikke rørte web/
 **Dato:** 2026-11-19
 **Kategori:** Vercel / Build
